@@ -6,6 +6,7 @@ import Array exposing (Array)
 import List
 import Set exposing (Set)
 import Dict exposing (Dict)
+import Debug exposing (log)
 
 
 type Msg
@@ -90,7 +91,7 @@ test =
                 [ ( "q0", Dict.fromList [ ( "1", Set.singleton "q1" ), ( "0", Set.singleton "q2" ) ] )
                 , ( "q1", Dict.fromList [ ( "1", Set.singleton "q0" ), ( "0", Set.singleton "q3" ) ] )
                 , ( "q2", Dict.fromList [ ( "1", Set.singleton "q3" ), ( "0", Set.singleton "q0" ) ] )
-                , ( "q3", Dict.fromList [ ( "1", Set.singleton "q2" ), ( "0", Set.singleton "q1 " ) ] )
+                , ( "q3", Dict.fromList [ ( "1", Set.singleton "q2" ), ( "0", Set.singleton "q1" ) ] )
                 ]
 
         start =
@@ -109,7 +110,18 @@ main =
               , states = test.start
               , input = Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ]
               , inputAt = 0
-              , statePositions = Dict.fromList [ ( "q0", ( -30, 30 ) ), ( "q1", ( 30, 30 ) ), ( "q2", ( 30, -30 ) ), ( "q3", ( -30, -30 ) ) ]
+              , statePositions = Dict.fromList [ ( "q0", ( -50, 50 ) ), ( "q1", ( 50, 50 ) ), ( "q2", ( -50, -50 ) ), ( "q3", ( 50, -50 ) ) ]
+              , stateTransitions =
+                    Dict.fromList
+                        [ ( ( "q0", "q1" ), ( 0, 15 ) )
+                        , ( ( "q1", "q0" ), ( 0, -15 ) )
+                        , ( ( "q0", "q2" ), ( 15, 0 ) )
+                        , ( ( "q2", "q0" ), ( -15, 0 ) )
+                        , ( ( "q2", "q3" ), ( 0, 15 ) )
+                        , ( ( "q3", "q2" ), ( 0, -15 ) )
+                        , ( ( "q1", "q3" ), ( 15, 0 ) )
+                        , ( ( "q3", "q1" ), ( -15, 0 ) )
+                        ]
               }
             , Cmd.none
             )
@@ -220,7 +232,7 @@ renderStates states currents finals pos =
                         [ circle 20
                             |> outlined (solid (thickness state)) black
                         , if (Set.member state finals) then
-                            circle 23 |> outlined (solid (thickness state)) black
+                            circle 17 |> outlined (solid (thickness state)) black
                           else
                             group []
                         , text state |> centered |> filled black |> move ( 0, -3 )
@@ -269,14 +281,24 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char =
     in
         group
             [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
-            , text char |> centered |> filled black |> move ( mx, my + 5 )
+            , text char |> centered |> filled black |> move ( mx, my )
             ]
 
 
-renderArrows states delta pos =
+renderArrows states delta pos transPos =
     let
         stateList =
             Set.toList states
+
+        edgeToList state =
+            Dict.toList
+                (case (Dict.get state delta) of
+                    Just d ->
+                        d
+
+                    Nothing ->
+                        Dict.empty
+                )
 
         getPos state =
             case (Dict.get state pos) of
@@ -285,8 +307,65 @@ renderArrows states delta pos =
 
                 Nothing ->
                     ( 0, 0 )
+
+        getTransPos ( s1, s2 ) =
+            case (Dict.get ( s1, s2 ) transPos) of
+                Just ( x, y ) ->
+                    ( x, y )
+
+                Nothing ->
+                    ( 0, 0 )
     in
-        []
+        group <|
+            List.map
+                (\s1 ->
+                    group
+                        (List.concat
+                            (List.map
+                                (\( ch, states ) ->
+                                    List.map (\s2 -> renderArrow (getPos s1) (getTransPos ( s1, s2 )) (getPos s2) 20 20 ch) (Set.toList states)
+                                )
+                                (edgeToList s1)
+                            )
+                        )
+                )
+                stateList
+
+
+vertex ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
+    let
+        p0 =
+            ( x0, y0 )
+
+        p1 =
+            ( x1, y1 )
+
+        p2 =
+            ( x2, y2 )
+
+        p3 =
+            p0 +++ p2
+
+        t =
+            log "t" <| dot (p0 ~~~ p1) (p3 ~~~ (p1 *** 2)) / (dot p3 p3 - 4 * dot (p1) (p3 ~~~ p1))
+    in
+        (p0 *** ((1 - t) ^ 2)) +++ ((p1 *** t) *** (1 - t)) +++ (p2 *** (t ^ 2))
+
+
+(+++) ( x0, y0 ) ( x1, y1 ) =
+    ( x0 + x1, y0 + y1 )
+
+
+(***) ( x0, y0 ) x =
+    ( x0 * x, y0 * x )
+
+
+(~~~) ( x0, y0 ) ( x1, y1 ) =
+    ( x0 - x1, y0 - y1 )
+
+
+dot ( x0, y0 ) ( x1, y1 ) =
+    x0 * x1 + y0 * y1
 
 
 
@@ -300,7 +379,7 @@ view model =
     in
         collage 500
             500
-            [ renderStates model.machine.q model.states model.machine.final model.statePositions |> move ( 0, 100 )
+            [ group [ renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions, renderStates model.machine.q model.states model.machine.final model.statePositions ] |> move ( 0, 100 )
             , renderTape model.input model.inputAt |> move ( 0, 0 )
             , text ("Accepted: " ++ toString accepted)
                 |> centered
@@ -312,5 +391,7 @@ view model =
                     )
                 |> move ( 0, -60 )
             , group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
-            , renderArrow ( -30, 30 ) ( 30, 60 ) ( 30, 30 ) 23 20 "a" |> move ( 0, 100 )
+            , curve ( 0, 0 ) [ Pull ( 50, 10 ) ( 100, 0 ) ] |> outlined (solid 1) black
+            , circle 2 |> filled yellow |> move (vertex ( 0, 0 ) ( 50, 10 ) ( 100, 0 ))
+            , text (toString (vertex ( -1, 1 ) ( 0, -1 ) ( 1, 1 ))) |> filled red |> move ( 0, -50 )
             ]
