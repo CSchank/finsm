@@ -7,11 +7,19 @@ import List
 import Set exposing (Set)
 import Dict exposing (Dict)
 import Debug exposing (log)
+import Katex as K exposing (Latex, human, inline, display, generate)
+import Html as H exposing (Html, node)
+import Html.Attributes
+import Json.Encode
 
 
 type Msg
     = Tick Float GetKeyState
     | Step
+    | StartDragging State
+    | SelectArrow ( State, State )
+    | Drag ( Float, Float )
+    | StopDragging
 
 
 type alias State =
@@ -38,8 +46,16 @@ type alias StateTransitions =
     Dict ( State, State ) ( Float, Float )
 
 
+type ApplicationState
+    = Regular
+    | DraggingState State
+    | SelectedArrow ( State, State )
+    | DraggingArrow ( State, State )
+
+
 type alias Model =
-    { machine : Machine
+    { appState : ApplicationState
+    , machine : Machine
     , states : Set State
     , input : Array Character
     , inputAt : Int
@@ -81,24 +97,24 @@ test : Machine
 test =
     let
         q =
-            Set.fromList [ "q0", "q1", "q2", "q3" ]
+            Set.fromList [ "q_0", "q_1", "q_2", "q_3" ]
 
         sigma =
             Set.fromList [ "0", "1" ]
 
         delta =
             Dict.fromList
-                [ ( "q0", Dict.fromList [ ( "1", Set.singleton "q1" ), ( "0", Set.singleton "q2" ) ] )
-                , ( "q1", Dict.fromList [ ( "1", Set.singleton "q0" ), ( "0", Set.singleton "q3" ) ] )
-                , ( "q2", Dict.fromList [ ( "1", Set.singleton "q3" ), ( "0", Set.singleton "q0" ) ] )
-                , ( "q3", Dict.fromList [ ( "1", Set.singleton "q2" ), ( "0", Set.singleton "q1" ) ] )
+                [ ( "q_0", Dict.fromList [ ( "1", Set.singleton "q_1" ), ( "0", Set.singleton "q_2" ) ] )
+                , ( "q_1", Dict.fromList [ ( "1", Set.singleton "q_0" ), ( "0", Set.singleton "q_3" ) ] )
+                , ( "q_2", Dict.fromList [ ( "1", Set.singleton "q_3" ), ( "0", Set.singleton "q_0" ) ] )
+                , ( "q_3", Dict.fromList [ ( "1", Set.singleton "q_2" ), ( "0", Set.singleton "q_1" ) ] )
                 ]
 
         start =
-            Set.fromList [ "q0" ]
+            Set.fromList [ "q_0" ]
 
         final =
-            Set.fromList [ "q0" ]
+            Set.fromList [ "q_0" ]
     in
         Machine q sigma delta start final
 
@@ -106,21 +122,22 @@ test =
 main =
     cmdApp Tick
         { init =
-            ( { machine = test
+            ( { appState = Regular
+              , machine = test
               , states = test.start
               , input = Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ]
               , inputAt = 0
-              , statePositions = Dict.fromList [ ( "q0", ( -50, 50 ) ), ( "q1", ( 50, 50 ) ), ( "q2", ( -50, -50 ) ), ( "q3", ( 50, -50 ) ) ]
+              , statePositions = Dict.fromList [ ( "q_0", ( -50, 50 ) ), ( "q_1", ( 50, 50 ) ), ( "q_2", ( -50, -50 ) ), ( "q_3", ( 50, -50 ) ) ]
               , stateTransitions =
                     Dict.fromList
-                        [ ( ( "q0", "q1" ), ( 0, 15 ) )
-                        , ( ( "q1", "q0" ), ( 0, -15 ) )
-                        , ( ( "q0", "q2" ), ( 15, 0 ) )
-                        , ( ( "q2", "q0" ), ( -15, 0 ) )
-                        , ( ( "q2", "q3" ), ( 0, 15 ) )
-                        , ( ( "q3", "q2" ), ( 0, -15 ) )
-                        , ( ( "q1", "q3" ), ( 15, 0 ) )
-                        , ( ( "q3", "q1" ), ( -15, 0 ) )
+                        [ ( ( "q_0", "q_1" ), ( 0, 15 ) )
+                        , ( ( "q_1", "q_0" ), ( 0, -15 ) )
+                        , ( ( "q_0", "q_2" ), ( 15, 0 ) )
+                        , ( ( "q_2", "q_0" ), ( -15, 0 ) )
+                        , ( ( "q_2", "q_3" ), ( 0, 15 ) )
+                        , ( ( "q_3", "q_2" ), ( 0, -15 ) )
+                        , ( ( "q_1", "q_3" ), ( 15, 0 ) )
+                        , ( ( "q_3", "q_1" ), ( -15, 0 ) )
                         ]
               }
             , Cmd.none
@@ -155,6 +172,66 @@ update msg model =
                     )
                 else
                     ( model, Cmd.none )
+
+            StartDragging st ->
+                ( { model | appState = DraggingState st }, Cmd.none )
+
+            StopDragging ->
+                ( { model | appState = Regular }, Cmd.none )
+
+            SelectArrow ( s0, s1 ) ->
+                ( { model | appState = SelectedArrow ( s0, s1 ) }, Cmd.none )
+
+            Drag ( x, y ) ->
+                case model.appState of
+                    DraggingState st ->
+                        let
+                            ( sx, sy ) =
+                                case (Dict.get st model.statePositions) of
+                                    Just ( x, y ) ->
+                                        ( x, y )
+
+                                    Nothing ->
+                                        ( 0, 0 )
+                        in
+                            ( { model
+                                | statePositions = updateStatePos st ( x, y ) model.statePositions
+
+                                -- , stateTransitions = updateArrowPos st theta model.stateTransitions
+                              }
+                            , Cmd.none
+                            )
+
+                    _ ->
+                        ( model, Cmd.none )
+
+
+updateStatePos : State -> ( Float, Float ) -> StatePositions -> StatePositions
+updateStatePos st ( x, y ) pos =
+    Dict.update st
+        (\m ->
+            case m of
+                Just _ ->
+                    Just ( x, y )
+
+                Nothing ->
+                    Nothing
+        )
+        pos
+
+
+updateArrowPos : State -> Float -> StateTransitions -> StateTransitions
+updateArrowPos st angle pos =
+    Dict.map
+        (\( st0, st1 ) ( x, y ) ->
+            if st0 == st then
+                ( x * cos angle, y * sin angle )
+            else if st1 == st then
+                ( x * cos (-angle), y * sin (-angle) )
+            else
+                ( x, y )
+        )
+        pos
 
 
 isAccept : Set State -> Set State -> InputTape -> Int -> Bool
@@ -205,7 +282,16 @@ renderTape input inputAt =
 --renderStates : Set State -> StatePositions
 
 
-renderStates states currents finals pos =
+textHtml : String -> Html msg
+textHtml t =
+    H.span
+        [ Json.Encode.string t
+            |> Html.Attributes.property "innerHTML"
+        ]
+        []
+
+
+renderStates states currents finals pos model =
     let
         stateList =
             Set.toList states
@@ -235,11 +321,44 @@ renderStates states currents finals pos =
                             circle 17 |> outlined (solid (thickness state)) black
                           else
                             group []
-                        , text state |> centered |> filled black |> move ( 0, -3 )
+
+                        --, html (H.div [] [ textHtml """<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="2.313ex" height="1.861ex" viewBox="-38.5 -533.5 995.9 801.3" role="img" focusable="false" style="vertical-align: -0.622ex; margin-left: -0.089ex;" aria-hidden="true"><g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"><use xlink:href="#MJMATHI-70" x="0" y="0"></use><use transform="scale(0.707)" xlink:href="#MJMAIN-30" x="712" y="-213"></use></g></svg>""" ]) |> move ( -5, 10 )
+                        , (html <| H.img [ Html.Attributes.src (latexurl state) ] []) |> move ( -7, 7 )
+
+                        --, text state |> centered |> filled black |> move ( 0, -3 )
+                        {--, case model.appState of
+                            DraggingState st ->
+                                if st == state then
+                                    circle 21 |> outlined (solid 1) lightBlue
+                                else
+                                    group []
+
+                            a ->
+                                group []--}
                         ]
                         |> move (getPos state)
+                        |> notifyMouseDown (StartDragging state)
                 )
                 stateList
+
+
+latexurl : String -> String
+latexurl latex =
+    "https://do.schankula.ca/latex/render/" ++ latex
+
+
+viewLatex : Latex -> Html a
+viewLatex =
+    let
+        htmlGenerator isDisplayMode stringLatex =
+            case isDisplayMode of
+                Just True ->
+                    H.div [ Html.Attributes.attribute "xmlns" "http://www.w3.org/1999/xhtml" ] [ H.text stringLatex ]
+
+                _ ->
+                    H.span [ Html.Attributes.attribute "xmlns" "http://www.w3.org/1999/xhtml" ] [ H.text stringLatex ]
+    in
+        generate htmlGenerator
 
 
 arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
@@ -262,7 +381,7 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
             ]
 
 
-renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char =
+renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel =
     let
         ( mx, my ) =
             ( (x2 + x0) / 2 + x1, (y2 + y0) / 2 + y1 )
@@ -282,10 +401,18 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char =
         group
             [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
             , text char |> centered |> filled black |> move ( mx, my )
+            , if sel then
+                group
+                    [ circle 1 |> filled red |> move ( mx, my )
+                    , line ( xx0, yy0 ) ( mx, my ) |> outlined (dotted 1) black
+                    , line ( xx1, yy1 ) ( mx, my ) |> outlined (dotted 1) black
+                    ]
+              else
+                group []
             ]
 
 
-renderArrows states delta pos transPos =
+renderArrows states delta pos transPos model =
     let
         stateList =
             Set.toList states
@@ -323,7 +450,31 @@ renderArrows states delta pos transPos =
                         (List.concat
                             (List.map
                                 (\( ch, states ) ->
-                                    List.map (\s2 -> renderArrow (getPos s1) (getTransPos ( s1, s2 )) (getPos s2) 20 20 ch) (Set.toList states)
+                                    List.map
+                                        (\s2 ->
+                                            let
+                                                ( x0, y0 ) =
+                                                    (getPos s1)
+
+                                                ( x1, y1 ) =
+                                                    (getTransPos ( s1, s2 ))
+
+                                                ( x2, y2 ) =
+                                                    (getPos s2)
+
+                                                sel =
+                                                    case model.appState of
+                                                        SelectedArrow ( ss1, ss2 ) ->
+                                                            ( ss1, ss2 ) == ( s1, s2 )
+
+                                                        _ ->
+                                                            False
+                                            in
+                                                group
+                                                    [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch sel |> notifyMouseDown (SelectArrow ( s1, s2 ))
+                                                    ]
+                                        )
+                                        (Set.toList states)
                                 )
                                 (edgeToList s1)
                             )
@@ -349,7 +500,11 @@ vertex ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
         t =
             log "t" <| dot (p0 ~~~ p1) (p3 ~~~ (p1 *** 2)) / (dot p3 p3 - 4 * dot (p1) (p3 ~~~ p1))
     in
-        (p0 *** ((1 - t) ^ 2)) +++ ((p1 *** t) *** (1 - t)) +++ (p2 *** (t ^ 2))
+        p p0 p1 p2 t
+
+
+p p0 p1 p2 t =
+    (p0 *** ((1 - t) ^ 2)) +++ ((p1 *** t) *** (1 - t) *** 2) +++ (p2 *** (t ^ 2))
 
 
 (+++) ( x0, y0 ) ( x1, y1 ) =
@@ -379,7 +534,7 @@ view model =
     in
         collage 500
             500
-            [ group [ renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions, renderStates model.machine.q model.states model.machine.final model.statePositions ] |> move ( 0, 100 )
+            [ group [ renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions model, renderStates model.machine.q model.states model.machine.final model.statePositions model ] |> move ( 0, 0 )
             , renderTape model.input model.inputAt |> move ( 0, 0 )
             , text ("Accepted: " ++ toString accepted)
                 |> centered
@@ -391,7 +546,14 @@ view model =
                     )
                 |> move ( 0, -60 )
             , group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
-            , curve ( 0, 0 ) [ Pull ( 50, 10 ) ( 100, 0 ) ] |> outlined (solid 1) black
-            , circle 2 |> filled yellow |> move (vertex ( 0, 0 ) ( 50, 10 ) ( 100, 0 ))
-            , text (toString (vertex ( -1, 1 ) ( 0, -1 ) ( 1, 1 ))) |> filled red |> move ( 0, -50 )
+            , text (toString model.appState) |> filled black |> move ( 0, -150 )
+            , case model.appState of
+                DraggingState st ->
+                    rect 500 500
+                        |> filled blank
+                        |> notifyMouseMoveAt Drag
+                        |> notifyMouseUp StopDragging
+
+                _ ->
+                    group []
             ]
