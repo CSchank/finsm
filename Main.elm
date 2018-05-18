@@ -11,6 +11,7 @@ import Katex as K exposing (Latex, human, inline, display, generate)
 import Html as H exposing (Html, node)
 import Html.Attributes
 import Json.Encode
+import Debug exposing (log)
 
 
 type Msg
@@ -130,14 +131,14 @@ main =
               , statePositions = Dict.fromList [ ( "q_0", ( -50, 50 ) ), ( "q_1", ( 50, 50 ) ), ( "q_2", ( -50, -50 ) ), ( "q_3", ( 50, -50 ) ) ]
               , stateTransitions =
                     Dict.fromList
-                        [ ( ( "q_0", "q_1" ), ( 0, 15 ) )
-                        , ( ( "q_1", "q_0" ), ( 0, -15 ) )
-                        , ( ( "q_0", "q_2" ), ( 15, 0 ) )
-                        , ( ( "q_2", "q_0" ), ( -15, 0 ) )
-                        , ( ( "q_2", "q_3" ), ( 0, 15 ) )
-                        , ( ( "q_3", "q_2" ), ( 0, -15 ) )
-                        , ( ( "q_1", "q_3" ), ( 15, 0 ) )
-                        , ( ( "q_3", "q_1" ), ( -15, 0 ) )
+                        [ ( ( "q_0", "q_1" ), ( 0, 10 ) )
+                        , ( ( "q_1", "q_0" ), ( 0, 10 ) )
+                        , ( ( "q_0", "q_2" ), ( 0, 10 ) )
+                        , ( ( "q_2", "q_0" ), ( 0, 10 ) )
+                        , ( ( "q_2", "q_3" ), ( 0, 10 ) )
+                        , ( ( "q_3", "q_2" ), ( 0, 10 ) )
+                        , ( ( "q_1", "q_3" ), ( 0, 10 ) )
+                        , ( ( "q_3", "q_1" ), ( 0, 10 ) )
                         ]
               }
             , Cmd.none
@@ -383,19 +384,31 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
 
 renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel =
     let
+        ( tx, ty ) =
+            --tangent between to and from states
+            ( x2 - x0, y2 - y0 )
+
+        theta =
+            -1 * atan2 ty tx
+
         ( mx, my ) =
-            ( (x2 + x0) / 2 + x1, (y2 + y0) / 2 + y1 )
+            --pull point
+            ( (x2 + x0) / 2 + x1 * cos theta + y1 * sin theta, (y2 + y0) / 2 + y1 * cos theta + x1 * sin theta )
 
         ( dx0, dy0 ) =
+            --tangent from middle point to from state
             ( mx - x0, my - y0 )
 
         ( dx1, dy1 ) =
+            --tangent from middle point to to state
             ( mx - x2, my - y2 )
 
         ( xx0, yy0 ) =
+            --from state position (with radius accounted for)
             ( x0 + r0 * cos (atan2 dy0 dx0), y0 + r0 * sin (atan2 dy0 dx0) )
 
         ( xx1, yy1 ) =
+            --to state position (with radius accounted for)
             ( x2 + r1 * cos (atan2 dy1 dx1), y2 + r1 * sin (atan2 dy1 dx1) )
     in
         group
