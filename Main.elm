@@ -12,15 +12,20 @@ import Html as H exposing (Html, node)
 import Html.Attributes
 import Json.Encode
 import Debug exposing (log)
+import Window
+import Tuple exposing (first, second)
+import Task
 
 
 type Msg
     = Tick Float GetKeyState
     | Step
     | StartDragging State
+    | StartDraggingArrow State State
     | SelectArrow ( State, State )
     | Drag ( Float, Float )
     | StopDragging
+    | WindowSize ( Int, Int )
 
 
 type alias State =
@@ -62,6 +67,7 @@ type alias Model =
     , inputAt : Int
     , statePositions : StatePositions
     , stateTransitions : StateTransitions
+    , windowSize : ( Int, Int )
     }
 
 
@@ -140,12 +146,13 @@ main =
                         , ( ( "q_1", "q_3" ), ( 0, 10 ) )
                         , ( ( "q_3", "q_1" ), ( 0, 10 ) )
                         ]
+              , windowSize = ( 500, 500 )
               }
-            , Cmd.none
+            , Task.perform (\size -> WindowSize ( size.width, size.height )) Window.size
             )
         , update = update
         , view = view
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = \_ -> Window.resizes (\size -> WindowSize ( size.width, size.height ))
         }
 
 
@@ -177,6 +184,9 @@ update msg model =
             StartDragging st ->
                 ( { model | appState = DraggingState st }, Cmd.none )
 
+            StartDraggingArrow st1 st2 ->
+                ( { model | appState = DraggingArrow ( st1, st2 ) }, Cmd.none )
+
             StopDragging ->
                 ( { model | appState = Regular }, Cmd.none )
 
@@ -197,14 +207,47 @@ update msg model =
                         in
                             ( { model
                                 | statePositions = updateStatePos st ( x, y ) model.statePositions
-
-                                -- , stateTransitions = updateArrowPos st theta model.stateTransitions
                               }
                             , Cmd.none
                             )
 
+                    DraggingArrow ( s1, s2 ) ->
+                        let
+                            ( x0, y0 ) =
+                                case (Dict.get s1 model.statePositions) of
+                                    Just ( x, y ) ->
+                                        ( x, y )
+
+                                    Nothing ->
+                                        ( 0, 0 )
+
+                            ( x1, y1 ) =
+                                case (Dict.get s2 model.statePositions) of
+                                    Just ( x, y ) ->
+                                        ( x, y )
+
+                                    Nothing ->
+                                        ( 0, 0 )
+
+                            theta =
+                                atan2 (y1 - y0) (x1 - x0)
+
+                            ( mx, my ) =
+                                ( (x0 + x1) / 2, (y0 + y1) / 2 )
+
+                            ( nx, ny ) =
+                                ( x, y ) ~~~ ( mx, my )
+
+                            nprot =
+                                ( nx * cos theta + ny * sin theta, nx * sin theta + ny * cos theta )
+                        in
+                            ( { model | stateTransitions = Dict.insert ( s1, s2 ) nprot model.stateTransitions }, Cmd.none )
+
                     _ ->
                         ( model, Cmd.none )
+
+            WindowSize ( w, h ) ->
+                ( { model | windowSize = ( w, h ) }, Cmd.none )
 
 
 updateStatePos : State -> ( Float, Float ) -> StatePositions -> StatePositions
@@ -382,7 +425,7 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
             ]
 
 
-renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel =
+renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
     let
         ( tx, ty ) =
             --tangent between to and from states
@@ -413,12 +456,17 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel =
     in
         group
             [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
+                |> notifyMouseDown (SelectArrow ( s1, s2 ))
             , text char |> centered |> filled black |> move ( mx, my )
             , if sel then
                 group
-                    [ circle 1 |> filled red |> move ( mx, my )
-                    , line ( xx0, yy0 ) ( mx, my ) |> outlined (dotted 1) black
+                    [ line ( xx0, yy0 ) ( mx, my ) |> outlined (dotted 1) black
                     , line ( xx1, yy1 ) ( mx, my ) |> outlined (dotted 1) black
+                    , circle 3
+                        |> filled red
+                        |> move ( mx, my )
+                        |> notifyMouseDown (StartDraggingArrow s1 s2)
+                        |> notifyMouseMoveAt Drag
                     ]
               else
                 group []
@@ -480,11 +528,14 @@ renderArrows states delta pos transPos model =
                                                         SelectedArrow ( ss1, ss2 ) ->
                                                             ( ss1, ss2 ) == ( s1, s2 )
 
+                                                        DraggingArrow ( ss1, ss2 ) ->
+                                                            ( ss1, ss2 ) == ( s1, s2 )
+
                                                         _ ->
                                                             False
                                             in
                                                 group
-                                                    [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch sel |> notifyMouseDown (SelectArrow ( s1, s2 ))
+                                                    [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch sel s1 s2
                                                     ]
                                         )
                                         (Set.toList states)
@@ -544,25 +595,42 @@ view model =
     let
         accepted =
             isAccept model.states model.machine.final model.input model.inputAt
+
+        winX =
+            (toFloat <| first model.windowSize)
+
+        winY =
+            (toFloat <| second model.windowSize)
     in
-        collage 500
-            500
+        collage
+            1280
+            --winX
+            720
+            --winY
             [ group [ renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions model, renderStates model.machine.q model.states model.machine.final model.statePositions model ] |> move ( 0, 0 )
-            , renderTape model.input model.inputAt |> move ( 0, 0 )
-            , text ("Accepted: " ++ toString accepted)
-                |> centered
-                |> filled
-                    (if accepted then
-                        green
-                     else
-                        red
-                    )
-                |> move ( 0, -60 )
+
+            --, renderTape model.input model.inputAt |> move ( 0, 0 )
+            {- , text ("Accepted: " ++ toString accepted)
+               |> centered
+               |> filled
+                   (if accepted then
+                       green
+                    else
+                       red
+                   )
+               |> move ( 0, -60 )
+            -}
             , group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
             , text (toString model.appState) |> filled black |> move ( 0, -150 )
             , case model.appState of
-                DraggingState st ->
-                    rect 500 500
+                DraggingState _ ->
+                    rect winX winY
+                        |> filled blank
+                        |> notifyMouseMoveAt Drag
+                        |> notifyMouseUp StopDragging
+
+                DraggingArrow _ ->
+                    rect winX winY
                         |> filled blank
                         |> notifyMouseMoveAt Drag
                         |> notifyMouseUp StopDragging
