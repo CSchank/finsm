@@ -15,6 +15,7 @@ import Debug exposing (log)
 import Window
 import Tuple exposing (first, second)
 import Task
+import Http exposing (encodeUri)
 
 
 type Msg
@@ -230,7 +231,7 @@ update msg model =
                                         ( 0, 0 )
 
                             theta =
-                                atan2 (y1 - y0) (x1 - x0)
+                                -1 * atan2 (y1 - y0) (x1 - x0)
 
                             ( mx, my ) =
                                 ( (x0 + x1) / 2, (y0 + y1) / 2 )
@@ -239,7 +240,7 @@ update msg model =
                                 ( x, y ) ~~~ ( mx, my )
 
                             nprot =
-                                ( nx * cos theta + ny * sin theta, nx * sin theta + ny * cos theta )
+                                ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
                         in
                             ( { model | stateTransitions = Dict.insert ( s1, s2 ) nprot model.stateTransitions }, Cmd.none )
 
@@ -367,7 +368,7 @@ renderStates states currents finals pos model =
                             group []
 
                         --, html (H.div [] [ textHtml """<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="2.313ex" height="1.861ex" viewBox="-38.5 -533.5 995.9 801.3" role="img" focusable="false" style="vertical-align: -0.622ex; margin-left: -0.089ex;" aria-hidden="true"><g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"><use xlink:href="#MJMATHI-70" x="0" y="0"></use><use transform="scale(0.707)" xlink:href="#MJMAIN-30" x="712" y="-213"></use></g></svg>""" ]) |> move ( -5, 10 )
-                        , (html <| H.img [ Html.Attributes.src (latexurl state) ] []) |> move ( -7, 7 )
+                        , (latex 20 20 "\\latex") |> move ( -8, 9 ) |> scale 0.9
 
                         --, text state |> centered |> filled black |> move ( 0, -3 )
                         {--, case model.appState of
@@ -386,9 +387,14 @@ renderStates states currents finals pos model =
                 stateList
 
 
+latex w h txt =
+    html w h <| H.img [ Html.Attributes.attribute "onError" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'"), Html.Attributes.src (latexurl txt), Html.Attributes.style [ ( "width", "100%" ), ( "height", "100%" ), ( "-moz-user-select", "none" ), ( "-webkit-user-select", "none" ), ( "user-select", "none" ) ] ] []
+
+
 latexurl : String -> String
 latexurl latex =
-    "https://do.schankula.ca/latex/render/" ++ latex
+    --"https://do.schankula.ca/latex/render/" ++ encodeUri latex
+    "http://localhost:8001/latex/render/" ++ encodeUri latex
 
 
 viewLatex : Latex -> Html a
@@ -432,11 +438,14 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
             ( x2 - x0, y2 - y0 )
 
         theta =
-            -1 * atan2 ty tx
+            atan2 ty tx
+
+        ( rx, ry ) =
+            ( x1 * cos theta - y1 * sin theta, y1 * cos theta + x1 * sin theta )
 
         ( mx, my ) =
             --pull point
-            ( (x2 + x0) / 2 + x1 * cos theta + y1 * sin theta, (y2 + y0) / 2 + y1 * cos theta + x1 * sin theta )
+            ( (x2 + x0) / 2 + rx, (y2 + y0) / 2 + ry )
 
         ( dx0, dy0 ) =
             --tangent from middle point to from state
@@ -453,11 +462,40 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
         ( xx1, yy1 ) =
             --to state position (with radius accounted for)
             ( x2 + r1 * cos (atan2 dy1 dx1), y2 + r1 * sin (atan2 dy1 dx1) )
+
+        offset =
+            if y1 > 0 then
+                8
+            else
+                -8
     in
         group
-            [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
+            [ group
+                [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
+                , latex 12 12 char
+                    |> move ( -6, 7 )
+                    |> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
+                    |> move
+                        ( -offset * sin theta
+                        , offset * cos theta
+                        )
+                ]
                 |> notifyMouseDown (SelectArrow ( s1, s2 ))
-            , text char |> centered |> filled black |> move ( mx, my )
+
+            {- ( (x2 + x0)
+                   / 2
+                   + rx
+                   / 2
+                   + if rx > 0 then
+                       10 + 0.08 * rx
+                     else
+                       -10 - 0.08 * rx
+               , (y2 + y0)
+                   / 2
+                   + ry
+                   / 2
+               )
+            -}
             , if sel then
                 group
                     [ line ( xx0, yy0 ) ( mx, my ) |> outlined (dotted 1) black
@@ -603,11 +641,12 @@ view model =
             (toFloat <| second model.windowSize)
     in
         collage
-            1280
+            700
             --winX
-            720
+            400
             --winY
-            [ group [ renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions model, renderStates model.machine.q model.states model.machine.final model.statePositions model ] |> move ( 0, 0 )
+            [ group [ renderStates model.machine.q model.states model.machine.final model.statePositions model ] |> move ( 0, 0 )
+            , renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions model
 
             --, renderTape model.input model.inputAt |> move ( 0, 0 )
             {- , text ("Accepted: " ++ toString accepted)
