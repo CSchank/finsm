@@ -8,8 +8,9 @@ import Set exposing (Set)
 import Dict exposing (Dict)
 import Debug exposing (log)
 import Katex as K exposing (Latex, human, inline, display, generate)
-import Html as H exposing (Html, node)
-import Html.Attributes
+import Html as H exposing (Html, node, input)
+import Html.Attributes exposing (placeholder, value, style)
+import Html.Events exposing (onInput)
 import Json.Encode
 import Debug exposing (log)
 import Window
@@ -21,9 +22,13 @@ import Http exposing (encodeUri)
 type Msg
     = Tick Float GetKeyState
     | Step
-    | StartDragging State
+    | StartDragging State ( Float, Float )
     | StartDraggingArrow State State
     | SelectArrow ( State, State )
+    | MouseOverStateLabel State
+    | MouseLeaveStateLabel State
+    | SelectStateLabel State
+    | EditLabel State String
     | Drag ( Float, Float )
     | StopDragging
     | WindowSize ( Int, Int )
@@ -55,7 +60,9 @@ type alias StateTransitions =
 
 type ApplicationState
     = Regular
-    | DraggingState State
+    | DraggingState State ( Float, Float )
+    | MousingOverStateLabel State
+    | EditingStateLabel State
     | SelectedArrow ( State, State )
     | DraggingArrow ( State, State )
 
@@ -168,8 +175,21 @@ update msg model =
                     ""
     in
         case msg of
-            Tick t _ ->
-                ( model, Cmd.none )
+            Tick t ( getKeyState, _, _ ) ->
+                ( { model
+                    | appState =
+                        case model.appState of
+                            EditingStateLabel st ->
+                                if (getKeyState Enter == JustDown) then
+                                    Regular
+                                else
+                                    model.appState
+
+                            _ ->
+                                model.appState
+                  }
+                , Cmd.none
+                )
 
             Step ->
                 if ch /= "" then
@@ -182,8 +202,17 @@ update msg model =
                 else
                     ( model, Cmd.none )
 
-            StartDragging st ->
-                ( { model | appState = DraggingState st }, Cmd.none )
+            StartDragging st ( x, y ) ->
+                let
+                    ( sx, sy ) =
+                        case (Dict.get st model.statePositions) of
+                            Just ( x, y ) ->
+                                ( x, y )
+
+                            Nothing ->
+                                ( 0, 0 )
+                in
+                    ( { model | appState = DraggingState st ( x - sx, y - sy ) }, Cmd.none )
 
             StartDraggingArrow st1 st2 ->
                 ( { model | appState = DraggingArrow ( st1, st2 ) }, Cmd.none )
@@ -196,7 +225,7 @@ update msg model =
 
             Drag ( x, y ) ->
                 case model.appState of
-                    DraggingState st ->
+                    DraggingState st ( ox, oy ) ->
                         let
                             ( sx, sy ) =
                                 case (Dict.get st model.statePositions) of
@@ -207,7 +236,7 @@ update msg model =
                                         ( 0, 0 )
                         in
                             ( { model
-                                | statePositions = updateStatePos st ( x, y ) model.statePositions
+                                | statePositions = updateStatePos st ( x - ox, y - oy ) model.statePositions
                               }
                             , Cmd.none
                             )
@@ -247,8 +276,24 @@ update msg model =
                     _ ->
                         ( model, Cmd.none )
 
+            MouseOverStateLabel st ->
+                ( { model | appState = MousingOverStateLabel st }, Cmd.none )
+
+            MouseLeaveStateLabel st ->
+                ( { model | appState = Regular }, Cmd.none )
+
+            SelectStateLabel st ->
+                ( { model | appState = EditingStateLabel st }, Cmd.none )
+
+            EditLabel st lbl ->
+                ( model, Cmd.none )
+
             WindowSize ( w, h ) ->
                 ( { model | windowSize = ( w, h ) }, Cmd.none )
+
+
+
+--renameState : State -> String ->
 
 
 updateStatePos : State -> ( Float, Float ) -> StatePositions -> StatePositions
@@ -355,6 +400,18 @@ renderStates states currents finals pos model =
              else
                 1
             )
+
+        editIcon =
+            group
+                [ --square 5 |> outlined (solid 1) black
+                  rect 5 2
+                    |> filled blue
+                    |> rotate (degrees 45)
+                    |> move ( 3, 3 )
+                , triangle 1
+                    |> filled blue
+                    |> rotate (degrees -15)
+                ]
     in
         group <|
             List.map
@@ -362,13 +419,43 @@ renderStates states currents finals pos model =
                     group
                         [ circle 20
                             |> outlined (solid (thickness state)) black
+                            |> notifyMouseDownAt (StartDragging state)
                         , if (Set.member state finals) then
-                            circle 17 |> outlined (solid (thickness state)) black
+                            circle 17
+                                |> outlined (solid (thickness state)) black
+                                |> notifyMouseDownAt (StartDragging state)
                           else
                             group []
 
                         --, html (H.div [] [ textHtml """<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="2.313ex" height="1.861ex" viewBox="-38.5 -533.5 995.9 801.3" role="img" focusable="false" style="vertical-align: -0.622ex; margin-left: -0.089ex;" aria-hidden="true"><g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"><use xlink:href="#MJMATHI-70" x="0" y="0"></use><use transform="scale(0.707)" xlink:href="#MJMAIN-30" x="712" y="-213"></use></g></svg>""" ]) |> move ( -5, 10 )
-                        , (latex 20 20 "\\latex") |> move ( -8, 9 ) |> scale 0.9
+                        , case model.appState of
+                            EditingStateLabel st ->
+                                if st == state then
+                                    textBox state 20 20 "LaTeX" (EditLabel state)
+                                else
+                                    (latex 20 20 state)
+                                        |> move ( -8, 9 )
+                                        |> scale 0.9
+                                        |> notifyEnter (MouseOverStateLabel state)
+                                        |> notifyLeave (MouseLeaveStateLabel state)
+                                        |> notifyTap (SelectStateLabel state)
+
+                            _ ->
+                                (latex 20 20 state)
+                                    |> move ( -8, 9 )
+                                    |> scale 0.9
+                                    |> notifyEnter (MouseOverStateLabel state)
+                                    |> notifyLeave (MouseLeaveStateLabel state)
+                                    |> notifyTap (SelectStateLabel state)
+                        , case model.appState of
+                            MousingOverStateLabel st ->
+                                if state == st then
+                                    editIcon |> scale 0.75 |> move ( 5, 5.5 )
+                                else
+                                    group []
+
+                            _ ->
+                                group []
 
                         --, text state |> centered |> filled black |> move ( 0, -3 )
                         {--, case model.appState of
@@ -382,9 +469,27 @@ renderStates states currents finals pos model =
                                 group []--}
                         ]
                         |> move (getPos state)
-                        |> notifyMouseDown (StartDragging state)
                 )
                 stateList
+
+
+textBox : String -> Float -> Float -> String -> (String -> Msg) -> Shape Msg
+textBox txt w h place msg =
+    move ( -w / 2, h / 2 ) <|
+        html (w * 1.5) (h * 1.5) <|
+            input
+                [ placeholder place
+                , onInput msg
+                , value txt
+                , style
+                    [ ( "width", toString w ++ "px" )
+                    , ( "height", toString h ++ "px" )
+
+                    --, ( "padding", "0" )
+                    , ( "margin-top", "1px" )
+                    ]
+                ]
+                []
 
 
 latex w h txt =
@@ -662,7 +767,7 @@ view model =
             , group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
             , text (toString model.appState) |> filled black |> move ( 0, -150 )
             , case model.appState of
-                DraggingState _ ->
+                DraggingState _ _ ->
                     rect winX winY
                         |> filled blank
                         |> notifyMouseMoveAt Drag
