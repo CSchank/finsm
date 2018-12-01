@@ -7,16 +7,18 @@ import List
 import Set exposing (Set)
 import Dict exposing (Dict)
 import Debug exposing (log)
-import Katex as K exposing (Latex, human, inline, display, generate)
 import Html as H exposing (Html, node, input)
-import Html.Attributes exposing (placeholder, value, style)
+import Html.Attributes exposing (placeholder, value, style, attribute)
 import Html.Events exposing (onInput)
 import Json.Encode
 import Debug exposing (log)
-import Window
+import Browser exposing(UrlRequest)
+import Browser.Events
+import Browser.Dom
 import Tuple exposing (first, second)
 import Task
-import Http exposing (encodeUri)
+import Url exposing(Url, percentEncode)
+import GraphicSVG.App exposing(GetKeyState, appWithTick, Keys(..), KeyState(..), AppWithTick)
 
 
 type Msg
@@ -32,6 +34,8 @@ type Msg
     | Drag ( Float, Float )
     | StopDragging
     | WindowSize ( Int, Int )
+    | UrlChange Url
+    | UrlRequest UrlRequest
 
 
 type alias State =
@@ -105,7 +109,7 @@ delta d ch state =
 
 deltaHat : Delta -> Character -> Set State -> Set State
 deltaHat d ch states =
-    Set.foldl (\curr states -> Set.union states (delta d ch curr)) Set.empty states
+    Set.foldl (\curr ss -> Set.union ss (delta d ch curr)) Set.empty states
 
 
 test : Machine
@@ -117,7 +121,7 @@ test =
         sigma =
             Set.fromList [ "0", "1" ]
 
-        delta =
+        delta0 =
             Dict.fromList
                 [ ( "q_0", Dict.fromList [ ( "1", Set.singleton "q_1" ), ( "0", Set.singleton "q_2" ) ] )
                 , ( "q_1", Dict.fromList [ ( "1", Set.singleton "q_0" ), ( "0", Set.singleton "q_3" ) ] )
@@ -131,12 +135,12 @@ test =
         final =
             Set.fromList [ "q_0" ]
     in
-        Machine q sigma delta start final
+        Machine q sigma delta0 start final
 
-
+main : AppWithTick () Model Msg
 main =
-    cmdApp Tick
-        { init =
+    appWithTick Tick
+        { init = \flags url key ->
             ( { appState = Regular
               , machine = test
               , states = test.start
@@ -156,11 +160,13 @@ main =
                         ]
               , windowSize = ( 500, 500 )
               }
-            , Task.perform (\size -> WindowSize ( size.width, size.height )) Window.size
+            , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
             )
         , update = update
-        , view = view
-        , subscriptions = \_ -> Window.resizes (\size -> WindowSize ( size.width, size.height ))
+        , view =\ m ->  { body = view m, title = "finSM: create and simulate finite state machines" }
+        , subscriptions = \_ -> Browser.Events.onResize (\w h -> WindowSize ( w, h ))
+        , onUrlChange = UrlChange
+        , onUrlRequest = UrlRequest
         }
 
 
@@ -168,8 +174,8 @@ update msg model =
     let
         ch =
             case (Array.get model.inputAt model.input) of
-                Just ch ->
-                    ch
+                Just c ->
+                    c
 
                 Nothing ->
                     ""
@@ -206,8 +212,8 @@ update msg model =
                 let
                     ( sx, sy ) =
                         case (Dict.get st model.statePositions) of
-                            Just ( x, y ) ->
-                                ( x, y )
+                            Just ( xx, yy ) ->
+                                ( xx, yy )
 
                             Nothing ->
                                 ( 0, 0 )
@@ -229,8 +235,8 @@ update msg model =
                         let
                             ( sx, sy ) =
                                 case (Dict.get st model.statePositions) of
-                                    Just ( x, y ) ->
-                                        ( x, y )
+                                    Just ( xx, yy ) ->
+                                        ( xx, yy )
 
                                     Nothing ->
                                         ( 0, 0 )
@@ -245,16 +251,16 @@ update msg model =
                         let
                             ( x0, y0 ) =
                                 case (Dict.get s1 model.statePositions) of
-                                    Just ( x, y ) ->
-                                        ( x, y )
+                                    Just ( xx, yy ) ->
+                                        ( xx, yy )
 
                                     Nothing ->
                                         ( 0, 0 )
 
                             ( x1, y1 ) =
                                 case (Dict.get s2 model.statePositions) of
-                                    Just ( x, y ) ->
-                                        ( x, y )
+                                    Just ( xx, yy ) ->
+                                        ( xx, yy )
 
                                     Nothing ->
                                         ( 0, 0 )
@@ -266,7 +272,7 @@ update msg model =
                                 ( (x0 + x1) / 2, (y0 + y1) / 2 )
 
                             ( nx, ny ) =
-                                ( x, y ) ~~~ ( mx, my )
+                                sub ( x, y ) ( mx, my )
 
                             nprot =
                                 ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
@@ -290,6 +296,10 @@ update msg model =
 
             WindowSize ( w, h ) ->
                 ( { model | windowSize = ( w, h ) }, Cmd.none )
+        
+            UrlChange _ -> ( model, Cmd.none )
+            
+            UrlRequest _ -> ( model, Cmd.none )
 
 
 
@@ -481,39 +491,26 @@ textBox txt w h place msg =
                 [ placeholder place
                 , onInput msg
                 , value txt
-                , style
-                    [ ( "width", toString w ++ "px" )
-                    , ( "height", toString h ++ "px" )
-
-                    --, ( "padding", "0" )
-                    , ( "margin-top", "1px" )
-                    ]
+                , style "width" (String.fromFloat w ++ "px")
+                , style "height" (String.fromFloat h ++ "px")
+                , style "margin-top" "1px"
                 ]
                 []
 
 
 latex w h txt =
-    html w h <| H.img [ Html.Attributes.attribute "onError" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'"), Html.Attributes.src (latexurl txt), Html.Attributes.style [ ( "width", "100%" ), ( "height", "100%" ), ( "-moz-user-select", "none" ), ( "-webkit-user-select", "none" ), ( "user-select", "none" ) ] ] []
+    html w h <| H.img [ Html.Attributes.attribute "onError" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
+                      , Html.Attributes.src (latexurl txt)
+                      , style "width" "100%"
+                      , style "height" "100%"
+                      , attribute "user-select" "none"
+                       ] []
 
 
 latexurl : String -> String
-latexurl latex =
-    --"https://do.schankula.ca/latex/render/" ++ encodeUri latex
-    "http://localhost:8001/latex/render/" ++ encodeUri latex
-
-
-viewLatex : Latex -> Html a
-viewLatex =
-    let
-        htmlGenerator isDisplayMode stringLatex =
-            case isDisplayMode of
-                Just True ->
-                    H.div [ Html.Attributes.attribute "xmlns" "http://www.w3.org/1999/xhtml" ] [ H.text stringLatex ]
-
-                _ ->
-                    H.span [ Html.Attributes.attribute "xmlns" "http://www.w3.org/1999/xhtml" ] [ H.text stringLatex ]
-    in
-        generate htmlGenerator
+latexurl lx =
+    "https://do.schankula.ca/latex/render/" ++ percentEncode lx
+    --"http://localhost:8001/latex/render/" ++ percentEncode lx
 
 
 arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
@@ -616,14 +613,14 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
             ]
 
 
-renderArrows states delta pos transPos model =
+renderArrows states del pos transPos model =
     let
         stateList =
             Set.toList states
 
         edgeToList state =
             Dict.toList
-                (case (Dict.get state delta) of
+                (case (Dict.get state del) of
                     Just d ->
                         d
 
@@ -653,7 +650,7 @@ renderArrows states delta pos transPos model =
                     group
                         (List.concat
                             (List.map
-                                (\( ch, states ) ->
+                                (\( ch, ss ) ->
                                     List.map
                                         (\s2 ->
                                             let
@@ -681,7 +678,7 @@ renderArrows states delta pos transPos model =
                                                     [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch sel s1 s2
                                                     ]
                                         )
-                                        (Set.toList states)
+                                        (Set.toList ss)
                                 )
                                 (edgeToList s1)
                             )
@@ -702,27 +699,25 @@ vertex ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
             ( x2, y2 )
 
         p3 =
-            p0 +++ p2
+            add p0 p2
 
         t =
-            log "t" <| dot (p0 ~~~ p1) (p3 ~~~ (p1 *** 2)) / (dot p3 p3 - 4 * dot (p1) (p3 ~~~ p1))
+            log "t" <| dot (sub p0 p1) (sub p3 (mult p1 2)) / (dot p3 p3 - 4 * dot (p1) (sub p3 p1))
     in
         p p0 p1 p2 t
 
 
 p p0 p1 p2 t =
-    (p0 *** ((1 - t) ^ 2)) +++ ((p1 *** t) *** (1 - t) *** 2) +++ (p2 *** (t ^ 2))
+    add (mult p0 ((1 - t) ^ 2)) (add (mult (mult (mult p1 t) (1 - t)) 2) (mult p2 (t ^ 2)))
 
 
-(+++) ( x0, y0 ) ( x1, y1 ) =
+add ( x0, y0 ) ( x1, y1 ) =
     ( x0 + x1, y0 + y1 )
 
+mult (x, y) s =
+    (x * s, y * s)
 
-(***) ( x0, y0 ) x =
-    ( x0 * x, y0 * x )
-
-
-(~~~) ( x0, y0 ) ( x1, y1 ) =
+sub ( x0, y0 ) ( x1, y1 ) =
     ( x0 - x1, y0 - y1 )
 
 
@@ -746,9 +741,9 @@ view model =
             (toFloat <| second model.windowSize)
     in
         collage
-            700
+            winX
             --winX
-            400
+            winY
             --winY
             [ group [ renderStates model.machine.q model.states model.machine.final model.statePositions model ] |> move ( 0, 0 )
             , renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions model
@@ -765,7 +760,8 @@ view model =
                |> move ( 0, -60 )
             -}
             , group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
-            , text (toString model.appState) |> filled black |> move ( 0, -150 )
+            , text (Debug.toString model.appState) |> filled black |> move ( 0, -150 )
+            , text (Debug.toString model.windowSize) |> filled black |> move ( 0, -170 )
             , case model.appState of
                 DraggingState _ _ ->
                     rect winX winY
