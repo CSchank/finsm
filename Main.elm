@@ -11,6 +11,7 @@ import Html as H exposing (Html, node, input)
 import Html.Attributes exposing (placeholder, value, style, attribute)
 import Html.Events exposing (onInput)
 import Json.Encode
+import Json.Decode as D
 import Debug exposing (log)
 import Browser exposing(UrlRequest)
 import Browser.Events
@@ -18,19 +19,18 @@ import Browser.Dom
 import Tuple exposing (first, second)
 import Task
 import Url exposing(Url, percentEncode)
-import GraphicSVG.App exposing(GetKeyState, appWithTick, Keys(..), KeyState(..), AppWithTick)
 
 
 type Msg
-    = Tick Float GetKeyState
-    | Step
-    | StartDragging State ( Float, Float )
-    | StartDraggingArrow State State
-    | SelectArrow ( State, State )
-    | MouseOverStateLabel State
-    | MouseLeaveStateLabel State
-    | SelectStateLabel State
-    | EditLabel State String
+    = Step
+    | StartDragging StateID ( Float, Float )
+    | StartDraggingArrow (StateID, Character, StateID)
+    | SelectArrow ( StateID, Character , StateID )
+    | MouseOverStateLabel StateID
+    | MouseLeaveStateLabel StateID
+    | SelectStateLabel StateID
+    | EditLabel StateID String
+    | KeyPressed Int
     | Drag ( Float, Float )
     | StopDragging
     | WindowSize ( Int, Int )
@@ -38,8 +38,8 @@ type Msg
     | UrlRequest UrlRequest
 
 
-type alias State =
-    String
+type alias StateID =
+    Int
 
 
 type alias Character =
@@ -47,7 +47,7 @@ type alias Character =
 
 
 type alias Delta =
-    Dict State (Dict Character (Set State))
+    Dict StateID (Dict Character (Set StateID))
 
 
 type alias InputTape =
@@ -55,44 +55,54 @@ type alias InputTape =
 
 
 type alias StatePositions =
-    Dict State ( Float, Float )
+    Dict StateID ( Float, Float )
+
+
+type alias StateNames =
+    Dict StateID String
 
 
 type alias StateTransitions =
-    Dict ( State, State ) ( Float, Float )
-
+    Dict ( StateID, Character, StateID ) ( Float, Float )
 
 type ApplicationState
+    = Building BuildingState
+    | Simulating
+
+type BuildingState
     = Regular
-    | DraggingState State ( Float, Float )
-    | MousingOverStateLabel State
-    | EditingStateLabel State
-    | SelectedArrow ( State, State )
-    | DraggingArrow ( State, State )
+    | Adding
+    | DraggingState StateID ( Float, Float )
+    | MousingOverStateLabel StateID
+    | EditingStateLabel StateID String
+    | SelectedArrow ( StateID, Character, StateID )
+    | DraggingArrow ( StateID, Character, StateID )
+    | CreatingNewArrow StateID {-source StateID-}
 
 
 type alias Model =
     { appState : ApplicationState
     , machine : Machine
-    , states : Set State
+    , states : Set StateID
     , input : Array Character
     , inputAt : Int
     , statePositions : StatePositions
     , stateTransitions : StateTransitions
+    , stateNames : StateNames
     , windowSize : ( Int, Int )
     }
 
 
 type alias Machine =
-    { q : Set State
+    { q : Set StateID
     , sigma : Set Character
     , delta : Delta
-    , start : Set State
-    , final : Set State
+    , start : Set StateID
+    , final : Set StateID
     }
 
 
-delta : Delta -> Character -> State -> Set State
+delta : Delta -> Character -> StateID -> Set StateID
 delta d ch state =
     case (Dict.get state d) of
         Just charMap ->
@@ -107,7 +117,7 @@ delta d ch state =
             Set.empty
 
 
-deltaHat : Delta -> Character -> Set State -> Set State
+deltaHat : Delta -> Character -> Set StateID -> Set StateID
 deltaHat d ch states =
     Set.foldl (\curr ss -> Set.union ss (delta d ch curr)) Set.empty states
 
@@ -116,55 +126,63 @@ test : Machine
 test =
     let
         q =
-            Set.fromList [ "q_0", "q_1", "q_2", "q_3" ]
+            Set.fromList [ 0, 1, 2, 3 ]
 
         sigma =
             Set.fromList [ "0", "1" ]
 
         delta0 =
             Dict.fromList
-                [ ( "q_0", Dict.fromList [ ( "1", Set.singleton "q_1" ), ( "0", Set.singleton "q_2" ) ] )
-                , ( "q_1", Dict.fromList [ ( "1", Set.singleton "q_0" ), ( "0", Set.singleton "q_3" ) ] )
-                , ( "q_2", Dict.fromList [ ( "1", Set.singleton "q_3" ), ( "0", Set.singleton "q_0" ) ] )
-                , ( "q_3", Dict.fromList [ ( "1", Set.singleton "q_2" ), ( "0", Set.singleton "q_1" ) ] )
+                [ ( 0, Dict.fromList [ ( "1", Set.singleton 1 ), ( "0", Set.singleton 2 ) ] )
+                , ( 1, Dict.fromList [ ( "1", Set.singleton 0 ), ( "0", Set.singleton 3 ) ] )
+                , ( 2, Dict.fromList [ ( "1", Set.singleton 3 ), ( "0", Set.singleton 0 ) ] )
+                , ( 3, Dict.fromList [ ( "1", Set.singleton 2 ), ( "0", Set.singleton 1 ) ] )
                 ]
 
         start =
-            Set.fromList [ "q_0" ]
+            Set.fromList [ 0 ]
 
         final =
-            Set.fromList [ "q_0" ]
+            Set.fromList [ 0 ]
     in
         Machine q sigma delta0 start final
 
-main : AppWithTick () Model Msg
+main : App () Model Msg
 main =
-    appWithTick Tick
+    app
         { init = \flags url key ->
-            ( { appState = Regular
+            ( { appState = Building Regular
               , machine = test
               , states = test.start
               , input = Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ]
               , inputAt = 0
-              , statePositions = Dict.fromList [ ( "q_0", ( -50, 50 ) ), ( "q_1", ( 50, 50 ) ), ( "q_2", ( -50, -50 ) ), ( "q_3", ( 50, -50 ) ) ]
+              , statePositions = Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
+              , stateNames = Dict.fromList [(0, "q_0"), (1, "q_1"), (2, "q_2"), (3,"q_3")]
               , stateTransitions =
                     Dict.fromList
-                        [ ( ( "q_0", "q_1" ), ( 0, 10 ) )
-                        , ( ( "q_1", "q_0" ), ( 0, 10 ) )
-                        , ( ( "q_0", "q_2" ), ( 0, 10 ) )
-                        , ( ( "q_2", "q_0" ), ( 0, 10 ) )
-                        , ( ( "q_2", "q_3" ), ( 0, 10 ) )
-                        , ( ( "q_3", "q_2" ), ( 0, 10 ) )
-                        , ( ( "q_1", "q_3" ), ( 0, 10 ) )
-                        , ( ( "q_3", "q_1" ), ( 0, 10 ) )
+                        [ ( ( 0, "1" , 1 ), ( 0, 10 ) )
+                        , ( ( 1, "1" , 0 ), ( 0, 10 ) )
+                        , ( ( 0, "0" , 2 ), ( 0, 10 ) )
+                        , ( ( 2, "0", 0 ), ( 0, 10 ) )
+                        , ( ( 2, "1" ,3 ), ( 0, 10 ) )
+                        , ( ( 3, "1", 2 ), ( 0, 10 ) )
+                        , ( ( 1, "0", 3 ), ( 0, 10 ) )
+                        , ( ( 3, "0", 1 ), ( 0, 10 ) )
                         ]
-              , windowSize = ( 500, 500 )
+              , windowSize = ( 0, 0 )
               }
             , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
             )
         , update = update
         , view =\ m ->  { body = view m, title = "finSM: create and simulate finite state machines" }
-        , subscriptions = \_ -> Browser.Events.onResize (\w h -> WindowSize ( w, h ))
+        , subscriptions = \model -> Sub.batch 
+                                    [
+                                        Browser.Events.onResize (\w h -> WindowSize ( w, h ))
+                                    ,   case model.appState of 
+                                            Building (EditingStateLabel _ _) ->
+                                                Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
+                                            _ -> Sub.none
+                                    ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
         }
@@ -181,21 +199,15 @@ update msg model =
                     ""
     in
         case msg of
-            Tick t ( getKeyState, _, _ ) ->
-                ( { model
-                    | appState =
-                        case model.appState of
-                            EditingStateLabel st ->
-                                if (getKeyState Enter == JustDown) then
-                                    Regular
-                                else
-                                    model.appState
-
-                            _ ->
+            {-Tick t ( getKeyState, _, _ ) ->
+                ( case model.appState of
+                        Building (EditingStateLabel st str) ->
+                            if (getKeyState Enter == JustDown) then
+                                Building Regular
+                            else
                                 model.appState
-                  }
                 , Cmd.none
-                )
+                )-}
 
             Step ->
                 if ch /= "" then
@@ -218,20 +230,20 @@ update msg model =
                             Nothing ->
                                 ( 0, 0 )
                 in
-                    ( { model | appState = DraggingState st ( x - sx, y - sy ) }, Cmd.none )
+                    ( { model | appState = Building <| DraggingState st ( x - sx, y - sy ) }, Cmd.none )
 
-            StartDraggingArrow st1 st2 ->
-                ( { model | appState = DraggingArrow ( st1, st2 ) }, Cmd.none )
+            StartDraggingArrow (st1, char, st2) ->
+                ( { model | appState = Building <| DraggingArrow ( st1, char, st2 ) }, Cmd.none )
 
             StopDragging ->
-                ( { model | appState = Regular }, Cmd.none )
+                ( { model | appState = Building Regular }, Cmd.none )
 
-            SelectArrow ( s0, s1 ) ->
-                ( { model | appState = SelectedArrow ( s0, s1 ) }, Cmd.none )
+            SelectArrow ( s0, char, s1 ) ->
+                ( { model | appState = Building <| SelectedArrow ( s0, char, s1 ) }, Cmd.none )
 
             Drag ( x, y ) ->
                 case model.appState of
-                    DraggingState st ( ox, oy ) ->
+                    Building (DraggingState st ( ox, oy )) ->
                         let
                             ( sx, sy ) =
                                 case (Dict.get st model.statePositions) of
@@ -247,7 +259,7 @@ update msg model =
                             , Cmd.none
                             )
 
-                    DraggingArrow ( s1, s2 ) ->
+                    Building (DraggingArrow ( s1, char, s2 )) ->
                         let
                             ( x0, y0 ) =
                                 case (Dict.get s1 model.statePositions) of
@@ -277,22 +289,32 @@ update msg model =
                             nprot =
                                 ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
                         in
-                            ( { model | stateTransitions = Dict.insert ( s1, s2 ) nprot model.stateTransitions }, Cmd.none )
+                            ( { model | stateTransitions = Dict.insert ( s1, char, s2 ) nprot model.stateTransitions }, Cmd.none )
 
                     _ ->
                         ( model, Cmd.none )
 
             MouseOverStateLabel st ->
-                ( { model | appState = MousingOverStateLabel st }, Cmd.none )
+                ( { model | appState = Building <| MousingOverStateLabel st }, Cmd.none )
 
             MouseLeaveStateLabel st ->
-                ( { model | appState = Regular }, Cmd.none )
+                ( { model | appState = Building Regular }, Cmd.none )
 
             SelectStateLabel st ->
-                ( { model | appState = EditingStateLabel st }, Cmd.none )
+                let
+                    stateName =
+                        case Dict.get st model.stateNames of
+                            Just n -> n
+                            Nothing -> ""    
+                in
+                
+                ( { model | appState = Building <| EditingStateLabel st stateName }, Cmd.none )
 
-            EditLabel st lbl ->
-                ( model, Cmd.none )
+            EditLabel _ lbl ->
+                case model.appState of
+                    Building (EditingStateLabel st _) -> 
+                        ( { model | appState = Building (EditingStateLabel st lbl ) } , Cmd.none )
+                    _ -> ( model, Cmd.none )
 
             WindowSize ( w, h ) ->
                 ( { model | windowSize = ( w, h ) }, Cmd.none )
@@ -301,12 +323,29 @@ update msg model =
             
             UrlRequest _ -> ( model, Cmd.none )
 
+            KeyPressed k ->
+                if k == 13 then
+                    case model.appState of
+                        Building (EditingStateLabel stId newLbl) ->
+                            let
+                                oldStateName = 
+                                    case Dict.get stId model.stateNames of
+                                        Just n -> n
+                                        _      -> ""
+                            in
+                                if newLbl == oldStateName || newLbl == "" then
+                                    ( { model | appState = Building Regular }, Cmd.none)
+                                else
+                                    ( { model | stateNames = Dict.insert stId newLbl model.stateNames }, Cmd.none)
+                        _ -> (model, Cmd.none)
+                else (model, Cmd.none)
+
 
 
 --renameState : State -> String ->
 
 
-updateStatePos : State -> ( Float, Float ) -> StatePositions -> StatePositions
+updateStatePos : StateID -> ( Float, Float ) -> StatePositions -> StatePositions
 updateStatePos st ( x, y ) pos =
     Dict.update st
         (\m ->
@@ -320,10 +359,10 @@ updateStatePos st ( x, y ) pos =
         pos
 
 
-updateArrowPos : State -> Float -> StateTransitions -> StateTransitions
+updateArrowPos : StateID -> Float -> StateTransitions -> StateTransitions
 updateArrowPos st angle pos =
     Dict.map
-        (\( st0, st1 ) ( x, y ) ->
+        (\( st0, char, st1 ) ( x, y ) ->
             if st0 == st then
                 ( x * cos angle, y * sin angle )
             else if st1 == st then
@@ -334,7 +373,7 @@ updateArrowPos st angle pos =
         pos
 
 
-isAccept : Set State -> Set State -> InputTape -> Int -> Bool
+isAccept : Set StateID -> Set StateID -> InputTape -> Int -> Bool
 isAccept states finals input inputAt =
     if inputAt == Array.length input then
         Set.size (Set.intersect states finals) > 0
@@ -422,44 +461,48 @@ renderStates states currents finals pos model =
                     |> filled blue
                     |> rotate (degrees -15)
                 ]
+        stateName sId =
+            case Dict.get sId model.stateNames of
+                Just n -> n
+                _      -> ""
     in
         group <|
             List.map
-                (\state ->
+                (\sId ->
                     group
                         [ circle 20
-                            |> outlined (solid (thickness state)) black
-                            |> notifyMouseDownAt (StartDragging state)
-                        , if (Set.member state finals) then
+                            |> outlined (solid (thickness sId)) black
+                            |> notifyMouseDownAt (StartDragging sId)
+                        , if (Set.member sId finals) then
                             circle 17
-                                |> outlined (solid (thickness state)) black
-                                |> notifyMouseDownAt (StartDragging state)
+                                |> outlined (solid (thickness sId)) black
+                                |> notifyMouseDownAt (StartDragging sId)
                           else
                             group []
 
                         --, html (H.div [] [ textHtml """<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="2.313ex" height="1.861ex" viewBox="-38.5 -533.5 995.9 801.3" role="img" focusable="false" style="vertical-align: -0.622ex; margin-left: -0.089ex;" aria-hidden="true"><g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"><use xlink:href="#MJMATHI-70" x="0" y="0"></use><use transform="scale(0.707)" xlink:href="#MJMAIN-30" x="712" y="-213"></use></g></svg>""" ]) |> move ( -5, 10 )
                         , case model.appState of
-                            EditingStateLabel st ->
-                                if st == state then
-                                    textBox state 20 20 "LaTeX" (EditLabel state)
+                            Building (EditingStateLabel st str) ->
+                                if st == sId then
+                                    textBox str (6*toFloat (String.length str)) 20 "LaTeX" (EditLabel sId)
                                 else
-                                    (latex 20 20 state)
+                                    (latex 20 20 (stateName sId))
                                         |> move ( -8, 9 )
                                         |> scale 0.9
-                                        |> notifyEnter (MouseOverStateLabel state)
-                                        |> notifyLeave (MouseLeaveStateLabel state)
-                                        |> notifyTap (SelectStateLabel state)
+                                        |> notifyEnter (MouseOverStateLabel sId)
+                                        |> notifyLeave (MouseLeaveStateLabel sId)
+                                        |> notifyTap (SelectStateLabel sId)
 
                             _ ->
-                                (latex 20 20 state)
+                                (latex 20 20 (stateName sId))
                                     |> move ( -8, 9 )
                                     |> scale 0.9
-                                    |> notifyEnter (MouseOverStateLabel state)
-                                    |> notifyLeave (MouseLeaveStateLabel state)
-                                    |> notifyTap (SelectStateLabel state)
+                                    |> notifyEnter (MouseOverStateLabel sId)
+                                    |> notifyLeave (MouseLeaveStateLabel sId)
+                                    |> notifyTap (SelectStateLabel sId)
                         , case model.appState of
-                            MousingOverStateLabel st ->
-                                if state == st then
+                            Building (MousingOverStateLabel st) ->
+                                if sId == st then
                                     editIcon |> scale 0.75 |> move ( 5, 5.5 )
                                 else
                                     group []
@@ -478,7 +521,7 @@ renderStates states currents finals pos model =
                             a ->
                                 group []--}
                         ]
-                        |> move (getPos state)
+                        |> move (getPos sId)
                 )
                 stateList
 
@@ -503,6 +546,8 @@ latex w h txt =
                       , Html.Attributes.src (latexurl txt)
                       , style "width" "100%"
                       , style "height" "100%"
+                      , attribute "moz-user-select" "none"
+                      , attribute "webkit-user-select" "none"
                       , attribute "user-select" "none"
                        ] []
 
@@ -582,7 +627,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
                         , offset * cos theta
                         )
                 ]
-                |> notifyMouseDown (SelectArrow ( s1, s2 ))
+                |> notifyMouseDown (SelectArrow ( s1, char , s2 ))
 
             {- ( (x2 + x0)
                    / 2
@@ -605,7 +650,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
                     , circle 3
                         |> filled red
                         |> move ( mx, my )
-                        |> notifyMouseDown (StartDraggingArrow s1 s2)
+                        |> notifyMouseDown (StartDraggingArrow (s1, char, s2))
                         |> notifyMouseMoveAt Drag
                     ]
               else
@@ -636,8 +681,8 @@ renderArrows states del pos transPos model =
                 Nothing ->
                     ( 0, 0 )
 
-        getTransPos ( s1, s2 ) =
-            case (Dict.get ( s1, s2 ) transPos) of
+        getTransPos ( s1, char, s2 ) =
+            case (Dict.get ( s1, char, s2 ) transPos) of
                 Just ( x, y ) ->
                     ( x, y )
 
@@ -658,17 +703,17 @@ renderArrows states del pos transPos model =
                                                     (getPos s1)
 
                                                 ( x1, y1 ) =
-                                                    (getTransPos ( s1, s2 ))
+                                                    (getTransPos ( s1, ch, s2 ))
 
                                                 ( x2, y2 ) =
                                                     (getPos s2)
 
                                                 sel =
                                                     case model.appState of
-                                                        SelectedArrow ( ss1, ss2 ) ->
+                                                        Building (SelectedArrow ( ss1, char , ss2 )) ->
                                                             ( ss1, ss2 ) == ( s1, s2 )
 
-                                                        DraggingArrow ( ss1, ss2 ) ->
+                                                        Building (DraggingArrow ( ss1, char , ss2 )) ->
                                                             ( ss1, ss2 ) == ( s1, s2 )
 
                                                         _ ->
@@ -761,15 +806,14 @@ view model =
             -}
             , group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
             , text (Debug.toString model.appState) |> filled black |> move ( 0, -150 )
-            , text (Debug.toString model.windowSize) |> filled black |> move ( 0, -170 )
             , case model.appState of
-                DraggingState _ _ ->
+                Building (DraggingState _ _) ->
                     rect winX winY
                         |> filled blank
                         |> notifyMouseMoveAt Drag
                         |> notifyMouseUp StopDragging
 
-                DraggingArrow _ ->
+                Building (DraggingArrow _) ->
                     rect winX winY
                         |> filled blank
                         |> notifyMouseMoveAt Drag
@@ -777,4 +821,20 @@ view model =
 
                 _ ->
                     group []
+            , editingButtons
+                |> move (-winX/2,winY/2)
             ]
+
+editingButtons = 
+    group 
+        [
+            icon (group [rect 20 3 |> filled black, rect 3 20 |> filled black])
+                |> move(30,-30)
+        ]
+
+icon sh = 
+    group
+        [
+            circle 20 |> filled (rgb 220 220 220)
+        ,   sh
+        ]
