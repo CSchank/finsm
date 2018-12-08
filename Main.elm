@@ -6,13 +6,11 @@ import Array exposing (Array)
 import List
 import Set exposing (Set)
 import Dict exposing (Dict)
-import Debug exposing (log)
 import Html as H exposing (Html, node, input)
 import Html.Attributes exposing (placeholder, value, style, attribute)
 import Html.Events exposing (onInput)
 import Json.Encode
 import Json.Decode as D
-import Debug exposing (log)
 import Browser exposing(UrlRequest)
 import Browser.Events
 import Browser.Dom
@@ -25,7 +23,8 @@ type Msg
     = Step
     | StartDragging StateID ( Float, Float )
     | StartDraggingArrow (StateID, Character, StateID)
-    | StartMouseOverRim StateID
+    | StartMouseOverRim StateID (Float, Float)
+    | MoveMouseOverRim (Float, Float)
     | StopMouseOverRim
     | SelectArrow ( StateID, Character , StateID )
     | MouseOverStateLabel StateID
@@ -45,12 +44,16 @@ type alias StateID =
     Int
 
 
+type alias TransitionID =
+    Int
+
+
 type alias Character =
     String
 
 
 type alias Delta =
-    Dict StateID (Dict Character (Set StateID))
+    Dict StateID (Dict TransitionID StateID)
 
 
 type alias InputTape =
@@ -64,9 +67,11 @@ type alias StatePositions =
 type alias StateNames =
     Dict StateID String
 
+type alias TransitionNames =
+    Dict TransitionID String
 
 type alias StateTransitions =
-    Dict ( StateID, Character, StateID ) ( Float, Float )
+    Dict ( StateID, TransitionID, StateID ) ( Float, Float )
 
 type ApplicationState
     = Building BuildingState
@@ -76,7 +81,7 @@ type BuildingState
     = Regular
     | DraggingState StateID ( Float, Float )
     | SelectedState StateID
-    | MousingOverRim StateID
+    | MousingOverRim StateID (Float, Float)
     | AddingArrow StateID (Float, Float)
     | AddingArrowOverOtherState StateID (Float, Float) StateID
     | MousingOverStateLabel StateID
@@ -95,37 +100,41 @@ type alias Model =
     , statePositions : StatePositions
     , stateTransitions : StateTransitions
     , stateNames : StateNames
+    , transitionNames : TransitionNames
     , windowSize : ( Int, Int )
     }
 
 
 type alias Machine =
     { q : Set StateID
-    , sigma : Set Character
     , delta : Delta
     , start : Set StateID
     , final : Set StateID
     }
 
 
-delta : Delta -> Character -> StateID -> Set StateID
-delta d ch state =
-    case (Dict.get state d) of
-        Just charMap ->
-            case (Dict.get ch charMap) of
-                Just stateSet ->
-                    stateSet
+delta : TransitionNames -> Delta -> Character -> StateID -> Set StateID
+delta tNames d ch state =
+    let
+        getName trans =
+            case Dict.get trans tNames of
+                Just n -> n
+                _      -> ""
+    in
+        case (Dict.get state d) of
+            Just transMap ->
+                let
+                    states = List.filterMap (\(tId,sId) -> if getName tId == ch then Just sId else Nothing) <| Dict.toList transMap
+                in
+                    Set.fromList states
 
-                Nothing ->
-                    Set.empty
-
-        Nothing ->
-            Set.empty
+            Nothing ->
+                Set.empty
 
 
-deltaHat : Delta -> Character -> Set StateID -> Set StateID
-deltaHat d ch states =
-    Set.foldl (\curr ss -> Set.union ss (delta d ch curr)) Set.empty states
+deltaHat : TransitionNames -> Delta -> Character -> Set StateID -> Set StateID
+deltaHat tNames d ch states =
+    Set.foldl (\curr ss -> Set.union ss (delta tNames d ch curr)) Set.empty states
 
 
 test : Machine
@@ -134,15 +143,12 @@ test =
         q =
             Set.fromList [ 0, 1, 2, 3 ]
 
-        sigma =
-            Set.fromList [ "0", "1" ]
-
         delta0 =
             Dict.fromList
-                [ ( 0, Dict.fromList [ ( "1", Set.singleton 1 ), ( "0", Set.singleton 2 ) ] )
-                , ( 1, Dict.fromList [ ( "1", Set.singleton 0 ), ( "0", Set.singleton 3 ) ] )
-                , ( 2, Dict.fromList [ ( "1", Set.singleton 3 ), ( "0", Set.singleton 0 ) ] )
-                , ( 3, Dict.fromList [ ( "1", Set.singleton 2 ), ( "0", Set.singleton 1 ) ] )
+                [ ( 0, Dict.fromList [ ( 0, 1 ), ( 1, 2 ) ] )
+                , ( 1, Dict.fromList [ ( 2, 0 ), ( 3, 3 ) ] )
+                , ( 2, Dict.fromList [ ( 4, 3 ), ( 5, 0 ) ] )
+                , ( 3, Dict.fromList [ ( 6, 2 ), ( 7, 1 ) ] )
                 ]
 
         start =
@@ -151,7 +157,7 @@ test =
         final =
             Set.fromList [ 0 ]
     in
-        Machine q sigma delta0 start final
+        Machine q delta0 start final
 
 main : App () Model Msg
 main =
@@ -164,6 +170,7 @@ main =
               , inputAt = 0
               , statePositions = Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
               , stateNames = Dict.fromList [(0, "q_0"), (1, "q_1"), (2, "q_2"), (3,"q_3")]
+              , transitionNames = Dict.fromList [(0, "1"),(1,"0"),(2,"1"),(3,"0"),(4,"1"),(5,"0"),(6,"1"),(7,"0"),(8,"1")]
               , stateTransitions =
                     Dict.fromList
                         [ ( ( 0, "1" , 1 ), ( 0, 10 ) )
@@ -180,7 +187,7 @@ main =
             , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
             )
         , update = update
-        , view =\ m ->  { body = view m, title = "finSM: create and simulate finite state machines" }
+        , view =\ m ->  { body = view m, title = "finSM - create and simulate finite state machines" }
         , subscriptions = \model -> Sub.batch 
                                     [
                                         Browser.Events.onResize (\w h -> WindowSize ( w, h ))
@@ -206,11 +213,11 @@ update msg model =
                 Nothing ->
                     ""
     in
-        case Debug.log "msg" msg of
+        case msg of
             Step ->
                 if ch /= "" then
                     ( { model
-                        | states = deltaHat model.machine.delta ch model.states
+                        | states = deltaHat model.transitionNames model.machine.delta ch model.states
                         , inputAt = model.inputAt + 1
                       }
                     , Cmd.none
@@ -229,7 +236,7 @@ update msg model =
                                 ( 0, 0 )
                 in 
                     case model.appState of
-                        Building (MousingOverRim sId) ->
+                        Building (MousingOverRim sId _) ->
                             ( { model | appState = Building <| AddingArrow sId (x,y) }
                             , Cmd.none )
                         _ -> ( { model | appState = Building <| DraggingState st ( x - sx, y - sy ) }, Cmd.none )
@@ -237,10 +244,16 @@ update msg model =
             StartDraggingArrow (st1, char, st2) ->
                 ( { model | appState = Building <| DraggingArrow (st1, char, st2) }, Cmd.none)
 
-            StartMouseOverRim stId ->
+            StartMouseOverRim stId (x,y) ->
                 case model.appState of
                     Building Regular ->
-                        ( { model | appState = Building <| MousingOverRim stId }, Cmd.none )
+                        ( { model | appState = Building <| MousingOverRim stId (x,y) }, Cmd.none )
+                    _ -> ( model, Cmd.none )
+
+            MoveMouseOverRim (x,y) ->
+                case model.appState of
+                    Building (MousingOverRim stId _) ->
+                        ( { model | appState = Building <| MousingOverRim stId (x,y) }, Cmd.none )
                     _ -> ( model, Cmd.none )
 
             StopMouseOverRim ->
@@ -253,16 +266,18 @@ update msg model =
                     Building (AddingArrowOverOtherState st _ s1) ->
                         let
                             newTrans = 
-                                case Set.toList <| model.machine.sigma of 
-                                    h::rest -> h
-                                    _ -> " "
+                                case List.head <| Dict.values model.transitionNames of
+                                    Just char -> char
+                                    Nothing -> "x"
+                            newTransID = case List.maximum <| Dict.keys model.transitionNames of
+                                            Just n -> n + 1
+                                            Nothing -> 0
+                            newDelta : Delta
                             newDelta = Dict.update st (\mcDict -> 
                                         case mcDict of
-                                            Just ss -> Just <| Dict.update newTrans (\mSet ->
-                                                case mSet of
-                                                    Just s -> Just <| Set.insert s1 s
-                                                    Nothing -> Just <| Set.singleton s1) ss
-                                            Nothing -> Just <| Dict.singleton newTrans (Set.singleton s1)
+                                            Just ss -> Just <| Dict.update newTransID (\mState ->
+                                                    Just s1) ss
+                                            Nothing -> Just <| Dict.singleton newTransID s1
                                        ) model.machine.delta
                             oldMachine = model.machine
                         in
@@ -376,7 +391,7 @@ update msg model =
             UrlRequest _ -> ( model, Cmd.none )
 
             KeyPressed k ->
-                if Debug.log "key" k == 13 then
+                if k == 13 then
                     case model.appState of
                         Building (EditingStateLabel stId newLbl) ->
                             let
@@ -390,14 +405,12 @@ update msg model =
                                 else
                                     ( { model | stateNames = Dict.insert stId newLbl model.stateNames }, Cmd.none)
                         _ -> (model, Cmd.none)
-                else if Debug.log "key" k == 100 then --pressed d
+                else if k == 100 then --pressed d
                     case model.appState of
                         Building (SelectedState stId) ->
                             let
                                 oldMachine = model.machine                                
-                                newDelta = Dict.map (\k0 a ->
-                                                        Dict.map (\k1 s -> Set.remove stId s) a
-                                                    ) model.machine.delta
+                                newDelta = Dict.remove stId model.machine.delta
                                 newMachine = { oldMachine | q = Set.remove stId oldMachine.q, delta = newDelta }
                                 newStateTransitions = Dict.filter (\(s0,_,s1) _ -> s0 /= stId && s1 /= stId) model.stateTransitions
                             in
@@ -562,7 +575,7 @@ renderStates states currents finals pos model =
                     group
                         [ circle 21
                             |> outlined (solid 3) blank
-                            |> notifyEnter (StartMouseOverRim sId)
+                            |> notifyEnterAt (StartMouseOverRim sId)
                         , circle 20
                             |> outlined (solid (thickness sId)) black
                             |> notifyMouseDownAt (StartDragging sId)
@@ -579,11 +592,24 @@ renderStates states currents finals pos model =
                                         |> notifyMouseDownAt (StartDragging sId)
                                 else 
                                     group []
-                            Building (MousingOverRim st) ->
+                            Building (MousingOverRim st (x,y)) ->
+                                let
+                                    (x0,y0) = getPos st
+                                    (dx,dy) = (x-x0,y-y0)
+                                in
+                                
                                 if st == sId then
-                                    circle 21.5 |> outlined (solid 3) lightGreen
-                                        |> notifyMouseDownAt (StartDragging sId)
-                                        |> notifyLeave StopMouseOverRim
+                                    group
+                                        [
+                                            circle 7
+                                                |> filled white
+                                                |> addOutline (solid 0.5) black
+                                        ,   rect 8 1.5 |> filled black
+                                        ,   rect 1.5 8 |> filled black
+                                        ]|> notifyMouseMoveAt MoveMouseOverRim
+                                         |> notifyMouseDownAt (StartDragging sId)
+                                         |> notifyLeave StopMouseOverRim
+                                         |> move( 20 * cos (atan2 dy dx), 20 * sin (atan2 dy dx) )
                                 else 
                                     group []
                             Building (AddingArrowOverOtherState _ _ st) ->
@@ -667,7 +693,7 @@ latex w h txt =
 
 latexurl : String -> String
 latexurl lx =
-    "https://do.schankula.ca/latex/render/" ++ percentEncode lx
+    "https://finsm.io/latex/render/" ++ percentEncode lx
     --"http://localhost:8001/latex/render/" ++ percentEncode lx
 
 
@@ -770,7 +796,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
                 group []
             ]
 
-
+renderArrows : (Set StateID) -> Delta -> StatePositions -> StateTransitions -> Model -> Shape Msg
 renderArrows states del pos transPos model =
     let
         stateList =
@@ -860,7 +886,7 @@ vertex ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
             add p0 p2
 
         t =
-            log "t" <| dot (sub p0 p1) (sub p3 (mult p1 2)) / (dot p3 p3 - 4 * dot (p1) (sub p3 p1))
+            dot (sub p0 p1) (sub p3 (mult p1 2)) / (dot p3 p3 - 4 * dot (p1) (sub p3 p1))
     in
         p p0 p1 p2 t
 
@@ -931,8 +957,8 @@ view model =
                                 Just pos -> pos
                                 _ -> (0,0)
                         newTrans = 
-                            case Set.toList <| model.machine.sigma of 
-                                h::rest -> h
+                            case List.head <| Dict.values model.transitionNames of 
+                                Just h -> h
                                 _ -> " "
                     in
                         renderArrow s0Pos (0,0) (x,y) 20 0 newTrans False s -1
@@ -947,9 +973,9 @@ view model =
                                 Just pos -> pos
                                 _ -> (0,0)
                         newTrans = 
-                            case Set.toList <| model.machine.sigma of 
-                                h::rest -> h
-                                _ -> " "
+                                case List.head <| Dict.values model.transitionNames of
+                                    Just char -> char
+                                    Nothing -> "x"
                     in
                         renderArrow s0Pos (0,0) s1Pos 20 20 newTrans False s -1
                 _ -> group []
