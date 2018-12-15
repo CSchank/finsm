@@ -22,14 +22,16 @@ import Url exposing(Url, percentEncode)
 type Msg
     = Step
     | StartDragging StateID ( Float, Float )
-    | StartDraggingArrow (StateID, Character, StateID)
+    | StartDraggingArrow (StateID, TransitionID, StateID)
     | StartMouseOverRim StateID (Float, Float)
     | MoveMouseOverRim (Float, Float)
     | StopMouseOverRim
-    | SelectArrow ( StateID, Character , StateID )
+    | SelectArrow ( StateID, TransitionID , StateID )
     | MouseOverStateLabel StateID
-    | MouseLeaveStateLabel StateID
+    | MouseOverTransitionLabel TransitionID
+    | MouseLeaveLabel
     | SelectStateLabel StateID
+    | SelectTransitionLabel StateID
     | EditLabel StateID String
     | KeyPressed Int
     | Drag ( Float, Float )
@@ -84,10 +86,12 @@ type BuildingState
     | MousingOverRim StateID (Float, Float)
     | AddingArrow StateID (Float, Float)
     | AddingArrowOverOtherState StateID (Float, Float) StateID
-    | MousingOverStateLabel StateID
+    | MousingOverStateLabel StateID    
+    | MousingOverTransitionLabel TransitionID
     | EditingStateLabel StateID String
-    | SelectedArrow ( StateID, Character, StateID )
-    | DraggingArrow ( StateID, Character, StateID )
+    | EditingTransitionLabel TransitionID String
+    | SelectedArrow ( StateID, TransitionID, StateID )
+    | DraggingArrow ( StateID, TransitionID, StateID )
     | CreatingNewArrow StateID {-source StateID-}
 
 
@@ -170,17 +174,17 @@ main =
               , inputAt = 0
               , statePositions = Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
               , stateNames = Dict.fromList [(0, "q_0"), (1, "q_1"), (2, "q_2"), (3,"q_3")]
-              , transitionNames = Dict.fromList [(0, "1"),(1,"0"),(2,"1"),(3,"0"),(4,"1"),(5,"0"),(6,"1"),(7,"0"),(8,"1")]
+              , transitionNames = Dict.fromList [(0, "Hello"),(1,"0"),(2,"1"),(3,"0"),(4,"1"),(5,"0"),(6,"1"),(7,"0"),(8,"1")]
               , stateTransitions =
                     Dict.fromList
-                        [ ( ( 0, "1" , 1 ), ( 0, 10 ) )
-                        , ( ( 1, "1" , 0 ), ( 0, 10 ) )
-                        , ( ( 0, "0" , 2 ), ( 0, 10 ) )
-                        , ( ( 2, "0", 0 ), ( 0, 10 ) )
-                        , ( ( 2, "1" ,3 ), ( 0, 10 ) )
-                        , ( ( 3, "1", 2 ), ( 0, 10 ) )
-                        , ( ( 1, "0", 3 ), ( 0, 10 ) )
-                        , ( ( 3, "0", 1 ), ( 0, 10 ) )
+                        [ ( ( 0, 0, 1 ), ( 0, 10 ) )
+                        , ( ( 1, 2, 0 ), ( 0, 10 ) )
+                        , ( ( 0, 1, 2 ), ( 0, 10 ) )
+                        , ( ( 2, 5, 0 ), ( 0, 10 ) )
+                        , ( ( 2, 4, 3 ), ( 0, 10 ) )
+                        , ( ( 3, 6, 2 ), ( 0, 10 ) )
+                        , ( ( 1, 3, 3 ), ( 0, 10 ) )
+                        , ( ( 3, 7, 1 ), ( 0, 10 ) )
                         ]
               , windowSize = ( 0, 0 )
               }
@@ -193,6 +197,8 @@ main =
                                         Browser.Events.onResize (\w h -> WindowSize ( w, h ))
                                     ,   case model.appState of 
                                             Building (EditingStateLabel _ _) ->
+                                                Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
+                                            Building (EditingTransitionLabel _ _) ->
                                                 Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
                                             Building (SelectedState _) ->
                                                 Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
@@ -281,7 +287,10 @@ update msg model =
                                        ) model.machine.delta
                             oldMachine = model.machine
                         in
-                        ( { model | appState = Building Regular, machine = { oldMachine | delta = newDelta } }, Cmd.none )
+                        ( { model | appState = Building Regular
+                                  , machine = { oldMachine | delta = newDelta } 
+                                  , transitionNames = Dict.insert newTransID newTrans model.transitionNames
+                                  }, Cmd.none )
                     _ -> ( { model | appState = Building Regular}, Cmd.none )
 
             SelectArrow ( s0, char, s1 ) ->
@@ -363,9 +372,20 @@ update msg model =
 
             MouseOverStateLabel st ->
                 ( { model | appState = Building <| MousingOverStateLabel st }, Cmd.none )
+  
+            MouseOverTransitionLabel tr ->
+                ( { model | appState = case model.appState of
+                                            Building Regular -> 
+                                                Building <| MousingOverTransitionLabel tr 
+                                            _ -> model.appState
+                }, Cmd.none )
 
-            MouseLeaveStateLabel st ->
-                ( { model | appState = Building Regular }, Cmd.none )
+            MouseLeaveLabel ->
+                ( { model | appState = case model.appState of
+                                        Building (MousingOverStateLabel _) -> Building Regular 
+                                        Building (MousingOverTransitionLabel _) -> Building Regular 
+                                        _ -> model.appState
+                          }, Cmd.none )
 
             SelectStateLabel st ->
                 let
@@ -377,10 +397,22 @@ update msg model =
                 
                 ( { model | appState = Building <| EditingStateLabel st stateName }, Cmd.none )
 
+            SelectTransitionLabel tr ->
+                let
+                    transName =
+                        case Dict.get tr model.transitionNames of
+                            Just n -> n
+                            Nothing -> ""    
+                in
+                
+                ( { model | appState = Building <| EditingTransitionLabel tr transName }, Cmd.none )
+
             EditLabel _ lbl ->
                 case model.appState of
                     Building (EditingStateLabel st _) -> 
                         ( { model | appState = Building (EditingStateLabel st lbl ) } , Cmd.none )
+                    Building (EditingTransitionLabel tr _) -> 
+                        ( { model | appState = Building (EditingTransitionLabel tr lbl ) } , Cmd.none )
                     _ -> ( model, Cmd.none )
 
             WindowSize ( w, h ) ->
@@ -391,7 +423,7 @@ update msg model =
             UrlRequest _ -> ( model, Cmd.none )
 
             KeyPressed k ->
-                if k == 13 then
+                if k == 13 then --pressed enter
                     case model.appState of
                         Building (EditingStateLabel stId newLbl) ->
                             let
@@ -404,6 +436,17 @@ update msg model =
                                     ( { model | appState = Building Regular }, Cmd.none)
                                 else
                                     ( { model | stateNames = Dict.insert stId newLbl model.stateNames }, Cmd.none)
+                        Building (EditingTransitionLabel tId newLbl) ->
+                            let
+                                oldTransitionName = 
+                                    case Dict.get tId model.transitionNames of
+                                        Just n -> n
+                                        _      -> ""
+                            in
+                                if newLbl == oldTransitionName || newLbl == "" then
+                                    ( { model | appState = Building Regular }, Cmd.none)
+                                else
+                                    ( { model | transitionNames = Dict.insert tId newLbl model.transitionNames }, Cmd.none)
                         _ -> (model, Cmd.none)
                 else if k == 100 then --pressed d
                     case model.appState of
@@ -532,6 +575,17 @@ textHtml t =
         ]
         []
 
+editIcon =
+    group
+        [ --square 5 |> outlined (solid 1) black
+            rect 5 2
+            |> filled blue
+            |> rotate (degrees 45)
+            |> move ( 3, 3 )
+        , triangle 1
+            |> filled blue
+            |> rotate (degrees -15)
+        ]
 
 renderStates states currents finals pos model =
     let
@@ -553,17 +607,6 @@ renderStates states currents finals pos model =
                 1
             )
 
-        editIcon =
-            group
-                [ --square 5 |> outlined (solid 1) black
-                  rect 5 2
-                    |> filled blue
-                    |> rotate (degrees 45)
-                    |> move ( 3, 3 )
-                , triangle 1
-                    |> filled blue
-                    |> rotate (degrees -15)
-                ]
         stateName sId =
             case Dict.get sId model.stateNames of
                 Just n -> n
@@ -625,19 +668,17 @@ renderStates states currents finals pos model =
                                 if st == sId then
                                     textBox str (6*toFloat (String.length str)) 20 "LaTeX" (EditLabel sId)
                                 else
-                                    (latex 20 20 (stateName sId))
-                                        |> move ( -8, 9 )
-                                        |> scale 0.9
+                                    (latex 25 18 (stateName sId))
+                                        |> move ( 0, 9 )
                                         |> notifyEnter (MouseOverStateLabel sId)
-                                        |> notifyLeave (MouseLeaveStateLabel sId)
+                                        |> notifyLeave MouseLeaveLabel
                                         |> notifyTap (SelectStateLabel sId)
 
                             _ ->
-                                (latex 20 20 (stateName sId))
-                                    |> move ( -8, 9 )
-                                    |> scale 0.9
+                                (latex 25 18 (stateName sId))
+                                    |> move ( 0, 9 )
                                     |> notifyEnter (MouseOverStateLabel sId)
-                                    |> notifyLeave (MouseLeaveStateLabel sId)
+                                    |> notifyLeave MouseLeaveLabel
                                     |> notifyTap (SelectStateLabel sId)
                         , case model.appState of
                             Building (MousingOverStateLabel st) ->
@@ -681,14 +722,24 @@ textBox txt w h place msg =
 
 
 latex w h txt =
-    html w h <| H.img [ Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
-                      , Html.Attributes.src (latexurl txt)
-                      , style "width" "100%"
-                      , style "height" "100%"
+    (html w h <| H.div [style "position" "absolute"
+                      ,style "width" "100%"
+                      ,style "height" "100%"
                       , attribute "moz-user-select" "none"
                       , attribute "webkit-user-select" "none"
                       , attribute "user-select" "none"
-                       ] []
+                      ]
+                      
+                      [H.img [ Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
+                      , Html.Attributes.src (latexurl txt)
+                      --, style "width" "100%"                      
+                      ,style "height" "100%"
+                      ,style "margin-left" "auto"
+                      ,style "margin-right" "auto"
+                      ,style "display" "block"
+                      ,style "max-width" "100%"
+
+                       ] []]) |> move(-w/2,0)
 
 
 latexurl : String -> String
@@ -716,8 +767,8 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
                 |> move ( x2 - 4 * cos (atan2 dy dx), y2 - 4 * sin (atan2 dy dx) )
             ]
 
-
-renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
+renderArrow : (Float, Float) -> (Float, Float) -> (Float, Float) -> Float -> Float -> Character -> TransitionID -> Bool -> StateID -> StateID -> ApplicationState -> Shape Msg
+renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appState =
     let
         ( tx, ty ) =
             --tangent between to and from states
@@ -758,16 +809,38 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
         group
             [ group
                 [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
-                , latex 12 12 char
-                    |> move ( -6, 7 )
+                    |> notifyMouseDown (SelectArrow ( s1, charID , s2 ))
+                , 
+                    group 
+                    [
+                         case appState of 
+                            Building (EditingTransitionLabel tId str) ->
+                                if tId == charID then 
+                                    textBox str (6*toFloat (String.length str)) 20 "LaTeX" (EditLabel tId)
+                                else latex 50 12 char
+                            _ -> latex 50 12 char
+                    ,    case appState of 
+                            Building (MousingOverTransitionLabel tId) ->
+                                if tId == charID then 
+                                    group
+                                    [
+                                        editIcon |> move (10,0)
+                                    ,   rect 50 20 
+                                            |> filled blank
+                                            |> notifyTap (SelectTransitionLabel charID)
+                                    ]
+                                else group []
+                            _ -> group[]
+                    ]
+                    |> move ( 0, 7 )
                     |> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
                     |> move
                         ( -offset * sin theta
                         , offset * cos theta
                         )
+                    |> notifyEnter (MouseOverTransitionLabel charID)
+                    |> notifyLeave MouseLeaveLabel
                 ]
-                |> notifyMouseDown (SelectArrow ( s1, char , s2 ))
-
             {- ( (x2 + x0)
                    / 2
                    + rx
@@ -789,7 +862,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char sel s1 s2 =
                     , circle 3
                         |> filled red
                         |> move ( mx, my )
-                        |> notifyMouseDown (StartDraggingArrow (s1, char, s2))
+                        |> notifyMouseDown (StartDraggingArrow (s1, charID, s2))
                         |> notifyMouseMoveAt Drag
                     ]
               else
@@ -834,7 +907,7 @@ renderArrows states del pos transPos model =
                     group
                         (List.concat
                             (List.map
-                                (\( ch, ss ) ->
+                                (\( chId, ss ) ->
                                     List.map
                                         (\s2 ->
                                             let
@@ -842,27 +915,31 @@ renderArrows states del pos transPos model =
                                                     (getPos s1)
 
                                                 ( x1, y1 ) =
-                                                    (getTransPos ( s1, ch, s2 ))
+                                                    (getTransPos ( s1, chId, s2 ))
 
                                                 ( x2, y2 ) =
                                                     (getPos s2)
 
+                                                ch = case Dict.get chId model.transitionNames of
+                                                        Just c -> c
+                                                        _ -> ""
+
                                                 sel =
                                                     case model.appState of
                                                         Building (SelectedArrow ( ss1, char , ss2 )) ->
-                                                            ( ss1, ss2 ) == ( s1, s2 )
+                                                            char == chId
 
                                                         Building (DraggingArrow ( ss1, char , ss2 )) ->
-                                                            ( ss1, ss2 ) == ( s1, s2 )
+                                                            char == chId
 
                                                         _ ->
                                                             False
                                             in
                                                 group
-                                                    [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch sel s1 s2
+                                                    [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel s1 s2 model.appState
                                                     ]
                                         )
-                                        (Set.toList ss)
+                                        [ss]
                                 )
                                 (edgeToList s1)
                             )
@@ -957,11 +1034,15 @@ view model =
                                 Just pos -> pos
                                 _ -> (0,0)
                         newTrans = 
-                            case List.head <| Dict.values model.transitionNames of 
-                                Just h -> h
-                                _ -> " "
+                                case List.head <| Dict.values model.transitionNames of
+                                    Just char -> char
+                                    Nothing -> " "
+                        newTransID = 
+                                case List.head <| Dict.keys model.transitionNames of
+                                    Just char -> char
+                                    Nothing -> 0
                     in
-                        renderArrow s0Pos (0,0) (x,y) 20 0 newTrans False s -1
+                        renderArrow s0Pos (0,0) (x,y) 20 0 newTrans newTransID False s -1 model.appState
                 Building (AddingArrowOverOtherState s (x,y) s1) ->
                     let
                         s0Pos =
@@ -975,9 +1056,13 @@ view model =
                         newTrans = 
                                 case List.head <| Dict.values model.transitionNames of
                                     Just char -> char
-                                    Nothing -> "x"
+                                    Nothing -> " "
+                        newTransID = 
+                                case List.head <| Dict.keys model.transitionNames of
+                                    Just char -> char
+                                    Nothing -> 0
                     in
-                        renderArrow s0Pos (0,0) s1Pos 20 20 newTrans False s -1
+                        renderArrow s0Pos (0,0) s1Pos 20 20 newTrans newTransID False s -1 model.appState
                 _ -> group []
             , group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
             , text (Debug.toString model.appState) |> filled black |> move ( 0, -150 )
