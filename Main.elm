@@ -174,7 +174,7 @@ main =
               , inputAt = 0
               , statePositions = Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
               , stateNames = Dict.fromList [(0, "q_0"), (1, "q_1"), (2, "q_2"), (3,"q_3")]
-              , transitionNames = Dict.fromList [(0, "Hello"),(1,"0"),(2,"1"),(3,"0"),(4,"1"),(5,"0"),(6,"1"),(7,"0"),(8,"1")]
+              , transitionNames = Dict.fromList [(0, "1"),(1,"0"),(2,"1"),(3,"0"),(4,"1"),(5,"0"),(6,"1"),(7,"0"),(8,"1")]
               , stateTransitions =
                     Dict.fromList
                         [ ( ( 0, 0, 1 ), ( 0, 10 ) )
@@ -201,6 +201,8 @@ main =
                                             Building (EditingTransitionLabel _ _) ->
                                                 Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
                                             Building (SelectedState _) ->
+                                                Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
+                                            Building (SelectedArrow _) ->
                                                 Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
                                             _ -> Sub.none
                                     ]
@@ -460,6 +462,17 @@ update msg model =
                                 ({ model | machine = newMachine
                                          , appState = Building Regular
                                          , statePositions = Dict.remove stId model.statePositions
+                                         , stateTransitions = newStateTransitions
+                                 }, Cmd.none)
+                        Building (SelectedArrow (_,tId,_)) ->
+                            let
+                                oldMachine = model.machine                                
+                                newDelta = Dict.map (\_ d -> Dict.filter (\tId0 _ -> tId /= tId0) d) model.machine.delta
+                                newMachine = { oldMachine | delta = newDelta }
+                                newStateTransitions = Dict.filter (\(_,tId0,_) _ -> tId /= tId0) model.stateTransitions
+                            in
+                                ({ model | machine = newMachine
+                                         , appState = Building Regular
                                          , stateTransitions = newStateTransitions
                                  }, Cmd.none)
                         _ -> (model, Cmd.none)
@@ -1064,8 +1077,8 @@ view model =
                     in
                         renderArrow s0Pos (0,0) s1Pos 20 20 newTrans newTransID False s -1 model.appState
                 _ -> group []
-            , group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
-            , text (Debug.toString model.appState) |> filled black |> move ( 0, -150 )
+            --, group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
+           -- , text (Debug.toString model.appState) |> filled black |> move ( 0, -150 )
             , case model.appState of
                 Building (DraggingState _ _) ->
                     rect winX winY
@@ -1090,8 +1103,8 @@ view model =
 
                 _ ->
                     group []
-            , editingButtons
-                |> move (-winX/2,winY/2)
+            {-, editingButtons
+                |> move (-winX/2,winY/2)-}
             ]
 
 editingButtons = 
