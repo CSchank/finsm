@@ -20,8 +20,16 @@ import Url exposing(Url, percentEncode)
 
 
 type Msg
-    = Step
-    | StartDragging StateID ( Float, Float )
+    = GoTo ApplicationState
+    | BMsg BuildingMsg
+    | SMsg SimulatingMsg
+    | KeyPressed Int
+    | WindowSize ( Int, Int )
+    | UrlChange Url
+    | UrlRequest UrlRequest
+
+type BuildingMsg
+    = StartDragging StateID ( Float, Float )
     | StartDraggingArrow (StateID, TransitionID, StateID)
     | StartMouseOverRim StateID (Float, Float)
     | MoveMouseOverRim (Float, Float)
@@ -33,13 +41,12 @@ type Msg
     | SelectStateLabel StateID
     | SelectTransitionLabel StateID
     | EditLabel StateID String
-    | KeyPressed Int
     | Drag ( Float, Float )
     | AddState ( Float, Float )
     | StopDragging
-    | WindowSize ( Int, Int )
-    | UrlChange Url
-    | UrlRequest UrlRequest
+
+type SimulatingMsg
+    = Step
 
 
 type alias StateID =
@@ -77,7 +84,7 @@ type alias StateTransitions =
 
 type ApplicationState
     = Building BuildingState
-    | Simulating
+    | Simulating SimulatingState
 
 type BuildingState
     = Regular
@@ -94,13 +101,24 @@ type BuildingState
     | DraggingArrow ( StateID, TransitionID, StateID )
     | CreatingNewArrow StateID {-source StateID-}
 
+type SimulatingState
+    = SimRegular
+
+type alias SimulateData =
+    {
+        tapes : Dict Int (List Character)
+    }
+
+initSimData = 
+    {
+        tapes = Dict.empty
+    }
 
 type alias Model =
     { appState : ApplicationState
+    , simulateData : SimulateData
     , machine : Machine
     , states : Set StateID
-    , input : Array Character
-    , inputAt : Int
     , statePositions : StatePositions
     , stateTransitions : StateTransitions
     , stateNames : StateNames
@@ -169,9 +187,8 @@ main =
         { init = \flags url key ->
             ( { appState = Building Regular
               , machine = test
+              , simulateData = initSimData
               , states = test.start
-              , input = Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ]
-              , inputAt = 0
               , statePositions = Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
               , stateNames = Dict.fromList [(0, "q_0"), (1, "q_1"), (2, "q_2"), (3,"q_3")]
               , transitionNames = Dict.fromList [(0, "1"),(1,"0"),(2,"1"),(3,"0"),(4,"1"),(5,"0"),(6,"1"),(7,"0"),(8,"1")]
@@ -213,209 +230,28 @@ main =
 
 update msg model =
     let
-        ch =
+        {-ch =
             case (Array.get model.inputAt model.input) of
                 Just c ->
                     c
 
                 Nothing ->
-                    ""
+                    ""-}
+        xxxxx= 0 
     in
         case msg of
-            Step ->
-                if ch /= "" then
-                    ( { model
-                        | states = deltaHat model.transitionNames model.machine.delta ch model.states
-                        , inputAt = model.inputAt + 1
-                      }
-                    , Cmd.none
-                    )
-                else
-                    ( model, Cmd.none )
+            GoTo state ->
+                ( { model | appState = state }, Cmd.none)
 
-            StartDragging st ( x, y ) ->
-                let
-                    ( sx, sy ) =
-                        case (Dict.get st model.statePositions) of
-                            Just ( xx, yy ) ->
-                                ( xx, yy )
-
-                            Nothing ->
-                                ( 0, 0 )
-                in 
-                    case model.appState of
-                        Building (MousingOverRim sId _) ->
-                            ( { model | appState = Building <| AddingArrow sId (x,y) }
-                            , Cmd.none )
-                        _ -> ( { model | appState = Building <| DraggingState st ( x - sx, y - sy ) }, Cmd.none )
-
-            StartDraggingArrow (st1, char, st2) ->
-                ( { model | appState = Building <| DraggingArrow (st1, char, st2) }, Cmd.none)
-
-            StartMouseOverRim stId (x,y) ->
+            BMsg bmsg ->
                 case model.appState of
-                    Building Regular ->
-                        ( { model | appState = Building <| MousingOverRim stId (x,y) }, Cmd.none )
-                    _ -> ( model, Cmd.none )
+                    Building _ -> buildingUpdate bmsg model
+                    _ -> (model,Cmd.none)
 
-            MoveMouseOverRim (x,y) ->
+            SMsg smsg ->
                 case model.appState of
-                    Building (MousingOverRim stId _) ->
-                        ( { model | appState = Building <| MousingOverRim stId (x,y) }, Cmd.none )
-                    _ -> ( model, Cmd.none )
-
-            StopMouseOverRim ->
-                ( { model | appState = Building Regular }, Cmd.none )
-
-            StopDragging ->
-                case model.appState of 
-                    Building (DraggingState st _) ->
-                        ( { model | appState = Building (SelectedState st) }, Cmd.none )
-                    Building (AddingArrowOverOtherState st _ s1) ->
-                        let
-                            newTrans = 
-                                case List.head <| Dict.values model.transitionNames of
-                                    Just char -> char
-                                    Nothing -> "x"
-                            newTransID = case List.maximum <| Dict.keys model.transitionNames of
-                                            Just n -> n + 1
-                                            Nothing -> 0
-                            newDelta : Delta
-                            newDelta = Dict.update st (\mcDict -> 
-                                        case mcDict of
-                                            Just ss -> Just <| Dict.update newTransID (\mState ->
-                                                    Just s1) ss
-                                            Nothing -> Just <| Dict.singleton newTransID s1
-                                       ) model.machine.delta
-                            oldMachine = model.machine
-                        in
-                        ( { model | appState = Building Regular
-                                  , machine = { oldMachine | delta = newDelta } 
-                                  , transitionNames = Dict.insert newTransID newTrans model.transitionNames
-                                  }, Cmd.none )
-                    _ -> ( { model | appState = Building Regular}, Cmd.none )
-
-            SelectArrow ( s0, char, s1 ) ->
-                ( { model | appState = Building <| SelectedArrow ( s0, char, s1 ) }, Cmd.none )
-
-            Drag ( x, y ) ->
-                case model.appState of
-                    Building (DraggingState st ( ox, oy )) ->
-                        let
-                            ( sx, sy ) =
-                                case (Dict.get st model.statePositions) of
-                                    Just ( xx, yy ) ->
-                                        ( xx, yy )
-
-                                    Nothing ->
-                                        ( 0, 0 )
-                        in
-                            ( { model
-                                | statePositions = updateStatePos st ( x - ox, y - oy ) model.statePositions
-                              }
-                            , Cmd.none
-                            )
-
-                    Building (DraggingArrow ( s1, char, s2 )) ->
-                        let
-                            ( x0, y0 ) =
-                                case (Dict.get s1 model.statePositions) of
-                                    Just ( xx, yy ) ->
-                                        ( xx, yy )
-
-                                    Nothing ->
-                                        ( 0, 0 )
-
-                            ( x1, y1 ) =
-                                case (Dict.get s2 model.statePositions) of
-                                    Just ( xx, yy ) ->
-                                        ( xx, yy )
-
-                                    Nothing ->
-                                        ( 0, 0 )
-
-                            theta =
-                                -1 * atan2 (y1 - y0) (x1 - x0)
-
-                            ( mx, my ) =
-                                ( (x0 + x1) / 2, (y0 + y1) / 2 )
-
-                            ( nx, ny ) =
-                                sub ( x, y ) ( mx, my )
-
-                            nprot =
-                                ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
-                        in
-                            ( { model | stateTransitions = Dict.insert ( s1, char, s2 ) nprot model.stateTransitions }, Cmd.none )
-                    Building (AddingArrow st _) ->
-                        let
-                            aboveStates = List.map (\(sId,_) -> sId) <| Dict.toList <|
-                                            Dict.filter (\_ (x1,y1) -> (x1-x)^2 + (y1-y)^2 <= 400) model.statePositions
-                            newState =
-                                case aboveStates of
-                                    h::_ -> if st /= h then AddingArrowOverOtherState st (x,y) h else AddingArrow st (x,y)
-                                    _ -> AddingArrow st (x,y)
-                        in
-                        ( { model | appState = Building newState }
-                        , Cmd.none )
-                    Building (AddingArrowOverOtherState st _ s1) ->
-                        let
-                            aboveStates = List.map (\(sId,_) -> sId) <| Dict.toList <|
-                                            Dict.filter (\_ (x1,y1) -> (x1-x)^2 + (y1-y)^2 <= 400) model.statePositions
-                            newState =
-                                case aboveStates of
-                                    h::_ -> if st /= h then AddingArrowOverOtherState st (x,y) h else AddingArrow st (x,y)
-                                    _ -> AddingArrow st (x,y)
-                        in
-                        ( { model | appState = Building newState }
-                        , Cmd.none )
-                    _ ->
-                        ( model, Cmd.none )
-
-            MouseOverStateLabel st ->
-                ( { model | appState = Building <| MousingOverStateLabel st }, Cmd.none )
-  
-            MouseOverTransitionLabel tr ->
-                ( { model | appState = case model.appState of
-                                            Building Regular -> 
-                                                Building <| MousingOverTransitionLabel tr 
-                                            _ -> model.appState
-                }, Cmd.none )
-
-            MouseLeaveLabel ->
-                ( { model | appState = case model.appState of
-                                        Building (MousingOverStateLabel _) -> Building Regular 
-                                        Building (MousingOverTransitionLabel _) -> Building Regular 
-                                        _ -> model.appState
-                          }, Cmd.none )
-
-            SelectStateLabel st ->
-                let
-                    stateName =
-                        case Dict.get st model.stateNames of
-                            Just n -> n
-                            Nothing -> ""    
-                in
-                
-                ( { model | appState = Building <| EditingStateLabel st stateName }, Cmd.none )
-
-            SelectTransitionLabel tr ->
-                let
-                    transName =
-                        case Dict.get tr model.transitionNames of
-                            Just n -> n
-                            Nothing -> ""    
-                in
-                
-                ( { model | appState = Building <| EditingTransitionLabel tr transName }, Cmd.none )
-
-            EditLabel _ lbl ->
-                case model.appState of
-                    Building (EditingStateLabel st _) -> 
-                        ( { model | appState = Building (EditingStateLabel st lbl ) } , Cmd.none )
-                    Building (EditingTransitionLabel tr _) -> 
-                        ( { model | appState = Building (EditingTransitionLabel tr lbl ) } , Cmd.none )
-                    _ -> ( model, Cmd.none )
+                    Simulating _ -> simulatingUpdate smsg model
+                    _ -> (model,Cmd.none)
 
             WindowSize ( w, h ) ->
                 ( { model | windowSize = ( w, h ) }, Cmd.none )
@@ -478,7 +314,194 @@ update msg model =
                         _ -> (model, Cmd.none)
                 else (model, Cmd.none)
 
-            AddState (x,y) ->
+buildingUpdate : BuildingMsg -> Model -> (Model, Cmd Msg)    
+buildingUpdate msg model = 
+    case msg of 
+        StartDragging st ( x, y ) ->
+            let
+                ( sx, sy ) =
+                    case (Dict.get st model.statePositions) of
+                        Just ( xx, yy ) ->
+                            ( xx, yy )
+
+                        Nothing ->
+                            ( 0, 0 )
+            in 
+                case model.appState of
+                    Building (MousingOverRim sId _) ->
+                        ( { model | appState = Building <| AddingArrow sId (x,y) }
+                        , Cmd.none )
+                    _ -> ( { model | appState = Building <| DraggingState st ( x - sx, y - sy ) }, Cmd.none )
+
+        StartDraggingArrow (st1, char, st2) ->
+            ( { model | appState = Building <| DraggingArrow (st1, char, st2) }, Cmd.none)
+
+        StartMouseOverRim stId (x,y) ->
+            case model.appState of
+                Building Regular ->
+                    ( { model | appState = Building <| MousingOverRim stId (x,y) }, Cmd.none )
+                _ -> ( model, Cmd.none )
+
+        MoveMouseOverRim (x,y) ->
+            case model.appState of
+                Building (MousingOverRim stId _) ->
+                    ( { model | appState = Building <| MousingOverRim stId (x,y) }, Cmd.none )
+                _ -> ( model, Cmd.none )
+
+        StopMouseOverRim ->
+            ( { model | appState = Building Regular }, Cmd.none )
+
+        StopDragging ->
+            case model.appState of 
+                Building (DraggingState st _) ->
+                    ( { model | appState = Building (SelectedState st) }, Cmd.none )
+                Building (AddingArrowOverOtherState st _ s1) ->
+                    let
+                        newTrans = 
+                            case List.head <| Dict.values model.transitionNames of
+                                Just char -> char
+                                Nothing -> "x"
+                        newTransID = case List.maximum <| Dict.keys model.transitionNames of
+                                        Just n -> n + 1
+                                        Nothing -> 0
+                        newDelta : Delta
+                        newDelta = Dict.update st (\mcDict -> 
+                                    case mcDict of
+                                        Just ss -> Just <| Dict.update newTransID (\mState ->
+                                                Just s1) ss
+                                        Nothing -> Just <| Dict.singleton newTransID s1
+                                    ) model.machine.delta
+                        oldMachine = model.machine
+                    in
+                    ( { model | appState = Building Regular
+                                , machine = { oldMachine | delta = newDelta } 
+                                , transitionNames = Dict.insert newTransID newTrans model.transitionNames
+                                }, Cmd.none )
+                _ -> ( { model | appState = Building Regular}, Cmd.none )
+
+        SelectArrow ( s0, char, s1 ) ->
+            ( { model | appState = Building <| SelectedArrow ( s0, char, s1 ) }, Cmd.none )
+
+        Drag ( x, y ) ->
+            case model.appState of
+                Building (DraggingState st ( ox, oy )) ->
+                    let
+                        ( sx, sy ) =
+                            case (Dict.get st model.statePositions) of
+                                Just ( xx, yy ) ->
+                                    ( xx, yy )
+
+                                Nothing ->
+                                    ( 0, 0 )
+                    in
+                        ( { model
+                            | statePositions = updateStatePos st ( x - ox, y - oy ) model.statePositions
+                            }
+                        , Cmd.none
+                        )
+
+                Building (DraggingArrow ( s1, char, s2 )) ->
+                    let
+                        ( x0, y0 ) =
+                            case (Dict.get s1 model.statePositions) of
+                                Just ( xx, yy ) ->
+                                    ( xx, yy )
+
+                                Nothing ->
+                                    ( 0, 0 )
+
+                        ( x1, y1 ) =
+                            case (Dict.get s2 model.statePositions) of
+                                Just ( xx, yy ) ->
+                                    ( xx, yy )
+
+                                Nothing ->
+                                    ( 0, 0 )
+
+                        theta =
+                            -1 * atan2 (y1 - y0) (x1 - x0)
+
+                        ( mx, my ) =
+                            ( (x0 + x1) / 2, (y0 + y1) / 2 )
+
+                        ( nx, ny ) =
+                            sub ( x, y ) ( mx, my )
+
+                        nprot =
+                            ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
+                    in
+                        ( { model | stateTransitions = Dict.insert ( s1, char, s2 ) nprot model.stateTransitions }, Cmd.none )
+                Building (AddingArrow st _) ->
+                    let
+                        aboveStates = List.map (\(sId,_) -> sId) <| Dict.toList <|
+                                        Dict.filter (\_ (x1,y1) -> (x1-x)^2 + (y1-y)^2 <= 400) model.statePositions
+                        newState =
+                            case aboveStates of
+                                h::_ -> if st /= h then AddingArrowOverOtherState st (x,y) h else AddingArrow st (x,y)
+                                _ -> AddingArrow st (x,y)
+                    in
+                    ( { model | appState = Building newState }
+                    , Cmd.none )
+                Building (AddingArrowOverOtherState st _ s1) ->
+                    let
+                        aboveStates = List.map (\(sId,_) -> sId) <| Dict.toList <|
+                                        Dict.filter (\_ (x1,y1) -> (x1-x)^2 + (y1-y)^2 <= 400) model.statePositions
+                        newState =
+                            case aboveStates of
+                                h::_ -> if st /= h then AddingArrowOverOtherState st (x,y) h else AddingArrow st (x,y)
+                                _ -> AddingArrow st (x,y)
+                    in
+                    ( { model | appState = Building newState }
+                    , Cmd.none )
+                _ ->
+                    ( model, Cmd.none )
+
+        MouseOverStateLabel st ->
+            ( { model | appState = Building <| MousingOverStateLabel st }, Cmd.none )
+
+        MouseOverTransitionLabel tr ->
+            ( { model | appState = case model.appState of
+                                        Building Regular -> 
+                                            Building <| MousingOverTransitionLabel tr 
+                                        _ -> model.appState
+            }, Cmd.none )
+
+        MouseLeaveLabel ->
+            ( { model | appState = case model.appState of
+                                    Building (MousingOverStateLabel _) -> Building Regular 
+                                    Building (MousingOverTransitionLabel _) -> Building Regular 
+                                    _ -> model.appState
+                        }, Cmd.none )
+
+        SelectStateLabel st ->
+            let
+                stateName =
+                    case Dict.get st model.stateNames of
+                        Just n -> n
+                        Nothing -> ""    
+            in
+            
+            ( { model | appState = Building <| EditingStateLabel st stateName }, Cmd.none )
+
+        SelectTransitionLabel tr ->
+            let
+                transName =
+                    case Dict.get tr model.transitionNames of
+                        Just n -> n
+                        Nothing -> ""    
+            in
+            
+            ( { model | appState = Building <| EditingTransitionLabel tr transName }, Cmd.none )
+
+        EditLabel _ lbl ->
+            case model.appState of
+                Building (EditingStateLabel st _) -> 
+                    ( { model | appState = Building (EditingStateLabel st lbl ) } , Cmd.none )
+                Building (EditingTransitionLabel tr _) -> 
+                    ( { model | appState = Building (EditingTransitionLabel tr lbl ) } , Cmd.none )
+                _ -> ( model, Cmd.none )
+        
+        AddState (x,y) ->
                 case model.appState of
                     Building Regular ->
                         let
@@ -495,7 +518,20 @@ update msg model =
                         -> ({ model | appState = Building Regular }, Cmd.none)
                     
                     _ -> (model, Cmd.none)
-            
+
+simulatingUpdate msg model =
+    case msg of
+        Step ->
+                {-if ch /= "" then
+                    ( { model
+                        | states = deltaHat model.transitionNames model.machine.delta ch model.states
+                        , inputAt = model.inputAt + 1
+                      }
+                    , Cmd.none
+                    )
+                else-}
+            ( model, Cmd.none )
+
 setMax : Set Int -> Int
 setMax s = 
     Set.foldl max 0 s
@@ -600,6 +636,7 @@ editIcon =
             |> rotate (degrees -15)
         ]
 
+renderStates : Set StateID -> Set StateID -> Set StateID -> StatePositions -> Model -> Shape Msg
 renderStates states currents finals pos model =
     let
         stateList =
@@ -631,21 +668,21 @@ renderStates states currents finals pos model =
                     group
                         [ circle 21
                             |> outlined (solid 3) blank
-                            |> notifyEnterAt (StartMouseOverRim sId)
+                            |> notifyEnterAt (BMsg << StartMouseOverRim sId)
                         , circle 20
                             |> outlined (solid (thickness sId)) black
-                            |> notifyMouseDownAt (StartDragging sId)
+                            |> notifyMouseDownAt (BMsg << StartDragging sId)
                         , if (Set.member sId finals) then
                             circle 17
                                 |> outlined (solid (thickness sId)) black
-                                |> notifyMouseDownAt (StartDragging sId)
+                                |> notifyMouseDownAt (BMsg << StartDragging sId)
                           else
                             group []
                         , case model.appState of 
                             Building (SelectedState st) ->
                                 if st == sId then
                                     circle 20.75 |> outlined (solid 1.5) lightBlue
-                                        |> notifyMouseDownAt (StartDragging sId)
+                                        |> notifyMouseDownAt (BMsg << StartDragging sId)
                                 else 
                                     group []
                             Building (MousingOverRim st (x,y)) ->
@@ -662,37 +699,37 @@ renderStates states currents finals pos model =
                                                 |> addOutline (solid 0.5) black
                                         ,   rect 8 1.5 |> filled black
                                         ,   rect 1.5 8 |> filled black
-                                        ]|> notifyMouseMoveAt MoveMouseOverRim
-                                         |> notifyMouseDownAt (StartDragging sId)
-                                         |> notifyLeave StopMouseOverRim
+                                        ]|> notifyMouseMoveAt (BMsg << MoveMouseOverRim)
+                                         |> notifyMouseDownAt (BMsg << StartDragging sId)
+                                         |> notifyLeave (BMsg StopMouseOverRim)
                                          |> move( 20 * cos (atan2 dy dx), 20 * sin (atan2 dy dx) )
                                 else 
                                     group []
                             Building (AddingArrowOverOtherState _ _ st) ->
                                 if st == sId then
                                     circle 21.5 |> outlined (solid 3) lightGreen
-                                        |> notifyMouseDownAt (StartDragging sId)
-                                        |> notifyLeave StopMouseOverRim
+                                        |> notifyMouseDownAt (BMsg << StartDragging sId)
+                                        |> notifyLeave (BMsg StopMouseOverRim)
                                 else 
                                     group []
                             _ -> group []
                         , case model.appState of
                             Building (EditingStateLabel st str) ->
                                 if st == sId then
-                                    textBox str (6*toFloat (String.length str)) 20 "LaTeX" (EditLabel sId)
+                                    textBox str (6*toFloat (String.length str)) 20 "LaTeX" (BMsg << EditLabel sId)
                                 else
                                     (latex 25 18 (stateName sId))
                                         |> move ( 0, 9 )
-                                        |> notifyEnter (MouseOverStateLabel sId)
-                                        |> notifyLeave MouseLeaveLabel
-                                        |> notifyTap (SelectStateLabel sId)
+                                        |> notifyEnter (BMsg <| MouseOverStateLabel sId)
+                                        |> notifyLeave (BMsg MouseLeaveLabel)
+                                        |> notifyTap (BMsg <| SelectStateLabel sId)
 
                             _ ->
                                 (latex 25 18 (stateName sId))
                                     |> move ( 0, 9 )
-                                    |> notifyEnter (MouseOverStateLabel sId)
-                                    |> notifyLeave MouseLeaveLabel
-                                    |> notifyTap (SelectStateLabel sId)
+                                    |> notifyEnter (BMsg <| MouseOverStateLabel sId)
+                                    |> notifyLeave (BMsg MouseLeaveLabel)
+                                    |> notifyTap (BMsg <| SelectStateLabel sId)
                         , case model.appState of
                             Building (MousingOverStateLabel st) ->
                                 if sId == st then
@@ -822,14 +859,14 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
         group
             [ group
                 [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
-                    |> notifyMouseDown (SelectArrow ( s1, charID , s2 ))
+                    |> notifyMouseDown (BMsg <| SelectArrow ( s1, charID , s2 ))
                 , 
                     group 
                     [
                          case appState of 
                             Building (EditingTransitionLabel tId str) ->
                                 if tId == charID then 
-                                    textBox str (6*toFloat (String.length str)) 20 "LaTeX" (EditLabel tId)
+                                    textBox str (6*toFloat (String.length str)) 20 "LaTeX" (BMsg << EditLabel tId)
                                 else latex 50 12 char
                             _ -> latex 50 12 char
                     ,    case appState of 
@@ -840,7 +877,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
                                         editIcon |> move (10,0)
                                     ,   rect 50 20 
                                             |> filled blank
-                                            |> notifyTap (SelectTransitionLabel charID)
+                                            |> notifyTap (BMsg <| SelectTransitionLabel charID)
                                     ]
                                 else group []
                             _ -> group[]
@@ -851,8 +888,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
                         ( -offset * sin theta
                         , offset * cos theta
                         )
-                    |> notifyEnter (MouseOverTransitionLabel charID)
-                    |> notifyLeave MouseLeaveLabel
+                    |> notifyEnter (BMsg <| MouseOverTransitionLabel charID)
+                    |> notifyLeave (BMsg MouseLeaveLabel)
                 ]
             {- ( (x2 + x0)
                    / 2
@@ -875,8 +912,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
                     , circle 3
                         |> filled red
                         |> move ( mx, my )
-                        |> notifyMouseDown (StartDraggingArrow (s1, charID, s2))
-                        |> notifyMouseMoveAt Drag
+                        |> notifyMouseDown (BMsg <| StartDraggingArrow (s1, charID, s2))
+                        |> notifyMouseMoveAt (BMsg << Drag)
                     ]
               else
                 group []
@@ -1005,8 +1042,8 @@ dot ( x0, y0 ) ( x1, y1 ) =
 
 view model =
     let
-        accepted =
-            isAccept model.states model.machine.final model.input model.inputAt
+        {-accepted =
+            isAccept model.states model.machine.final model.input model.inputAt-}
 
         winX =
             (toFloat <| first model.windowSize)
@@ -1023,7 +1060,7 @@ view model =
                 Building _ -> 
                     rect winX winY 
                         |> filled blank
-                        |> notifyTapAt AddState
+                        |> notifyTapAt (BMsg << AddState)
                 _ -> group []
             , group [ renderStates model.machine.q model.states model.machine.final model.statePositions model ] |> move ( 0, 0 )
             , renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions model
@@ -1079,33 +1116,72 @@ view model =
                 _ -> group []
             --, group [ roundedRect 30 30 10 |> filled lightGreen, triangle 10 |> filled white ] |> move ( 0, -100 ) |> notifyTap Step
            -- , text (Debug.toString model.appState) |> filled black |> move ( 0, -150 )
-            , case model.appState of
-                Building (DraggingState _ _) ->
-                    rect winX winY
-                        |> filled blank
-                        |> notifyMouseMoveAt Drag
-                        |> notifyMouseUp StopDragging
-                Building (AddingArrow _ _) ->
-                    rect winX winY
-                        |> filled blank
-                        |> notifyMouseMoveAt Drag
-                        |> notifyMouseUp StopDragging
-                Building (AddingArrowOverOtherState _ _ _) ->
-                    rect winX winY
-                        |> filled blank
-                        |> notifyMouseMoveAt Drag
-                        |> notifyMouseUp StopDragging
-                Building (DraggingArrow _) ->
-                    rect winX winY
-                        |> filled blank
-                        |> notifyMouseMoveAt Drag
-                        |> notifyMouseUp StopDragging
-
-                _ ->
-                    group []
-            {-, editingButtons
+            , 
+                let
+                    newRect = 
+                        rect winX winY
+                            |> filled blank
+                            |> notifyMouseMoveAt (BMsg << Drag)
+                            |> notifyMouseUp (BMsg StopDragging)
+                in
+                
+                case model.appState of
+                    Building (DraggingState _ _) -> newRect
+                    Building (AddingArrow _ _) -> newRect
+                    Building (AddingArrowOverOtherState _ _ _) -> newRect
+                    Building (DraggingArrow _) -> newRect
+                    _ -> group []
+           {- , editingButtons
                 |> move (-winX/2,winY/2)-}
+            ,   modeButtons model
             ]
+
+modeButtons model =
+    let
+        
+        winX =
+            (toFloat <| first model.windowSize)
+
+        winY =
+            (toFloat <| second model.windowSize)
+
+        building = case model.appState of
+                        Building _ -> True
+                        _ -> False
+        simulating = case model.appState of
+                        Simulating _ -> True
+                        _ -> False
+    in
+    
+    group
+    [
+        group 
+            [
+                roundedRect 40 15 1 
+                    |> filled (if building then rgb 21 137 255 else blank)
+                    |> addOutline (solid 1) gray
+            ,   text "Build" 
+                    |> centered 
+                    |> fixedwidth 
+                    |> filled (if building then white else darkGray) 
+                    |> move(0,-4)
+            ]
+            |> move (-winX/2+25,winY/2-15)
+            |> notifyTap (GoTo <| Building Regular)
+    ,   group 
+            [
+                roundedRect 60 15 1 
+                    |> filled (if simulating then rgb 21 137 255 else blank)
+                    |> addOutline (solid 1) gray
+            ,   text "Simulate" 
+                    |> centered 
+                    |> fixedwidth 
+                    |> filled (if simulating then white else darkGray)  
+                    |> move(0,-4)
+            ]
+            |> move (-winX/2+77,winY/2-15)
+            |> notifyTap (GoTo <| Simulating SimRegular)
+    ]
 
 editingButtons = 
     group 
