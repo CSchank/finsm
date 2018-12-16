@@ -17,6 +17,7 @@ import Browser.Dom
 import Tuple exposing (first, second)
 import Task
 import Url exposing(Url, percentEncode)
+import Debug exposing (..)
 
 
 type Msg
@@ -47,6 +48,11 @@ type BuildingMsg
 
 type SimulatingMsg
     = Step
+    | EditTape Int
+    | DeleteTape Int
+    | AddNewTape
+    | ChangeTape Int
+    | ToggleStart StateID
 
 
 type alias StateID =
@@ -102,16 +108,21 @@ type BuildingState
     | CreatingNewArrow StateID {-source StateID-}
 
 type SimulatingState
-    = SimRegular
+    = SimRegular Int {-tapeID-} Int {-charID-}
+    | SimEditing Int {-tapeID-}
 
 type alias SimulateData =
     {
-        tapes : Dict Int (List Character)
+        tapes : Dict Int (Array Character)
     }
 
 initSimData = 
     {
-        tapes = Dict.empty
+        tapes = 
+            Dict.fromList 
+                [(0,Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ])
+                ,(1,Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0", "1", "1","1","1","0" ])
+                ]
     }
 
 type alias Model =
@@ -214,13 +225,17 @@ main =
                                         Browser.Events.onResize (\w h -> WindowSize ( w, h ))
                                     ,   case model.appState of 
                                             Building (EditingStateLabel _ _) ->
-                                                Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
+                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
                                             Building (EditingTransitionLabel _ _) ->
-                                                Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
+                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
                                             Building (SelectedState _) ->
-                                                Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
+                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
                                             Building (SelectedArrow _) ->
-                                                Browser.Events.onKeyPress (D.map KeyPressed (D.field "keyCode" D.int))
+                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+                                            Simulating (SimEditing _) ->
+                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+                                            Simulating (SimRegular _ _) ->
+                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
                                             _ -> Sub.none
                                     ]
         , onUrlChange = UrlChange
@@ -261,7 +276,7 @@ update msg model =
             UrlRequest _ -> ( model, Cmd.none )
 
             KeyPressed k ->
-                if k == 13 then --pressed enter
+                if Debug.log "k" k == 13 then --pressed enter
                     case model.appState of
                         Building (EditingStateLabel stId newLbl) ->
                             let
@@ -285,8 +300,9 @@ update msg model =
                                     ( { model | appState = Building Regular }, Cmd.none)
                                 else
                                     ( { model | transitionNames = Dict.insert tId newLbl model.transitionNames }, Cmd.none)
+                        Simulating (SimEditing _) -> ( { model | appState = Simulating (SimRegular 0 0)}, Cmd.none)
                         _ -> (model, Cmd.none)
-                else if k == 100 then --pressed d
+                else if k == 8 then --pressed delete
                     case model.appState of
                         Building (SelectedState stId) ->
                             let
@@ -294,11 +310,13 @@ update msg model =
                                 newDelta = Dict.remove stId model.machine.delta
                                 newMachine = { oldMachine | q = Set.remove stId oldMachine.q, delta = newDelta }
                                 newStateTransitions = Dict.filter (\(s0,_,s1) _ -> s0 /= stId && s1 /= stId) model.stateTransitions
+                                --removedTransitions = List.map (\(_,t,_) -> ) <| Dict.keys <|  Dict.filter (\(s0,_,s1) _ -> s0 == stId && s1 == stId) model.stateTransitions
                             in
                                 ({ model | machine = newMachine
                                          , appState = Building Regular
                                          , statePositions = Dict.remove stId model.statePositions
                                          , stateTransitions = newStateTransitions
+                                         , stateNames = Dict.remove stId model.stateNames
                                  }, Cmd.none)
                         Building (SelectedArrow (_,tId,_)) ->
                             let
@@ -311,8 +329,79 @@ update msg model =
                                          , appState = Building Regular
                                          , stateTransitions = newStateTransitions
                                  }, Cmd.none)
+                        Simulating (SimEditing tapeId) ->
+                            let
+                                oldSimData = model.simulateData
+                            in
+                                ( { model | simulateData = { oldSimData | tapes = Dict.update tapeId (\m ->
+                                                                                        case m of 
+                                                                                            Just ar -> Just <| Array.slice 0 -1 ar
+                                                                                            _ -> m) oldSimData.tapes
+                                                            }}, Cmd.none)
                         _ -> (model, Cmd.none)
-                else (model, Cmd.none)
+                else if k == 39 then --right arrow key
+                    case model.appState of
+                        Simulating (SimRegular tapeId _) ->
+                            (model, Task.perform identity (Task.succeed <| SMsg Step) )
+                        _ -> (model,Cmd.none)
+                else 
+                    case model.appState of
+                        Simulating (SimEditing tapeId) ->
+                            let
+                                charCode = 
+                                    case k of
+                                        65 -> 0
+                                        83 -> 1
+                                        52 -> 2
+                                        70 -> 3
+                                        71 -> 4
+                                        72 -> 5
+                                        74 -> 6
+                                        75 -> 7
+                                        76 -> 8
+                                        81 -> 9
+                                        87 -> 10
+                                        69 -> 11
+                                        82 -> 12
+                                        84 -> 13
+                                        89 -> 14
+                                        85 -> 15
+                                        73 -> 16
+                                        79 -> 17
+                                        80 -> 18
+                                        90 -> 19
+                                        88 -> 20
+                                        67 -> 21
+                                        86 -> 22
+                                        66 -> 23
+                                        78 -> 24
+                                        77 -> 25
+                                        _ -> -1
+                                chars = Array.fromList <| Set.toList <| Set.fromList <| Dict.values model.transitionNames
+
+                                newChar = Array.get charCode chars
+                                oldSimData = model.simulateData
+                            in
+                                ( { model | simulateData = { oldSimData | tapes = Dict.update tapeId
+                                                                        (\m -> case (m,newChar) of 
+                                                                                (Just ar,Just ch) -> Just <| Array.push ch ar
+                                                                                (Nothing,Just ch) -> Just <| Array.fromList [ch]
+                                                                                _ -> m
+                                                                        ) oldSimData.tapes
+                                }}, Cmd.none)
+                        Building (SelectedState sId) -> 
+                            if k == 70 then
+                                let
+                                    oldMachine = model.machine
+                                    newMachine = { oldMachine | final = case Set.member sId oldMachine.final of 
+                                                                            True -> Set.remove sId oldMachine.final
+                                                                            False -> Set.insert sId oldMachine.final
+                                                }
+                                in
+                                    ({ model | machine = newMachine }
+                                        , Cmd.none)
+                            else (model, Cmd.none)
+                        _ -> (model, Cmd.none)
 
 buildingUpdate : BuildingMsg -> Model -> (Model, Cmd Msg)    
 buildingUpdate msg model = 
@@ -519,18 +608,69 @@ buildingUpdate msg model =
                     
                     _ -> (model, Cmd.none)
 
+simulatingUpdate : SimulatingMsg -> Model -> (Model, Cmd Msg)
 simulatingUpdate msg model =
     case msg of
         Step ->
-                {-if ch /= "" then
-                    ( { model
-                        | states = deltaHat model.transitionNames model.machine.delta ch model.states
-                        , inputAt = model.inputAt + 1
+            case model.appState of
+                Simulating (SimRegular tapeId charId) ->
+                    let
+                        nextCh = case Dict.get tapeId model.simulateData.tapes of 
+                                    Just ar -> case Array.get (charId + 1) ar of
+                                                Just ch -> ch
+                                                _ -> ""
+                                    _ -> "" 
+                    in                    
+                        if nextCh /= "" then
+                            ( { model
+                                | states = deltaHat model.transitionNames model.machine.delta nextCh model.states
+                                , appState = Simulating (SimRegular tapeId (charId+1))
+                            }
+                            , Cmd.none
+                            )
+                        else
+                            ( model, Cmd.none )
+                _ -> ( model, Cmd.none )
+            
+        EditTape tId ->
+            ( { model | appState = Simulating (SimEditing tId)}, Cmd.none)
+
+        DeleteTape tId ->
+            let
+                oldSimData = model.simulateData
+            in
+                ( { model | simulateData = { oldSimData | tapes = Dict.remove (Debug.log "tapeID" tId) oldSimData.tapes } }, Cmd.none)
+        
+        AddNewTape ->
+            let
+                oldSimData = model.simulateData
+                newId = (case List.maximum <| Dict.keys model.simulateData.tapes of 
+                            Just n -> n
+                            Nothing -> 0
+                        ) + 1
+            in
+                ( { model | simulateData = { oldSimData | tapes = Dict.insert newId Array.empty oldSimData.tapes } }, Cmd.none)
+        ChangeTape tId ->
+            ( { model | states = model.machine.start
+                      , appState = Simulating (SimRegular tId 0)
                       }
-                    , Cmd.none
-                    )
-                else-}
-            ( model, Cmd.none )
+            , Cmd.none)
+        ToggleStart sId ->
+            let
+                tests = Debug.log "ToggleStart" (model.machine.start)
+                oldMachine = model.machine
+                newMachine = { oldMachine | start = 
+                            case Set.member sId oldMachine.start of
+                                True -> Set.remove sId oldMachine.start
+                                False -> Set.insert sId oldMachine.start}
+            in
+                case model.appState of 
+                    Simulating (SimRegular tapeId _) ->
+                        ( { model | machine = newMachine
+                                , appState = Simulating (SimRegular tapeId 0)
+                                , states = newMachine.start
+                        }, Cmd.none)
+                    _ -> (model, Cmd.none)
 
 setMax : Set Int -> Int
 setMax s = 
@@ -575,21 +715,22 @@ isAccept states finals input inputAt =
     else
         False
 
-
-renderTape input inputAt =
+renderTape : Array String -> Int -> Int -> Int -> Bool -> Shape Msg
+renderTape input tapeId selectedId inputAt showButtons =
     let
         xpad =
             20
     in
-        group
+        group <|
             (Array.toList
                 (Array.indexedMap
                     (\n st ->
                         group
                             [ square xpad
-                                |> outlined
+                                |> filled white
+                                |> addOutline
                                     (solid
-                                        (if inputAt == n then
+                                        (if tapeId == selectedId && inputAt == n then
                                             2
                                          else
                                             1
@@ -602,14 +743,41 @@ renderTape input inputAt =
                                 |> filled black
                             ]
                             |> move ( toFloat n * xpad, 0 )
+                            |> notifyTap (SMsg <| ChangeTape tapeId)
                     )
                     input
                 )
-            )
+            ) ++ if showButtons then
+            [
+                group 
+                    [
+                        roundedRect 15 15 2
+                                |> filled white
+                                |> addOutline (solid 1) darkGray
+                    ,   editIcon 
+                            |> scale 1.5
+                            |> move (-3,-3)
+                            |> repaint black
+                    ]
+                    |> move (toFloat <| Array.length input * xpad, 3)
+                    |> notifyTap (SMsg <| EditTape tapeId)
+            ,   group
+                    [
+                        roundedRect 15 15 2
+                                |> filled white
+                                |> addOutline (solid 1) darkGray
+                    , trashIcon |> scale 0.2 |> move (0,-1)
+                ]   
+                    |> move (toFloat <| (Array.length input + 1) * xpad, 3)
+                    |> notifyTap (SMsg <| DeleteTape tapeId)
+
+            ] else []
+            
+            {-
             |> move
                 ( -xpad / 2 * toFloat (Array.length input - 1)
                 , 0
-                )
+                )-}
 
 
 
@@ -628,12 +796,24 @@ editIcon =
     group
         [ --square 5 |> outlined (solid 1) black
             rect 5 2
-            |> filled blue
+            |> filled (rgb 21 137 255)
             |> rotate (degrees 45)
             |> move ( 3, 3 )
         , triangle 1
             |> filled blue
             |> rotate (degrees -15)
+        ]
+trashIcon =
+    group
+        [ 
+            roundedRect 30 40 3
+                |> outlined (solid 4) black
+        ,   rect 42 5 |> filled black |> move (0,19.5)
+        ,   roundedRect 36 5 1 |> filled black |> move (0,21.5)
+        ,   roundedRect 10 10 1 |> outlined (solid 3) black |> move (0,23.5)
+        ,   rect 4 30 |> filled black
+        ,   rect 4 30 |> filled black |> move(-8,0)
+        ,   rect 4 30 |> filled black |> move(8,0)
         ]
 
 renderStates : Set StateID -> Set StateID -> Set StateID -> StatePositions -> Model -> Shape Msg
@@ -651,11 +831,14 @@ renderStates states currents finals pos model =
                     ( 0, 0 )
 
         thickness state =
-            (if Set.member state currents then
-                2
-             else
-                1
-            )
+            case model.appState of
+                Simulating _ ->
+                    (if Set.member state currents then
+                        2
+                    else
+                        1
+                    )
+                _ -> 1
 
         stateName sId =
             case Dict.get sId model.stateNames of
@@ -718,14 +901,14 @@ renderStates states currents finals pos model =
                                 if st == sId then
                                     textBox str (6*toFloat (String.length str)) 20 "LaTeX" (BMsg << EditLabel sId)
                                 else
-                                    (latex 25 18 (stateName sId))
+                                    (latex 25 18 (stateName sId) AlignCentre)
                                         |> move ( 0, 9 )
                                         |> notifyEnter (BMsg <| MouseOverStateLabel sId)
                                         |> notifyLeave (BMsg MouseLeaveLabel)
                                         |> notifyTap (BMsg <| SelectStateLabel sId)
 
                             _ ->
-                                (latex 25 18 (stateName sId))
+                                (latex 25 18 (stateName sId) AlignCentre)
                                     |> move ( 0, 9 )
                                     |> notifyEnter (BMsg <| MouseOverStateLabel sId)
                                     |> notifyLeave (BMsg MouseLeaveLabel)
@@ -752,6 +935,9 @@ renderStates states currents finals pos model =
                                 group []--}
                         ]
                         |> move (getPos sId)
+                        |> (case model.appState of 
+                                Simulating _ -> notifyTap (SMsg <| ToggleStart sId)
+                                _ -> identity)
                 )
                 stateList
 
@@ -770,8 +956,12 @@ textBox txt w h place msg =
                 ]
                 []
 
+type LatexAlign =
+    AlignLeft
+    | AlignRight
+    | AlignCentre
 
-latex w h txt =
+latex w h txt align =
     (html w h <| H.div [style "position" "absolute"
                       ,style "width" "100%"
                       ,style "height" "100%"
@@ -780,16 +970,31 @@ latex w h txt =
                       , attribute "user-select" "none"
                       ]
                       
-                      [H.img [ Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
+                      [H.img 
+                        ([ Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
                       , Html.Attributes.src (latexurl txt)
                       --, style "width" "100%"                      
                       ,style "height" "100%"
-                      ,style "margin-left" "auto"
-                      ,style "margin-right" "auto"
-                      ,style "display" "block"
-                      ,style "max-width" "100%"
+                      ] ++
+                      (case align of
+                        AlignCentre -> 
+                            [
+                                style "margin-left" "auto"
+                            ,   style "margin-right" "auto"
+                            ]
+                        AlignLeft ->
+                            [
+                                style "margin-right" "auto"
+                            ]
+                        AlignRight ->
+                            [
+                                style "margin-left" "auto"
+                            ]) ++
+                       [
+                            style "display" "block"
+                       ,    style "max-width" "100%"
 
-                       ] []]) |> move(-w/2,0)
+                       ]) []]) |> move(-w/2,0)
 
 
 latexurl : String -> String
@@ -867,8 +1072,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
                             Building (EditingTransitionLabel tId str) ->
                                 if tId == charID then 
                                     textBox str (6*toFloat (String.length str)) 20 "LaTeX" (BMsg << EditLabel tId)
-                                else latex 50 12 char
-                            _ -> latex 50 12 char
+                                else latex 50 12 char AlignCentre
+                            _ -> latex 50 12 char AlignCentre
                     ,    case appState of 
                             Building (MousingOverTransitionLabel tId) ->
                                 if tId == charID then 
@@ -1062,8 +1267,12 @@ view model =
                         |> filled blank
                         |> notifyTapAt (BMsg << AddState)
                 _ -> group []
-            , group [ renderStates model.machine.q model.states model.machine.final model.statePositions model ] |> move ( 0, 0 )
-            , renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions model
+            , group [ 
+                        renderStates model.machine.q model.states model.machine.final model.statePositions model
+                    ,   renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions model
+                    ]|> move ( 0, case model.appState of 
+                                Simulating _ -> winY/6
+                                _ -> 0 )
 
             --, renderTape model.input model.inputAt |> move ( 0, 0 )
             {- , text ("Accepted: " ++ toString accepted)
@@ -1134,7 +1343,109 @@ view model =
            {- , editingButtons
                 |> move (-winX/2,winY/2)-}
             ,   modeButtons model
+            ,   renderSimulate model
             ]
+
+renderSimulate : Model -> Shape Msg
+renderSimulate model = 
+    let
+        winX =
+            (toFloat <| first model.windowSize)
+
+        winY =
+            (toFloat <| second model.windowSize)
+    
+        chars = Set.toList <| Set.fromList <| List.map (\(_,n) -> n) <| Dict.toList model.transitionNames
+    
+        getStateName sId = 
+            case Dict.get sId model.stateNames of
+                Just n -> n
+                Nothing -> "\\ "
+
+        menu = group
+                [
+                    text "Simulate"
+                        |> size 16
+                        |> fixedwidth
+                        |> filled black
+                        |> move (-winX/2+2, winY/6-15)
+                ,   group 
+                        [
+                            roundedRect 15 15 2
+                                |> filled white
+                                |> addOutline (solid 1) darkGray
+                        ,   text "+"
+                                |> size 16
+                                |> fixedwidth
+                                |> filled black
+                                |> move (-4.5,-5)
+                                |> notifyTap (SMsg AddNewTape)
+                        ]
+                        |> move (-winX/2+20, winY/6- 35 - 25 * (toFloat  <| Dict.size model.simulateData.tapes))
+                ,   text "Machine"
+                        |> size 16
+                        |> fixedwidth
+                        |> filled black
+                        |> move (-winX/2+492, winY/6-15)
+
+                ,   latex 500 18 "let\\ N = (Q,\\Sigma,\\Delta,S,F)" AlignLeft
+                        |> move (-winX/2+750, winY/6-25)
+                ,   latex 500 14 "where" AlignLeft
+                        |> move (-winX/2+750, winY/6-45)
+                ,   latex 500 18 ("Q = \\{ "++ String.join "," (Dict.values model.stateNames) ++" \\}") AlignLeft
+                        |> move (-winX/2+760, winY/6-65)
+                ,   latex 500 18 ("\\Sigma = \\{ "++ String.join "," (Set.toList <| Set.fromList <| Dict.values model.transitionNames) ++" \\}") AlignLeft
+                        |> move (-winX/2+760, winY/6-90)
+                ,   latex 500 18 ("\\Delta = (above)") AlignLeft
+                        |> move (-winX/2+760, winY/6-115)
+                ,   latex 500 18 ("S = \\{ "++ String.join "," (List.map getStateName <| Set.toList <| model.machine.start) ++" \\}") AlignLeft
+                        |> move (-winX/2+760, winY/6-140)
+                ,   latex 500 18 ("F = \\{ "++ String.join "," (List.map getStateName <| Set.toList <| model.machine.final) ++" \\}") AlignLeft
+                        |> move (-winX/2+760, winY/6-165)
+                , case model.appState of
+                    Simulating (SimRegular tapeId charId) ->
+                        group (List.indexedMap (\x (chId,ch) -> renderTape ch chId tapeId charId True |> move(0,-(toFloat x)*25)) <| Dict.toList tapes)
+                        |> move (-winX/2+20,winY/6-40)
+                    _ -> group []
+                
+                ]
+        
+        tapes = model.simulateData.tapes
+
+    in
+    group
+        [
+            case model.appState of
+                Simulating (SimRegular _ _) -> 
+                    group
+                    [
+                        rect winX (winY/3) 
+                            |> filled lightGray
+                    ,   menu
+                    ]
+                        |> move(0,-winY/3)
+                Simulating (SimEditing tapeId) ->
+                    let
+                        tape = case Dict.get tapeId model.simulateData.tapes of
+                                Just t -> t
+                                Nothing -> Array.empty
+                    in
+                        group 
+                            [   rect winX (winY/3) 
+                                    |> filled lightGray
+                            ,   text "Edit Tape"
+                                    |> size 16
+                                    |> fixedwidth
+                                    |> filled black
+                                    |> move (-winX/2+2, winY/6-15) 
+                            ,   latexKeyboard winX winY chars
+                                    |> move (0,0)
+                            ,   renderTape tape -1 -1 -1 False
+                                    |> move (-winX/2 +20, winY/6-50)
+                            ]
+                            |> move(0,-winY/3)
+                _ -> group []
+        ]
 
 modeButtons model =
     let
@@ -1159,7 +1470,7 @@ modeButtons model =
             [
                 roundedRect 40 15 1 
                     |> filled (if building then rgb 21 137 255 else blank)
-                    |> addOutline (solid 1) gray
+                    |> addOutline (solid 1) darkGray
             ,   text "Build" 
                     |> centered 
                     |> fixedwidth 
@@ -1172,7 +1483,7 @@ modeButtons model =
             [
                 roundedRect 60 15 1 
                     |> filled (if simulating then rgb 21 137 255 else blank)
-                    |> addOutline (solid 1) gray
+                    |> addOutline (solid 1) darkGray
             ,   text "Simulate" 
                     |> centered 
                     |> fixedwidth 
@@ -1180,7 +1491,7 @@ modeButtons model =
                     |> move(0,-4)
             ]
             |> move (-winX/2+77,winY/2-15)
-            |> notifyTap (GoTo <| Simulating SimRegular)
+            |> notifyTap (GoTo <| Simulating <| SimRegular 0 0)
     ]
 
 editingButtons = 
@@ -1217,7 +1528,7 @@ latexKeyboard w h chars =
                         |> size 10
                         |> filled (rgb 150 150 150)
                         |> move (-keyW/2+2,keyH/2-8)
-                ,   latex (keyW/1.5) (keyH/1.5) char
+                ,   latex (keyW/1.5) (keyH/1.5) char AlignCentre
                         |> move (0,10)
                 ]
         fillOutExtras n offset chs =
