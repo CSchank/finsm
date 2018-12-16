@@ -1196,3 +1196,42 @@ icon sh =
             circle 20 |> filled (rgb 220 220 220)
         ,   sh
         ]
+
+latexKeyboard : Float -> Float -> List Character -> Shape Msg
+latexKeyboard w h chars =
+    let
+        topRow = ['q','w','e','r','t','y','u','i','o','p']
+        homeRow = ['a','s','d','f','g','h','j','k','l']
+        botRow = ['z','x','c','v','b','n','m']
+        keyW = w/11
+        keyH = h/20
+
+        renderKey letter char =
+            group
+                [
+                    roundedRect keyW keyH 2
+                        |> filled white
+                        |> addOutline (solid 0.5) black
+                ,   text (String.fromChar letter) 
+                        |> fixedwidth 
+                        |> size 10
+                        |> filled (rgb 150 150 150)
+                        |> move (-keyW/2+2,keyH/2-8)
+                ,   latex (keyW/1.5) (keyH/1.5) char
+                        |> move (0,10)
+                ]
+        fillOutExtras n offset chs =
+            let
+                newL = List.take n (List.drop offset chs)
+            in
+                newL ++ List.repeat (n - List.length newL) "\\ "
+        oneRow letters chs =
+            group (List.indexedMap (\x (c,l) -> renderKey l c 
+                |> move ((keyW+2)*toFloat x-w/2+keyW/2+w/33,0)) (List.map2 (\a b -> (a,b)) chs letters))
+    in
+        group
+            [
+                oneRow topRow (fillOutExtras 10 9 chars)
+            ,   oneRow homeRow (fillOutExtras 9 0 chars) |> move (keyW/2,-keyH-2)
+            ,   oneRow botRow (fillOutExtras 7 19 chars) |> move(keyW,-(keyH+2)*2)
+            ]
