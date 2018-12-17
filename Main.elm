@@ -17,8 +17,6 @@ import Browser.Dom
 import Tuple exposing (first, second)
 import Task
 import Url exposing(Url, percentEncode)
-import Debug exposing (..)
-
 
 type Msg
     = GoTo ApplicationState
@@ -276,7 +274,7 @@ update msg model =
             UrlRequest _ -> ( model, Cmd.none )
 
             KeyPressed k ->
-                if Debug.log "k" k == 13 then --pressed enter
+                if k == 13 then --pressed enter
                     case model.appState of
                         Building (EditingStateLabel stId newLbl) ->
                             let
@@ -309,14 +307,15 @@ update msg model =
                                 oldMachine = model.machine                                
                                 newDelta = Dict.remove stId model.machine.delta
                                 newMachine = { oldMachine | q = Set.remove stId oldMachine.q, delta = newDelta }
-                                newStateTransitions = Dict.filter (\(s0,_,s1) _ -> s0 /= stId && s1 /= stId) model.stateTransitions
-                                --removedTransitions = List.map (\(_,t,_) -> ) <| Dict.keys <|  Dict.filter (\(s0,_,s1) _ -> s0 == stId && s1 == stId) model.stateTransitions
+                                newStateTransitions = Dict.filter (\(s0,_,s1) _ -> s0 /= stId || s1 /= stId) model.stateTransitions
+                                removedTransitions = Dict.fromList <| List.map (\(_,t,_) -> (t,())) <| Dict.keys <| Dict.filter (\(s0,_,s1) _ -> s0 == stId || s1 == stId) model.stateTransitions
                             in
                                 ({ model | machine = newMachine
                                          , appState = Building Regular
                                          , statePositions = Dict.remove stId model.statePositions
                                          , stateTransitions = newStateTransitions
                                          , stateNames = Dict.remove stId model.stateNames
+                                         , transitionNames = Dict.diff model.transitionNames removedTransitions
                                  }, Cmd.none)
                         Building (SelectedArrow (_,tId,_)) ->
                             let
@@ -328,6 +327,7 @@ update msg model =
                                 ({ model | machine = newMachine
                                          , appState = Building Regular
                                          , stateTransitions = newStateTransitions
+                                         , transitionNames = Dict.remove tId model.transitionNames
                                  }, Cmd.none)
                         Simulating (SimEditing tapeId) ->
                             let
@@ -465,6 +465,7 @@ buildingUpdate msg model =
                     ( { model | appState = Building Regular
                                 , machine = { oldMachine | delta = newDelta } 
                                 , transitionNames = Dict.insert newTransID newTrans model.transitionNames
+                                , stateTransitions = Dict.insert (st,newTransID,s1) (0,0) model.stateTransitions
                                 }, Cmd.none )
                 _ -> ( { model | appState = Building Regular}, Cmd.none )
 
@@ -639,7 +640,7 @@ simulatingUpdate msg model =
             let
                 oldSimData = model.simulateData
             in
-                ( { model | simulateData = { oldSimData | tapes = Dict.remove (Debug.log "tapeID" tId) oldSimData.tapes } }, Cmd.none)
+                ( { model | simulateData = { oldSimData | tapes = Dict.remove tId oldSimData.tapes } }, Cmd.none)
         
         AddNewTape ->
             let
@@ -657,7 +658,7 @@ simulatingUpdate msg model =
             , Cmd.none)
         ToggleStart sId ->
             let
-                tests = Debug.log "ToggleStart" (model.machine.start)
+                tests = model.machine.start
                 oldMachine = model.machine
                 newMachine = { oldMachine | start = 
                             case Set.member sId oldMachine.start of
@@ -1369,6 +1370,11 @@ renderSimulate model =
                         |> fixedwidth
                         |> filled black
                         |> move (-winX/2+2, winY/6-15)
+                ,   text "(Click to toggle start state(s), right arrow to scrub through tape)"
+                        |> size 6
+                        |> fixedwidth
+                        |> filled black
+                        |> move (-winX/2+85, winY/6-15)
                 ,   group 
                         [
                             roundedRect 15 15 2
@@ -1438,10 +1444,15 @@ renderSimulate model =
                                     |> fixedwidth
                                     |> filled black
                                     |> move (-winX/2+2, winY/6-15) 
+                            ,   text "(Type symbols with your keyboard; backspace to delete; enter to accept)"
+                                    |> size 6
+                                    |> fixedwidth
+                                    |> filled black
+                                    |> move (-winX/2+95, winY/6-15) 
                             ,   latexKeyboard winX winY chars
                                     |> move (0,0)
                             ,   renderTape tape -1 -1 -1 False
-                                    |> move (-winX/2 +20, winY/6-50)
+                                    |> move (-10 * toFloat (Array.length tape), winY/6-50)
                             ]
                             |> move(0,-winY/3)
                 _ -> group []
