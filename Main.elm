@@ -900,7 +900,7 @@ renderStates states currents finals pos model =
                         , case model.appState of
                             Building (EditingStateLabel st str) ->
                                 if st == sId then
-                                    textBox str (6*toFloat (String.length str)) 20 "LaTeX" (BMsg << EditLabel sId)
+                                    textBox str (if String.length str == 0 then 34 else (6*toFloat (String.length str))) 20 "LaTeX" (BMsg << EditLabel sId)
                                 else
                                     (latex 25 18 (stateName sId) AlignCentre)
                                         |> move ( 0, 9 )
@@ -1072,7 +1072,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
                          case appState of 
                             Building (EditingTransitionLabel tId str) ->
                                 if tId == charID then 
-                                    textBox str (6*toFloat (String.length str)) 20 "LaTeX" (BMsg << EditLabel tId)
+                                    textBox str (if String.length str == 0 then 34 else (6*toFloat (String.length str))) 20 "LaTeX" (BMsg << EditLabel tId)
                                 else latex 50 12 char AlignCentre
                             _ -> latex 50 12 char AlignCentre
                     ,    case appState of 
