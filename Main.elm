@@ -1452,7 +1452,7 @@ renderSimulate model =
                             ,   latexKeyboard winX winY chars
                                     |> move (0,0)
                             ,   renderTape tape -1 -1 -1 False
-                                    |> move (-10 * toFloat (Array.length tape), winY/6-50)
+                                    |> move (-10 * toFloat (Array.length tape), winY/6-65)
                             ]
                             |> move(0,-winY/3)
                 _ -> group []
@@ -1525,8 +1525,8 @@ latexKeyboard w h chars =
         topRow = ['q','w','e','r','t','y','u','i','o','p']
         homeRow = ['a','s','d','f','g','h','j','k','l']
         botRow = ['z','x','c','v','b','n','m']
-        keyW = w/11
-        keyH = h/20
+        keyW = clamp 0 50 (min (w/11) (keyH*1.2))
+        keyH = h/18
 
         renderKey letter char =
             group
@@ -1549,11 +1549,11 @@ latexKeyboard w h chars =
                 newL ++ List.repeat (n - List.length newL) "\\ "
         oneRow letters chs =
             group (List.indexedMap (\x (c,l) -> renderKey l c 
-                |> move ((keyW+2)*toFloat x-w/2+keyW/2+w/33,0)) (List.map2 (\a b -> (a,b)) chs letters))
+                |> move ((keyW + 2)*(toFloat x - (toFloat <| List.length chs) / 2)+keyW/2+w/33,0)) (List.map2 (\a b -> (a,b)) chs letters))
     in
         group
             [
-                oneRow topRow (fillOutExtras 10 9 chars)
-            ,   oneRow homeRow (fillOutExtras 9 0 chars) |> move (keyW/2,-keyH-2)
-            ,   oneRow botRow (fillOutExtras 7 19 chars) |> move(keyW,-(keyH+2)*2)
+                oneRow topRow (fillOutExtras 10 9 chars) |> move (-keyW/3,0)
+            ,   oneRow homeRow (fillOutExtras 9 0 chars) |> move (-keyW/3,-keyH-2)
+            ,   oneRow botRow (fillOutExtras 7 19 chars) |> move(-keyW,-(keyH+2)*2)
             ]
