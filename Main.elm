@@ -889,7 +889,7 @@ renderStates states currents finals pos model =
                                     group []
                             Building (AddingArrowOverOtherState _ _ st) ->
                                 if st == sId then
-                                    circle 21.5 |> outlined (solid 3) lightGreen
+                                    circle 21.5 |> outlined (solid 3) (rgb 112 190 255)
                                         |> notifyMouseDownAt (BMsg << StartDragging sId)
                                         |> notifyLeave (BMsg StopMouseOverRim)
                                 else 
