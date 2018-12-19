@@ -298,7 +298,7 @@ update msg model =
                                     ( { model | appState = Building Regular }, Cmd.none)
                                 else
                                     ( { model | transitionNames = Dict.insert tId newLbl model.transitionNames }, Cmd.none)
-                        Simulating (SimEditing _) -> ( { model | appState = Simulating (SimRegular 0 0)}, Cmd.none)
+                        Simulating (SimEditing tId) -> ( { model | appState = Simulating (SimRegular tId -1)}, Cmd.none)
                         _ -> (model, Cmd.none)
                 else if k == 8 then --pressed delete
                     case model.appState of
@@ -653,7 +653,7 @@ simulatingUpdate msg model =
                 ( { model | simulateData = { oldSimData | tapes = Dict.insert newId Array.empty oldSimData.tapes } }, Cmd.none)
         ChangeTape tId ->
             ( { model | states = model.machine.start
-                      , appState = Simulating (SimRegular tId 0)
+                      , appState = Simulating (SimRegular tId -1)
                       }
             , Cmd.none)
         ToggleStart sId ->
@@ -730,13 +730,7 @@ renderTape input tapeId selectedId inputAt showButtons =
                             [ square xpad
                                 |> filled white
                                 |> addOutline
-                                    (solid
-                                        (if tapeId == selectedId && inputAt == n then
-                                            2
-                                         else
-                                            1
-                                        )
-                                    )
+                                    (solid 1)
                                     black
                                 |> move ( 0, 3 )
                             , text st
@@ -748,7 +742,25 @@ renderTape input tapeId selectedId inputAt showButtons =
                     )
                     input
                 )
-            ) ++ if showButtons then
+            ) ++ 
+            (if tapeId == selectedId then
+            [
+                group
+                    [
+                        triangle 2.5
+                            |> filled black
+                            |> rotate (degrees 30)
+                            |> move (0,xpad/2+6)
+                    ,   triangle 2.5 
+                            |> filled black
+                            |> rotate (degrees -30)
+                            |> move (0,-xpad/2)
+                    ,   rect 2 (xpad+1) 
+                            |> filled black
+                            |> move (0,3)
+                    ] |> move (xpad/2 + xpad * (toFloat inputAt),0)
+            ] else [])
+            ++ if showButtons then
             [
                 group 
                     [
@@ -1451,7 +1463,7 @@ renderSimulate model =
                                     |> move (-winX/2+95, winY/6-15) 
                             ,   latexKeyboard winX winY chars
                                     |> move (0,0)
-                            ,   renderTape tape -1 -1 -1 False
+                            ,   renderTape tape tapeId -1 -1 False
                                     |> move (-10 * toFloat (Array.length tape), winY/6-65)
                             ]
                             |> move(0,-winY/3)
@@ -1502,7 +1514,7 @@ modeButtons model =
                     |> move(0,-4)
             ]
             |> move (-winX/2+77,winY/2-15)
-            |> notifyTap (GoTo <| Simulating <| SimRegular 0 0)
+            |> notifyTap (GoTo <| Simulating <| SimRegular 0 -1)
     ]
 
 editingButtons = 
