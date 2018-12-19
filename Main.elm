@@ -747,14 +747,14 @@ renderTape input tapeId selectedId inputAt showButtons =
             [
                 group
                     [
-                        triangle 2.5
+                        triangle 2.25
                             |> filled black
                             |> rotate (degrees 30)
-                            |> move (0,xpad/2+6)
-                    ,   triangle 2.5 
+                            |> move (0,xpad/2+5.75)
+                    ,   triangle 2.25
                             |> filled black
                             |> rotate (degrees -30)
-                            |> move (0,-xpad/2)
+                            |> move (0,-xpad/2+0.25)
                     ,   rect 2 (xpad+1) 
                             |> filled black
                             |> move (0,3)
