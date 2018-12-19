@@ -745,9 +745,8 @@ renderTape input tapeId selectedId inputAt showButtons =
                                     (solid 1)
                                     black
                                 |> move ( 0, 3 )
-                            , text st
-                                |> centered
-                                |> filled black
+                            , latex (xpad*0.90) (xpad*0.70) st AlignCentre
+                                |> move (0, 10.25)
                             ]
                             |> move ( toFloat n * xpad, 0 )
                             |> notifyTap (SMsg <| ChangeTape tapeId)
