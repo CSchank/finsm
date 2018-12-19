@@ -958,7 +958,7 @@ renderStates states currents finals pos model =
 textBox : String -> Float -> Float -> String -> (String -> Msg) -> Shape Msg
 textBox txt w h place msg =
     move ( -w / 2, h / 2 ) <|
-        html w h <|
+        html (w*1.5) (h*1.5) <|
             input
                 [ placeholder place
                 , onInput msg
