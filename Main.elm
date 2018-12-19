@@ -1265,7 +1265,7 @@ view model =
                 Building _ -> 
                     rect winX winY 
                         |> filled blank
-                        |> (if model.holdingShift then notifyTapAt (BMsg << AddState) else identity)
+                        |> (if model.holdingShift then notifyTapAt (BMsg << AddState) else notifyTap (GoTo <| Building Regular))
                 _ -> group []
             , group [ 
                         renderStates model.machine.q model.states model.machine.final model.statePositions model
