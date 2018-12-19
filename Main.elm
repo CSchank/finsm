@@ -17,6 +17,7 @@ import Browser.Dom
 import Tuple exposing (first, second)
 import Task
 import Url exposing(Url, percentEncode)
+import Debug
 
 type Msg
     = GoTo ApplicationState
@@ -290,15 +291,15 @@ update msg model =
                     Building (SelectedState stId) ->
                         let
                             oldMachine = model.machine                                
-                            newDelta = Dict.remove stId model.machine.delta
+                            newDelta = Dict.map (\_ d -> Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d) model.machine.delta
                             newMachine = { oldMachine | q = Set.remove stId oldMachine.q, delta = newDelta }
-                            newStateTransitions = Dict.filter (\(s0,_,s1) _ -> s0 /= stId || s1 /= stId) model.stateTransitions
+                            newStateTransitions = Dict.filter (\(_,t,_) _ -> not <| Dict.member t removedTransitions) model.stateTransitions
                             removedTransitions = Dict.fromList <| List.map (\(_,t,_) -> (t,())) <| Dict.keys <| Dict.filter (\(s0,_,s1) _ -> s0 == stId || s1 == stId) model.stateTransitions
                         in
                             ({ model | machine = newMachine
                                         , appState = Building Regular
                                         , statePositions = Dict.remove stId model.statePositions
-                                        , stateTransitions = newStateTransitions
+                                        , stateTransitions = Debug.log "nst" newStateTransitions
                                         , stateNames = Dict.remove stId model.stateNames
                                         , transitionNames = Dict.diff model.transitionNames removedTransitions
                                 }, Cmd.none)
