@@ -352,7 +352,7 @@ update msg model =
                                     case k of
                                         65 -> 0
                                         83 -> 1
-                                        52 -> 2
+                                        68 -> 2
                                         70 -> 3
                                         71 -> 4
                                         72 -> 5
@@ -910,6 +910,15 @@ renderStates states currents finals pos model =
                                     group []
                             _ -> group []
                         , case model.appState of
+                            Building (MousingOverStateLabel st) ->
+                                if sId == st then
+                                    editIcon |> scale 0.75 |> move ( 5, 5.5 )
+                                else
+                                    group []
+
+                            _ ->
+                                group []
+                        , case model.appState of
                             Building (EditingStateLabel st str) ->
                                 if st == sId then
                                     textBox str (if String.length str == 0 then 34 else (6*toFloat (String.length str))) 20 "LaTeX" (BMsg << EditLabel sId)
@@ -926,15 +935,6 @@ renderStates states currents finals pos model =
                                     |> notifyEnter (BMsg <| MouseOverStateLabel sId)
                                     |> notifyLeave (BMsg MouseLeaveLabel)
                                     |> notifyTap (BMsg <| SelectStateLabel sId)
-                        , case model.appState of
-                            Building (MousingOverStateLabel st) ->
-                                if sId == st then
-                                    editIcon |> scale 0.75 |> move ( 5, 5.5 )
-                                else
-                                    group []
-
-                            _ ->
-                                group []
 
                         --, text state |> centered |> filled black |> move ( 0, -3 )
                         {--, case model.appState of
