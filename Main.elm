@@ -224,23 +224,8 @@ main =
         , subscriptions = \model -> Sub.batch 
                                     [
                                         Browser.Events.onResize (\w h -> WindowSize ( w, h ))
-                                    ,   case model.appState of 
-                                            Building Regular ->
-                                                Sub.batch [Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-                                                          ,Browser.Events.onKeyUp (D.map KeyReleased (D.field "keyCode" D.int))]
-                                            Building (EditingStateLabel _ _) ->
-                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-                                            Building (EditingTransitionLabel _ _) ->
-                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-                                            Building (SelectedState _) ->
-                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-                                            Building (SelectedArrow _) ->
-                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-                                            Simulating (SimEditing _) ->
-                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-                                            Simulating (SimRegular _ _) ->
-                                                Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-                                            _ -> Sub.none
+                                    ,   Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+                                    ,   Browser.Events.onKeyUp (D.map KeyReleased (D.field "keyCode" D.int))
                                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
@@ -248,172 +233,162 @@ main =
 
 
 update msg model =
-    let
-        {-ch =
-            case (Array.get model.inputAt model.input) of
-                Just c ->
-                    c
+    case msg of
+        GoTo state ->
+            ( { model | appState = state }, Cmd.none)
 
-                Nothing ->
-                    ""-}
-        xxxxx= 0 
-    in
-        case msg of
-            GoTo state ->
-                ( { model | appState = state }, Cmd.none)
+        BMsg bmsg ->
+            case model.appState of
+                Building _ -> buildingUpdate bmsg model
+                _ -> (model,Cmd.none)
 
-            BMsg bmsg ->
-                case model.appState of
-                    Building _ -> buildingUpdate bmsg model
-                    _ -> (model,Cmd.none)
+        SMsg smsg ->
+            case model.appState of
+                Simulating _ -> simulatingUpdate smsg model
+                _ -> (model,Cmd.none)
 
-            SMsg smsg ->
-                case model.appState of
-                    Simulating _ -> simulatingUpdate smsg model
-                    _ -> (model,Cmd.none)
-
-            WindowSize ( w, h ) ->
-                ( { model | windowSize = ( w, h ) }, Cmd.none )
+        WindowSize ( w, h ) ->
+            ( { model | windowSize = ( w, h ) }, Cmd.none )
+    
+        UrlChange _ -> ( model, Cmd.none )
         
-            UrlChange _ -> ( model, Cmd.none )
-            
-            UrlRequest _ -> ( model, Cmd.none )
+        UrlRequest _ -> ( model, Cmd.none )
 
-            KeyReleased k ->
-                if k == 16 then ( { model | holdingShift = False }, Cmd.none)
-                else ( model, Cmd.none )
+        KeyReleased k ->
+            if k == 16 then ( { model | holdingShift = False }, Cmd.none)
+            else ( model, Cmd.none )
 
-            KeyPressed k ->
-                if k == 13 then --pressed enter
-                    case model.appState of
-                        Building (EditingStateLabel stId newLbl) ->
-                            let
-                                oldStateName = 
-                                    case Dict.get stId model.stateNames of
-                                        Just n -> n
-                                        _      -> ""
-                            in
-                                if newLbl == oldStateName || newLbl == "" then
-                                    ( { model | appState = Building Regular }, Cmd.none)
-                                else
-                                    ( { model | stateNames = Dict.insert stId newLbl model.stateNames }, Cmd.none)
-                        Building (EditingTransitionLabel tId newLbl) ->
-                            let
-                                oldTransitionName = 
-                                    case Dict.get tId model.transitionNames of
-                                        Just n -> n
-                                        _      -> ""
-                            in
-                                if newLbl == oldTransitionName || newLbl == "" then
-                                    ( { model | appState = Building Regular }, Cmd.none)
-                                else
-                                    ( { model | transitionNames = Dict.insert tId newLbl model.transitionNames }, Cmd.none)
-                        Simulating (SimEditing tId) -> ( { model | appState = Simulating (SimRegular tId -1)}, Cmd.none)
-                        _ -> (model, Cmd.none)
-                else if k == 8 then --pressed delete
-                    case model.appState of
-                        Building (SelectedState stId) ->
-                            let
-                                oldMachine = model.machine                                
-                                newDelta = Dict.remove stId model.machine.delta
-                                newMachine = { oldMachine | q = Set.remove stId oldMachine.q, delta = newDelta }
-                                newStateTransitions = Dict.filter (\(s0,_,s1) _ -> s0 /= stId || s1 /= stId) model.stateTransitions
-                                removedTransitions = Dict.fromList <| List.map (\(_,t,_) -> (t,())) <| Dict.keys <| Dict.filter (\(s0,_,s1) _ -> s0 == stId || s1 == stId) model.stateTransitions
-                            in
-                                ({ model | machine = newMachine
-                                         , appState = Building Regular
-                                         , statePositions = Dict.remove stId model.statePositions
-                                         , stateTransitions = newStateTransitions
-                                         , stateNames = Dict.remove stId model.stateNames
-                                         , transitionNames = Dict.diff model.transitionNames removedTransitions
-                                 }, Cmd.none)
-                        Building (SelectedArrow (_,tId,_)) ->
-                            let
-                                oldMachine = model.machine                                
-                                newDelta = Dict.map (\_ d -> Dict.filter (\tId0 _ -> tId /= tId0) d) model.machine.delta
-                                newMachine = { oldMachine | delta = newDelta }
-                                newStateTransitions = Dict.filter (\(_,tId0,_) _ -> tId /= tId0) model.stateTransitions
-                            in
-                                ({ model | machine = newMachine
-                                         , appState = Building Regular
-                                         , stateTransitions = newStateTransitions
-                                         , transitionNames = Dict.remove tId model.transitionNames
-                                 }, Cmd.none)
-                        Simulating (SimEditing tapeId) ->
-                            let
-                                oldSimData = model.simulateData
-                            in
-                                ( { model | simulateData = { oldSimData | tapes = Dict.update tapeId (\m ->
-                                                                                        case m of 
-                                                                                            Just ar -> Just <| Array.slice 0 -1 ar
-                                                                                            _ -> m) oldSimData.tapes
-                                                            }}, Cmd.none)
-                        _ -> (model, Cmd.none)
-                else if k == 39 then --right arrow key
-                    case model.appState of
-                        Simulating (SimRegular tapeId _) ->
-                            (model, Task.perform identity (Task.succeed <| SMsg Step) )
-                        _ -> (model,Cmd.none)
-                else if k == 16 then
-                    ( { model | holdingShift = True }, Cmd.none)
-                else 
-                    case model.appState of
-                        Simulating (SimEditing tapeId) ->
-                            let
-                                charCode = 
-                                    case k of
-                                        65 -> 0
-                                        83 -> 1
-                                        68 -> 2
-                                        70 -> 3
-                                        71 -> 4
-                                        72 -> 5
-                                        74 -> 6
-                                        75 -> 7
-                                        76 -> 8
-                                        81 -> 9
-                                        87 -> 10
-                                        69 -> 11
-                                        82 -> 12
-                                        84 -> 13
-                                        89 -> 14
-                                        85 -> 15
-                                        73 -> 16
-                                        79 -> 17
-                                        80 -> 18
-                                        90 -> 19
-                                        88 -> 20
-                                        67 -> 21
-                                        86 -> 22
-                                        66 -> 23
-                                        78 -> 24
-                                        77 -> 25
-                                        _ -> -1
-                                chars = Array.fromList <| Set.toList <| Set.fromList <| Dict.values model.transitionNames
+        KeyPressed k ->
+            if k == 13 then --pressed enter
+                case model.appState of
+                    Building (EditingStateLabel stId newLbl) ->
+                        let
+                            oldStateName = 
+                                case Dict.get stId model.stateNames of
+                                    Just n -> n
+                                    _      -> ""
+                        in
+                            if newLbl == oldStateName || newLbl == "" then
+                                ( { model | appState = Building Regular }, Cmd.none)
+                            else
+                                ( { model | stateNames = Dict.insert stId newLbl model.stateNames }, Cmd.none)
+                    Building (EditingTransitionLabel tId newLbl) ->
+                        let
+                            oldTransitionName = 
+                                case Dict.get tId model.transitionNames of
+                                    Just n -> n
+                                    _      -> ""
+                        in
+                            if newLbl == oldTransitionName || newLbl == "" then
+                                ( { model | appState = Building Regular }, Cmd.none)
+                            else
+                                ( { model | transitionNames = Dict.insert tId newLbl model.transitionNames }, Cmd.none)
+                    Simulating (SimEditing tId) -> ( { model | appState = Simulating (SimRegular tId -1)}, Cmd.none)
+                    _ -> (model, Cmd.none)
+            else if k == 8 then --pressed delete
+                case model.appState of
+                    Building (SelectedState stId) ->
+                        let
+                            oldMachine = model.machine                                
+                            newDelta = Dict.remove stId model.machine.delta
+                            newMachine = { oldMachine | q = Set.remove stId oldMachine.q, delta = newDelta }
+                            newStateTransitions = Dict.filter (\(s0,_,s1) _ -> s0 /= stId || s1 /= stId) model.stateTransitions
+                            removedTransitions = Dict.fromList <| List.map (\(_,t,_) -> (t,())) <| Dict.keys <| Dict.filter (\(s0,_,s1) _ -> s0 == stId || s1 == stId) model.stateTransitions
+                        in
+                            ({ model | machine = newMachine
+                                        , appState = Building Regular
+                                        , statePositions = Dict.remove stId model.statePositions
+                                        , stateTransitions = newStateTransitions
+                                        , stateNames = Dict.remove stId model.stateNames
+                                        , transitionNames = Dict.diff model.transitionNames removedTransitions
+                                }, Cmd.none)
+                    Building (SelectedArrow (_,tId,_)) ->
+                        let
+                            oldMachine = model.machine                                
+                            newDelta = Dict.map (\_ d -> Dict.filter (\tId0 _ -> tId /= tId0) d) model.machine.delta
+                            newMachine = { oldMachine | delta = newDelta }
+                            newStateTransitions = Dict.filter (\(_,tId0,_) _ -> tId /= tId0) model.stateTransitions
+                        in
+                            ({ model | machine = newMachine
+                                        , appState = Building Regular
+                                        , stateTransitions = newStateTransitions
+                                        , transitionNames = Dict.remove tId model.transitionNames
+                                }, Cmd.none)
+                    Simulating (SimEditing tapeId) ->
+                        let
+                            oldSimData = model.simulateData
+                        in
+                            ( { model | simulateData = { oldSimData | tapes = Dict.update tapeId (\m ->
+                                                                                    case m of 
+                                                                                        Just ar -> Just <| Array.slice 0 -1 ar
+                                                                                        _ -> m) oldSimData.tapes
+                                                        }}, Cmd.none)
+                    _ -> (model, Cmd.none)
+            else if k == 39 then --right arrow key
+                case model.appState of
+                    Simulating (SimRegular tapeId _) ->
+                        (model, Task.perform identity (Task.succeed <| SMsg Step) )
+                    _ -> (model,Cmd.none)
+            else if k == 16 then
+                ( { model | holdingShift = True }, Cmd.none)
+            else 
+                case model.appState of
+                    Simulating (SimEditing tapeId) ->
+                        let
+                            charCode = 
+                                case k of
+                                    65 -> 0
+                                    83 -> 1
+                                    68 -> 2
+                                    70 -> 3
+                                    71 -> 4
+                                    72 -> 5
+                                    74 -> 6
+                                    75 -> 7
+                                    76 -> 8
+                                    81 -> 9
+                                    87 -> 10
+                                    69 -> 11
+                                    82 -> 12
+                                    84 -> 13
+                                    89 -> 14
+                                    85 -> 15
+                                    73 -> 16
+                                    79 -> 17
+                                    80 -> 18
+                                    90 -> 19
+                                    88 -> 20
+                                    67 -> 21
+                                    86 -> 22
+                                    66 -> 23
+                                    78 -> 24
+                                    77 -> 25
+                                    _ -> -1
+                            chars = Array.fromList <| Set.toList <| Set.fromList <| Dict.values model.transitionNames
 
-                                newChar = Array.get charCode chars
-                                oldSimData = model.simulateData
+                            newChar = Array.get charCode chars
+                            oldSimData = model.simulateData
+                        in
+                            ( { model | simulateData = { oldSimData | tapes = Dict.update tapeId
+                                                                    (\m -> case (m,newChar) of 
+                                                                            (Just ar,Just ch) -> Just <| Array.push ch ar
+                                                                            (Nothing,Just ch) -> Just <| Array.fromList [ch]
+                                                                            _ -> m
+                                                                    ) oldSimData.tapes
+                            }}, Cmd.none)
+                    Building (SelectedState sId) -> 
+                        if k == 70 then
+                            let
+                                oldMachine = model.machine
+                                newMachine = { oldMachine | final = case Set.member sId oldMachine.final of 
+                                                                        True -> Set.remove sId oldMachine.final
+                                                                        False -> Set.insert sId oldMachine.final
+                                            }
                             in
-                                ( { model | simulateData = { oldSimData | tapes = Dict.update tapeId
-                                                                        (\m -> case (m,newChar) of 
-                                                                                (Just ar,Just ch) -> Just <| Array.push ch ar
-                                                                                (Nothing,Just ch) -> Just <| Array.fromList [ch]
-                                                                                _ -> m
-                                                                        ) oldSimData.tapes
-                                }}, Cmd.none)
-                        Building (SelectedState sId) -> 
-                            if k == 70 then
-                                let
-                                    oldMachine = model.machine
-                                    newMachine = { oldMachine | final = case Set.member sId oldMachine.final of 
-                                                                            True -> Set.remove sId oldMachine.final
-                                                                            False -> Set.insert sId oldMachine.final
-                                                }
-                                in
-                                    ({ model | machine = newMachine }
-                                        , Cmd.none)
-                            else (model, Cmd.none)
-                        _ -> (model, Cmd.none)
+                                ({ model | machine = newMachine }
+                                    , Cmd.none)
+                        else (model, Cmd.none)
+                    _ -> (model, Cmd.none)
 
 buildingUpdate : BuildingMsg -> Model -> (Model, Cmd Msg)    
 buildingUpdate msg model = 
