@@ -23,6 +23,7 @@ type Msg
     | BMsg BuildingMsg
     | SMsg SimulatingMsg
     | KeyPressed Int
+    | KeyReleased Int
     | WindowSize ( Int, Int )
     | UrlChange Url
     | UrlRequest UrlRequest
@@ -133,6 +134,7 @@ type alias Model =
     , stateNames : StateNames
     , transitionNames : TransitionNames
     , windowSize : ( Int, Int )
+    , holdingShift : Bool
     }
 
 
@@ -213,6 +215,7 @@ main =
                         , ( ( 3, 7, 1 ), ( 0, 10 ) )
                         ]
               , windowSize = ( 0, 0 )
+              , holdingShift = False
               }
             , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
             )
@@ -222,6 +225,9 @@ main =
                                     [
                                         Browser.Events.onResize (\w h -> WindowSize ( w, h ))
                                     ,   case model.appState of 
+                                            Building Regular ->
+                                                Sub.batch [Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+                                                          ,Browser.Events.onKeyUp (D.map KeyReleased (D.field "keyCode" D.int))]
                                             Building (EditingStateLabel _ _) ->
                                                 Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
                                             Building (EditingTransitionLabel _ _) ->
@@ -272,6 +278,10 @@ update msg model =
             UrlChange _ -> ( model, Cmd.none )
             
             UrlRequest _ -> ( model, Cmd.none )
+
+            KeyReleased k ->
+                if k == 16 then ( { model | holdingShift = False }, Cmd.none)
+                else ( model, Cmd.none )
 
             KeyPressed k ->
                 if k == 13 then --pressed enter
@@ -344,6 +354,8 @@ update msg model =
                         Simulating (SimRegular tapeId _) ->
                             (model, Task.perform identity (Task.succeed <| SMsg Step) )
                         _ -> (model,Cmd.none)
+                else if k == 16 then
+                    ( { model | holdingShift = True }, Cmd.none)
                 else 
                     case model.appState of
                         Simulating (SimEditing tapeId) ->
@@ -958,7 +970,7 @@ renderStates states currents finals pos model =
 textBox : String -> Float -> Float -> String -> (String -> Msg) -> Shape Msg
 textBox txt w h place msg =
     move ( -w / 2, h / 2 ) <|
-        html (w*1.5) (h*1.5) <|
+        html (w * 1.5) (h * 1.5) <|
             input
                 [ placeholder place
                 , onInput msg
@@ -987,7 +999,7 @@ latex w h txt align =
                       [H.img 
                         ([ Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
                       , Html.Attributes.src (latexurl txt)
-                      --, style "width" "100%"                      
+                      , style "width" "100%"                      
                       ,style "height" "100%"
                       ] ++
                       (case align of
@@ -1279,7 +1291,7 @@ view model =
                 Building _ -> 
                     rect winX winY 
                         |> filled blank
-                        |> notifyTapAt (BMsg << AddState)
+                        |> (if model.holdingShift then notifyTapAt (BMsg << AddState) else identity)
                 _ -> group []
             , group [ 
                         renderStates model.machine.q model.states model.machine.final model.statePositions model
