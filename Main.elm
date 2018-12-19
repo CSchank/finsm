@@ -17,7 +17,6 @@ import Browser.Dom
 import Tuple exposing (first, second)
 import Task
 import Url exposing(Url, percentEncode)
-import Debug
 
 type Msg
     = GoTo ApplicationState
@@ -299,7 +298,7 @@ update msg model =
                             ({ model | machine = newMachine
                                         , appState = Building Regular
                                         , statePositions = Dict.remove stId model.statePositions
-                                        , stateTransitions = Debug.log "nst" newStateTransitions
+                                        , stateTransitions = newStateTransitions
                                         , stateNames = Dict.remove stId model.stateNames
                                         , transitionNames = Dict.diff model.transitionNames removedTransitions
                                 }, Cmd.none)
