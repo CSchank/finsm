@@ -998,7 +998,7 @@ latex w h txt align =
                       [H.img 
                         ([ Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
                       , Html.Attributes.src (latexurl txt)
-                      , style "width" "100%"                      
+                      --, style "width" "100%"                      
                       ,style "height" "100%"
                       ] ++
                       (case align of
