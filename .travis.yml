@@ -1,0 +1,30 @@
+language: elm
+env:
+  global:
+  - secure: igVDIirV3EwtYbOnbSXvS8LAmRbEnGdCi321I7swVNXLLIr6h0L35+NraNUpiIXYZIyBRELGRkwu8laxf/HzYzttvg8JudIo7/C+P/F5tt2jq3Lt132zc3c0lRRV+RHjfqbmso7uRn/6hEMHTEVZkrzqhkY4SHI9ObxXpY6Lg2f/RTM3ho2YX2zXfy/utTrcJHws0XbYEGhwYbJmX8UaGyixLYcJJoSheOStgdzONCPZ4t8DBF7rBjtdu8UQaWjEFkTkS2oEdsQnYb63rBswXPV6KDnXVI+wS71tV1Gmlndy80Vy4HWfRgqKR9zyGVSR0uTU4nvPc3s2rm2R1DEQQ7c54RbBWriwHCHJhWCV/AGTHyl0dtJP40sR/ozu86MlPdnZoJCoVoVqvBBoChijqSJMbVba0lm3ATWxFQCb5BL184gLN3TFXQE+BJk0saa06LRWfcFkEPjg+9rrU4xafcA/xFgq+OEIUhEvFDdJ7SUymWioo8dc/5NxGnkK4AA39rwuUj2V06TlyFup+H8hTMiYjBKhRAKJMte38Rdeko2XoQgYkRy1MZX0hA1wwhtnh773BuFGlvTf6X9GcqtJ1MFC6m1FxG8cqX+ywGHJAGuDrWYbigVWPA9H9pXVdpW44X21AgIescpMePtYgsFLv3HQNDSDic+MGTKhx2yz4fY=
+  - secure: Bkr/cPAex+9Ui/ScFK356enMM6xR4wQ5qEmzuan7LSKAZq8VAJXCxymyI1qDePZCLRpYxIn5Wn26OEqQYcifyymHOzAt0mQ2s39eFoJDJeIHTDr0UHJl1RIOp8cH+84nUdw0sjVTjdg5jnNR+6krsS2wdFbBYuhDyVWKRtbhzHoe3eY7RXjcBW/aSjxovkPQhopwM21baXIH7Fbl6MkyKkurvdEHYKZiJOXSnH1GD3XULlv/L5/+S4L+oEbg1r+r+RVDfAP/IE0ccrEU61E7re0/DiYiKq2wkwSGCOmMEHDfpFUhyQGuM0KA73utOBCca++6Gi3inaADqjQfWSCnpKHajuiS8Pckzi2lSb1yVLvSaV5LcG43oMqlneNdCFY2V+NqNr68Oq+g1E+QUnFdu6/0m8fh8kG/ZcpDDQdIvzvMw7+1xXOX1tnWyAW2D8YCJIOUTMDj1Fnc3EeKfCZ3Kg+c6TSowHKrtXZ3tJI75YOJe2fXYigmRI6xdyGWf1+lAPKH7OtLR4NBb9YZ1WiiS63wkHvugAJ4ob+gLw6JL6VaoIiyapVPnfiMO+swlYxba5JyLqGe3A7gqsU+oT+w8EC73NyIQvZTkP1UhUzWJXlHtIjrpt+hiiBTqHMfJ++Hdecly1Zynp8P8/e/lURWPs/eIayjZrd4gccWJH7gRlw=
+  - secure: VnNSzNboQGqiekYJndn49sHr8bPdKHXMUqlUKs2kAaM4TkWYg5CMhoS4LwlN4r2JorJgqVNsoX9LlhrW3+bvpSe6EzTr4QQ58ToDPP2nEcMyUG69gqLMDwAmu42iv3mOKJuEbbQ1+ppIywGeE2/kiLgsffkKDxku1LDjJRRRpyt3uy389yyw74VIpor6n++ZgkfMREWpM6dUq6mkByDen+FC40pYkrOITjxwCKZi2HLL7EelGLzmpcEBUyA9kWcwd54EDhrq6iDIcG4DHWrhogvst/ogCn45RMjPEWE3iLYVeoaX3Ps/651kZwYytONHpKHIZYHg23z/iisyHFpOs3auG3gEfKHv9k70fqPL6gLoD1lcD/TWf8oOcfmYpMv66CLr/QYjdiK9+aLYN4bwhP58HoaHGzSrk364PUDYbzOkbZSfIAr00HX++HhXdR61Hx4mv8B9eGUt9vdOvlvS7LKDE6lXoW4+sTo5KJKZLUEmzP6juJGDvFlmeX0Tf3m6KTbiTmxheGciS5K/MinKWn2by+rJgPyGdw4AaDd9EAPmlFfTLTTa1kJKzePozuNp8X0owKL1tvX7kC14J9m5DxCEHF3rsImFtaLR7FSRAITUyATjE8iiXM0f1cpIUGioR3z5N/lSstez5yVBGq5RlTAWGZN1i3vkwgwUDouyONs=
+jobs:
+  include:
+    - stage: test
+      script: elm-format --validate .
+      name: "elm-format validation"
+    - script: elm-test
+      name: "elm-test test run"
+    - stage: deploy
+      script:
+      - openssl aes-256-cbc -K $encrypted_0d4cca618d57_key -iv $encrypted_0d4cca618d57_iv
+        -in build_scripts/deploy_rsa.enc -out deploy_rsa -d
+      - eval "$(ssh-agent -s)"
+      - chmod 600 /tmp/deploy\_rsa
+      - chmod u+x build_scripts/optimize.sh
+      - ssh-add /tmp/deploy\_rsa
+      - echo -e "Host $DEPLOY_HOST\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
+      - npm install -g uglify-js
+      - ./build_scripts/optimize.sh Main.elm
+      - rsync -r --quiet --delete-after _site/* $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIRECTORY
+      name: "Live Deployment"
+stages:
+  - test
+  - name: deploy
+    if (branch = master) AND (type = push)
