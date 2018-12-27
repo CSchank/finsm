@@ -14,7 +14,7 @@ jobs:
     - stage: deploy
       script:
       - openssl aes-256-cbc -K $encrypted_0d4cca618d57_key -iv $encrypted_0d4cca618d57_iv
-        -in build_scripts/deploy_rsa.enc -out deploy_rsa -d
+        -in build_scripts/deploy_rsa.enc -out /tmp/deploy_rsa -d
       - eval "$(ssh-agent -s)"
       - chmod 600 /tmp/deploy\_rsa
       - chmod u+x build_scripts/optimize.sh
