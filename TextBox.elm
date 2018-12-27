@@ -1,22 +1,20 @@
-module Main exposing (..)
+module Main exposing (Msg(..), main, textBox, update, view)
 
-import GraphicSVG exposing (..)
-import Random
 import Array exposing (Array)
-import List
-import Set exposing (Set)
+import Debug exposing (log)
 import Dict exposing (Dict)
-import Debug exposing (log)
-import Katex as K exposing (Latex, human, inline, display, generate)
-import Html as H exposing (Html, node)
+import GraphicSVG exposing (..)
+import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (placeholder)
-import Json.Encode
-import Debug exposing (log)
-import Window
-import Tuple exposing (first, second)
-import Task
-import Html exposing (input)
 import Html.Events exposing (onInput)
+import Json.Encode
+import Katex as K exposing (Latex, display, generate, human, inline)
+import List
+import Random
+import Set exposing (Set)
+import Task
+import Tuple exposing (first, second)
+import Window
 
 
 type Msg
