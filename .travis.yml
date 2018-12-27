@@ -22,7 +22,7 @@ jobs:
       - echo -e "Host $DEPLOY_HOST\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
       - npm install -g uglify-js
       - ./build_scripts/optimize.sh Main.elm
-      - rsync -r --quiet --delete-after _site/* $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIRECTORY
+      - scp finsm.min.js $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIRECTORY # - rsync -r --quiet --delete-after _site/* $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIRECTORY
       name: "Live Deployment"
 stages:
   - test
