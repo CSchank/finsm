@@ -27,4 +27,4 @@ jobs:
 stages:
   - test
   - name: deploy
-    if (branch = master) AND (type = push)
+    if: (branch = master) AND (type = push)
