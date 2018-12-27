@@ -2,8 +2,8 @@
 
 set -e
 
-js="login.js"
-min="login.min.js"
+js="finsm.js"
+min="finsm.min.js"
 
 elm make --optimize --output=$js $@
 
