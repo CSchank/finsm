@@ -22,7 +22,6 @@ jobs:
     - echo -e "Host $DEPLOY_HOST\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
     - npm install -g uglify-js
     - "./build_scripts/optimize.sh src/Main.elm"
-    - ssh -T $DEPLOY_USER@$DEPLOY_HOST
     - scp finsm.min.js $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIRECTORY
     name: Live Deployment
 stages:
