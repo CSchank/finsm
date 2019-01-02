@@ -320,7 +320,12 @@ update msg model =
                             ( { model | appState = Building Regular }, Cmd.none )
 
                         else
-                            ( { model | stateNames = Dict.insert stId newLbl model.stateNames }, Cmd.none )
+                            ( { model
+                                | stateNames = Dict.insert stId newLbl model.stateNames
+                                , appState = Building Regular
+                              }
+                            , Cmd.none
+                            )
 
                     Building (EditingTransitionLabel tId newLbl) ->
                         let
@@ -336,7 +341,12 @@ update msg model =
                             ( { model | appState = Building Regular }, Cmd.none )
 
                         else
-                            ( { model | transitionNames = Dict.insert tId newLbl model.transitionNames }, Cmd.none )
+                            ( { model
+                                | transitionNames = Dict.insert tId newLbl model.transitionNames
+                                , appState = Building Regular
+                              }
+                            , Cmd.none
+                            )
 
                     Simulating (SimEditing tId) ->
                         ( { model | appState = Simulating (SimRegular tId -1) }, Cmd.none )
