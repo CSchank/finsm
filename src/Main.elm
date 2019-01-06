@@ -320,7 +320,12 @@ update msg model =
                             ( { model | appState = Building Regular }, Cmd.none )
 
                         else
-                            ( { model | stateNames = Dict.insert stId newLbl model.stateNames }, Cmd.none )
+                            ( { model
+                                | stateNames = Dict.insert stId newLbl model.stateNames
+                                , appState = Building Regular
+                              }
+                            , Cmd.none
+                            )
 
                     Building (EditingTransitionLabel tId newLbl) ->
                         let
@@ -336,7 +341,12 @@ update msg model =
                             ( { model | appState = Building Regular }, Cmd.none )
 
                         else
-                            ( { model | transitionNames = Dict.insert tId newLbl model.transitionNames }, Cmd.none )
+                            ( { model
+                                | transitionNames = Dict.insert tId newLbl model.transitionNames
+                                , appState = Building Regular
+                              }
+                            , Cmd.none
+                            )
 
                     Simulating (SimEditing tId) ->
                         ( { model | appState = Simulating (SimRegular tId -1) }, Cmd.none )
@@ -1269,18 +1279,26 @@ renderStates states currents finals pos model =
                                     (BMsg << EditLabel sId)
 
                             else
-                                latex 25 18 (stateName sId) AlignCentre
+                                group
+                                    [ latex 25 18 (stateName sId) AlignCentre
+                                        |> move ( 0, 9 )
+                                    , rect 25 18
+                                        |> filled blank
+                                        |> notifyEnter (BMsg <| MouseOverStateLabel sId)
+                                        |> notifyLeave (BMsg MouseLeaveLabel)
+                                        |> notifyTap (BMsg <| SelectStateLabel sId)
+                                    ]
+
+                        _ ->
+                            group
+                                [ latex 25 18 (stateName sId) AlignCentre
                                     |> move ( 0, 9 )
+                                , rect 25 18
+                                    |> filled blank
                                     |> notifyEnter (BMsg <| MouseOverStateLabel sId)
                                     |> notifyLeave (BMsg MouseLeaveLabel)
                                     |> notifyTap (BMsg <| SelectStateLabel sId)
-
-                        _ ->
-                            latex 25 18 (stateName sId) AlignCentre
-                                |> move ( 0, 9 )
-                                |> notifyEnter (BMsg <| MouseOverStateLabel sId)
-                                |> notifyLeave (BMsg MouseLeaveLabel)
-                                |> notifyTap (BMsg <| SelectStateLabel sId)
+                                ]
 
                     --, text state |> centered |> filled black |> move ( 0, -3 )
                     {--, case model.appState of
@@ -1330,8 +1348,7 @@ type LatexAlign
 latex w h txt align =
     (html w h <|
         H.div
-            [ style "position" "absolute"
-            , style "width" "100%"
+            [ style "width" "100%"
             , style "height" "100%"
             , attribute "moz-user-select" "none"
             , attribute "webkit-user-select" "none"
