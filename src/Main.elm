@@ -1279,18 +1279,26 @@ renderStates states currents finals pos model =
                                     (BMsg << EditLabel sId)
 
                             else
-                                latex 25 18 (stateName sId) AlignCentre
+                                group
+                                    [ latex 25 18 (stateName sId) AlignCentre
+                                        |> move ( 0, 9 )
+                                    , rect 25 18
+                                        |> filled blank
+                                        |> notifyEnter (BMsg <| MouseOverStateLabel sId)
+                                        |> notifyLeave (BMsg MouseLeaveLabel)
+                                        |> notifyTap (BMsg <| SelectStateLabel sId)
+                                    ]
+
+                        _ ->
+                            group
+                                [ latex 25 18 (stateName sId) AlignCentre
                                     |> move ( 0, 9 )
+                                , rect 25 18
+                                    |> filled blank
                                     |> notifyEnter (BMsg <| MouseOverStateLabel sId)
                                     |> notifyLeave (BMsg MouseLeaveLabel)
                                     |> notifyTap (BMsg <| SelectStateLabel sId)
-
-                        _ ->
-                            latex 25 18 (stateName sId) AlignCentre
-                                |> move ( 0, 9 )
-                                |> notifyEnter (BMsg <| MouseOverStateLabel sId)
-                                |> notifyLeave (BMsg MouseLeaveLabel)
-                                |> notifyTap (BMsg <| SelectStateLabel sId)
+                                ]
 
                     --, text state |> centered |> filled black |> move ( 0, -3 )
                     {--, case model.appState of
@@ -1340,8 +1348,7 @@ type LatexAlign
 latex w h txt align =
     (html w h <|
         H.div
-            [ style "position" "absolute"
-            , style "width" "100%"
+            [ style "width" "100%"
             , style "height" "100%"
             , attribute "moz-user-select" "none"
             , attribute "webkit-user-select" "none"
