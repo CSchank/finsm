@@ -146,10 +146,6 @@ type alias Model =
     , simulateData : SimulateData
     , machine : Machine
     , states : Set StateID
-    , statePositions : StatePositions
-    , stateTransitions : StateTransitions
-    , stateNames : StateNames
-    , transitionNames : TransitionNames
     , windowSize : ( Int, Int )
     , holdingShift : Bool
     }
@@ -160,6 +156,10 @@ type alias Machine =
     , delta : Delta
     , start : Set StateID
     , final : Set StateID
+    , statePositions : StatePositions
+    , stateTransitions : StateTransitions
+    , stateNames : StateNames
+    , transitionNames : TransitionNames
     }
 
 
@@ -219,8 +219,23 @@ test =
 
         final =
             Set.fromList [ 0 ]
+
+        statePositions = Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
+        stateNames = Dict.fromList [ ( 0, "q_0" ), ( 1, "q_1" ), ( 2, "q_2" ), ( 3, "q_3" ) ]
+        transitionNames = Dict.fromList [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ), ( 8, "1" ) ]
+        stateTransitions =
+            Dict.fromList
+                [ ( ( 0, 0, 1 ), ( 0, 10 ) )
+                , ( ( 1, 2, 0 ), ( 0, 10 ) )
+                , ( ( 0, 1, 2 ), ( 0, 10 ) )
+                , ( ( 2, 5, 0 ), ( 0, 10 ) )
+                , ( ( 2, 4, 3 ), ( 0, 10 ) )
+                , ( ( 3, 6, 2 ), ( 0, 10 ) )
+                , ( ( 1, 3, 3 ), ( 0, 10 ) )
+                , ( ( 3, 7, 1 ), ( 0, 10 ) )
+                ]
     in
-    Machine q delta0 start final
+        Machine q delta0 start final statePositions stateTransitions stateNames transitionNames 
 
 
 main : App () Model Msg
@@ -232,20 +247,7 @@ main =
                   , machine = test
                   , simulateData = initSimData
                   , states = test.start
-                  , statePositions = Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
-                  , stateNames = Dict.fromList [ ( 0, "q_0" ), ( 1, "q_1" ), ( 2, "q_2" ), ( 3, "q_3" ) ]
-                  , transitionNames = Dict.fromList [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ), ( 8, "1" ) ]
-                  , stateTransitions =
-                        Dict.fromList
-                            [ ( ( 0, 0, 1 ), ( 0, 10 ) )
-                            , ( ( 1, 2, 0 ), ( 0, 10 ) )
-                            , ( ( 0, 1, 2 ), ( 0, 10 ) )
-                            , ( ( 2, 5, 0 ), ( 0, 10 ) )
-                            , ( ( 2, 4, 3 ), ( 0, 10 ) )
-                            , ( ( 3, 6, 2 ), ( 0, 10 ) )
-                            , ( ( 1, 3, 3 ), ( 0, 10 ) )
-                            , ( ( 3, 7, 1 ), ( 0, 10 ) )
-                            ]
+                  
                   , windowSize = ( 0, 0 )
                   , holdingShift = False
                   }
@@ -266,7 +268,9 @@ main =
 
 
 update msg model =
-    case msg of
+    let 
+        oldMachine = model.machine
+    in case msg of
         GoTo state ->
             ( { model | appState = state }, Cmd.none )
 
@@ -309,7 +313,7 @@ update msg model =
                     Building (EditingStateLabel stId newLbl) ->
                         let
                             oldStateName =
-                                case Dict.get stId model.stateNames of
+                                case Dict.get stId oldMachine.stateNames of
                                     Just n ->
                                         n
 
@@ -321,7 +325,7 @@ update msg model =
 
                         else
                             ( { model
-                                | stateNames = Dict.insert stId newLbl model.stateNames
+                                | machine = { oldMachine | stateNames = Dict.insert stId newLbl oldMachine.stateNames }
                                 , appState = Building Regular
                               }
                             , Cmd.none
@@ -330,7 +334,7 @@ update msg model =
                     Building (EditingTransitionLabel tId newLbl) ->
                         let
                             oldTransitionName =
-                                case Dict.get tId model.transitionNames of
+                                case Dict.get tId oldMachine.transitionNames of
                                     Just n ->
                                         n
 
@@ -342,7 +346,7 @@ update msg model =
 
                         else
                             ( { model
-                                | transitionNames = Dict.insert tId newLbl model.transitionNames
+                                | machine = { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames}
                                 , appState = Building Regular
                               }
                             , Cmd.none
@@ -359,51 +363,48 @@ update msg model =
                 case model.appState of
                     Building (SelectedState stId) ->
                         let
-                            oldMachine =
-                                model.machine
-
                             newDelta =
-                                Dict.map (\_ d -> Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d) model.machine.delta
+                                Dict.map (\_ d -> Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d) oldMachine.delta
 
                             newMachine =
-                                { oldMachine | q = Set.remove stId oldMachine.q, delta = newDelta }
+                                { oldMachine | q = Set.remove stId oldMachine.q, delta = newDelta 
+                                , statePositions = Dict.remove stId oldMachine.statePositions
+                                , stateTransitions = newStateTransitions
+                                , stateNames = Dict.remove stId oldMachine.stateNames
+                                , transitionNames = Dict.diff oldMachine.transitionNames removedTransitions
+                                }
 
                             newStateTransitions =
-                                Dict.filter (\( _, t, _ ) _ -> not <| Dict.member t removedTransitions) model.stateTransitions
+                                Dict.filter (\( _, t, _ ) _ -> not <| Dict.member t removedTransitions) oldMachine.stateTransitions
 
                             removedTransitions =
-                                Dict.fromList <| List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) model.stateTransitions
+                                Dict.fromList <| List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) oldMachine.stateTransitions
                         in
                         ( { model
                             | machine = newMachine
                             , appState = Building Regular
-                            , statePositions = Dict.remove stId model.statePositions
-                            , stateTransitions = newStateTransitions
-                            , stateNames = Dict.remove stId model.stateNames
-                            , transitionNames = Dict.diff model.transitionNames removedTransitions
                           }
                         , Cmd.none
                         )
 
                     Building (SelectedArrow ( _, tId, _ )) ->
                         let
-                            oldMachine =
-                                model.machine
 
                             newDelta =
-                                Dict.map (\_ d -> Dict.filter (\tId0 _ -> tId /= tId0) d) model.machine.delta
+                                Dict.map (\_ d -> Dict.filter (\tId0 _ -> tId /= tId0) d) oldMachine.delta
 
                             newMachine =
-                                { oldMachine | delta = newDelta }
+                                { oldMachine | delta = newDelta
+                                , stateTransitions = newStateTransitions
+                                , transitionNames = Dict.remove tId oldMachine.transitionNames }
 
                             newStateTransitions =
-                                Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) model.stateTransitions
+                                Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.stateTransitions
                         in
                         ( { model
                             | machine = newMachine
                             , appState = Building Regular
-                            , stateTransitions = newStateTransitions
-                            , transitionNames = Dict.remove tId model.transitionNames
+                            
                           }
                         , Cmd.none
                         )
@@ -535,7 +536,7 @@ update msg model =
                                         -1
 
                             chars =
-                                Array.fromList <| Set.toList <| Set.fromList <| Dict.values model.transitionNames
+                                Array.fromList <| Set.toList <| Set.fromList <| Dict.values oldMachine.transitionNames
 
                             newChar =
                                 Array.get charCode chars
@@ -568,9 +569,6 @@ update msg model =
                     Building (SelectedState sId) ->
                         if k == 70 then
                             let
-                                oldMachine =
-                                    model.machine
-
                                 newMachine =
                                     { oldMachine
                                         | final =
@@ -595,11 +593,13 @@ update msg model =
 
 buildingUpdate : BuildingMsg -> Model -> ( Model, Cmd Msg )
 buildingUpdate msg model =
-    case msg of
+    let
+        oldMachine = model.machine
+    in case msg of
         StartDragging st ( x, y ) ->
             let
                 ( sx, sy ) =
-                    case Dict.get st model.statePositions of
+                    case Dict.get st oldMachine.statePositions of
                         Just ( xx, yy ) ->
                             ( xx, yy )
 
@@ -645,7 +645,7 @@ buildingUpdate msg model =
                 Building (AddingArrowOverOtherState st _ s1) ->
                     let
                         newTrans =
-                            case List.head <| Dict.values model.transitionNames of
+                            case List.head <| Dict.values oldMachine.transitionNames of
                                 Just char ->
                                     char
 
@@ -653,7 +653,7 @@ buildingUpdate msg model =
                                     "x"
 
                         newTransID =
-                            case List.maximum <| Dict.keys model.transitionNames of
+                            case List.maximum <| Dict.keys oldMachine.transitionNames of
                                 Just n ->
                                     n + 1
 
@@ -676,16 +676,14 @@ buildingUpdate msg model =
                                         Nothing ->
                                             Just <| Dict.singleton newTransID s1
                                 )
-                                model.machine.delta
-
-                        oldMachine =
-                            model.machine
+                                oldMachine.delta
                     in
                     ( { model
                         | appState = Building Regular
-                        , machine = { oldMachine | delta = newDelta }
-                        , transitionNames = Dict.insert newTransID newTrans model.transitionNames
-                        , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) model.stateTransitions
+                        , machine = { oldMachine | delta = newDelta 
+                        , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
+                        , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions
+                        }
                       }
                     , Cmd.none
                     )
@@ -701,7 +699,7 @@ buildingUpdate msg model =
                 Building (DraggingState st ( ox, oy )) ->
                     let
                         ( sx, sy ) =
-                            case Dict.get st model.statePositions of
+                            case Dict.get st oldMachine.statePositions of
                                 Just ( xx, yy ) ->
                                     ( xx, yy )
 
@@ -709,7 +707,7 @@ buildingUpdate msg model =
                                     ( 0, 0 )
                     in
                     ( { model
-                        | statePositions = updateStatePos st ( x - ox, y - oy ) model.statePositions
+                        | machine = { oldMachine | statePositions = updateStatePos st ( x - ox, y - oy ) oldMachine.statePositions }
                       }
                     , Cmd.none
                     )
@@ -717,7 +715,7 @@ buildingUpdate msg model =
                 Building (DraggingArrow ( s1, char, s2 )) ->
                     let
                         ( x0, y0 ) =
-                            case Dict.get s1 model.statePositions of
+                            case Dict.get s1 oldMachine.statePositions of
                                 Just ( xx, yy ) ->
                                     ( xx, yy )
 
@@ -725,7 +723,7 @@ buildingUpdate msg model =
                                     ( 0, 0 )
 
                         ( x1, y1 ) =
-                            case Dict.get s2 model.statePositions of
+                            case Dict.get s2 oldMachine.statePositions of
                                 Just ( xx, yy ) ->
                                     ( xx, yy )
 
@@ -744,14 +742,14 @@ buildingUpdate msg model =
                         nprot =
                             ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
                     in
-                    ( { model | stateTransitions = Dict.insert ( s1, char, s2 ) nprot model.stateTransitions }, Cmd.none )
+                    ( { model | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } }, Cmd.none )
 
                 Building (AddingArrow st _) ->
                     let
                         aboveStates =
                             List.map (\( sId, _ ) -> sId) <|
                                 Dict.toList <|
-                                    Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) model.statePositions
+                                    Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.statePositions
 
                         newState =
                             case aboveStates of
@@ -774,7 +772,7 @@ buildingUpdate msg model =
                         aboveStates =
                             List.map (\( sId, _ ) -> sId) <|
                                 Dict.toList <|
-                                    Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) model.statePositions
+                                    Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.statePositions
 
                         newState =
                             case aboveStates of
@@ -830,7 +828,7 @@ buildingUpdate msg model =
         SelectStateLabel st ->
             let
                 stateName =
-                    case Dict.get st model.stateNames of
+                    case Dict.get st oldMachine.stateNames of
                         Just n ->
                             n
 
@@ -842,7 +840,7 @@ buildingUpdate msg model =
         SelectTransitionLabel tr ->
             let
                 transName =
-                    case Dict.get tr model.transitionNames of
+                    case Dict.get tr oldMachine.transitionNames of
                         Just n ->
                             n
 
@@ -867,18 +865,15 @@ buildingUpdate msg model =
                 Building Regular ->
                     let
                         newId =
-                            setMax model.machine.q + 1
-
-                        oldMachine =
-                            model.machine
+                            setMax oldMachine.q + 1
 
                         newMachine =
-                            { oldMachine | q = Set.insert newId oldMachine.q }
+                            { oldMachine | q = Set.insert newId oldMachine.q
+                            , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
+                            , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames}
                     in
                     ( { model
                         | machine = newMachine
-                        , statePositions = Dict.insert newId ( x, y ) model.statePositions
-                        , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") model.stateNames
                       }
                     , Cmd.none
                     )
@@ -892,7 +887,9 @@ buildingUpdate msg model =
 
 simulatingUpdate : SimulatingMsg -> Model -> ( Model, Cmd Msg )
 simulatingUpdate msg model =
-    case msg of
+    let
+        oldMachine = model.machine
+    in case msg of
         Step ->
             case model.appState of
                 Simulating (SimRegular tapeId charId) ->
@@ -912,7 +909,7 @@ simulatingUpdate msg model =
                     in
                     if nextCh /= "" then
                         ( { model
-                            | states = deltaHat model.transitionNames model.machine.delta nextCh model.states
+                            | states = deltaHat oldMachine.transitionNames oldMachine.delta nextCh model.states
                             , appState = Simulating (SimRegular tapeId (charId + 1))
                           }
                         , Cmd.none
@@ -953,7 +950,7 @@ simulatingUpdate msg model =
 
         ChangeTape tId ->
             ( { model
-                | states = model.machine.start
+                | states = oldMachine.start
                 , appState = Simulating (SimRegular tId -1)
               }
             , Cmd.none
@@ -962,10 +959,7 @@ simulatingUpdate msg model =
         ToggleStart sId ->
             let
                 tests =
-                    model.machine.start
-
-                oldMachine =
-                    model.machine
+                    oldMachine.start
 
                 newMachine =
                     { oldMachine
@@ -1160,6 +1154,8 @@ trashIcon =
 renderStates : Set StateID -> Set StateID -> Set StateID -> StatePositions -> Model -> Shape Msg
 renderStates states currents finals pos model =
     let
+        oldMachine = model.machine
+
         stateList =
             Set.toList states
 
@@ -1184,7 +1180,7 @@ renderStates states currents finals pos model =
                     1
 
         stateName sId =
-            case Dict.get sId model.stateNames of
+            case Dict.get sId oldMachine.stateNames of
                 Just n ->
                     n
 
@@ -1537,6 +1533,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
 renderArrows : Set StateID -> Delta -> StatePositions -> StateTransitions -> Model -> Shape Msg
 renderArrows states del pos transPos model =
     let
+        oldMachine = model.machine
+
         stateList =
             Set.toList states
 
@@ -1586,7 +1584,7 @@ renderArrows states del pos transPos model =
                                                 getPos s2
 
                                             ch =
-                                                case Dict.get chId model.transitionNames of
+                                                case Dict.get chId oldMachine.transitionNames of
                                                     Just c ->
                                                         c
 
@@ -1664,13 +1662,15 @@ dot ( x0, y0 ) ( x1, y1 ) =
 view model =
     let
         {- accepted =
-           isAccept model.states model.machine.final model.input model.inputAt
+           isAccept model.states oldMachine.final model.input model.inputAt
         -}
         winX =
             toFloat <| first model.windowSize
 
         winY =
             toFloat <| second model.windowSize
+        
+        oldMachine = model.machine
     in
     collage
         winX
@@ -1691,8 +1691,8 @@ view model =
             _ ->
                 group []
         , group
-            [ renderStates model.machine.q model.states model.machine.final model.statePositions model
-            , renderArrows model.machine.q model.machine.delta model.statePositions model.stateTransitions model
+            [ renderStates oldMachine.q model.states oldMachine.final oldMachine.statePositions model
+            , renderArrows oldMachine.q oldMachine.delta oldMachine.statePositions oldMachine.stateTransitions model
             ]
             |> move
                 ( 0
@@ -1719,7 +1719,7 @@ view model =
             Building (AddingArrow s ( x, y )) ->
                 let
                     s0Pos =
-                        case Dict.get s model.statePositions of
+                        case Dict.get s oldMachine.statePositions of
                             Just pos ->
                                 pos
 
@@ -1727,7 +1727,7 @@ view model =
                                 ( 0, 0 )
 
                     newTrans =
-                        case List.head <| Dict.values model.transitionNames of
+                        case List.head <| Dict.values oldMachine.transitionNames of
                             Just char ->
                                 char
 
@@ -1735,7 +1735,7 @@ view model =
                                 " "
 
                     newTransID =
-                        case List.head <| Dict.keys model.transitionNames of
+                        case List.head <| Dict.keys oldMachine.transitionNames of
                             Just char ->
                                 char
 
@@ -1747,7 +1747,7 @@ view model =
             Building (AddingArrowOverOtherState s ( x, y ) s1) ->
                 let
                     s0Pos =
-                        case Dict.get s model.statePositions of
+                        case Dict.get s oldMachine.statePositions of
                             Just pos ->
                                 pos
 
@@ -1755,7 +1755,7 @@ view model =
                                 ( 0, 0 )
 
                     s1Pos =
-                        case Dict.get s1 model.statePositions of
+                        case Dict.get s1 oldMachine.statePositions of
                             Just pos ->
                                 pos
 
@@ -1763,7 +1763,7 @@ view model =
                                 ( 0, 0 )
 
                     newTrans =
-                        case List.head <| Dict.values model.transitionNames of
+                        case List.head <| Dict.values oldMachine.transitionNames of
                             Just char ->
                                 char
 
@@ -1771,7 +1771,7 @@ view model =
                                 " "
 
                     newTransID =
-                        case List.head <| Dict.keys model.transitionNames of
+                        case List.head <| Dict.keys oldMachine.transitionNames of
                             Just char ->
                                 char
 
@@ -1819,6 +1819,7 @@ view model =
 renderSimulate : Model -> Shape Msg
 renderSimulate model =
     let
+        oldMachine = model.machine
         winX =
             toFloat <| first model.windowSize
 
@@ -1826,10 +1827,10 @@ renderSimulate model =
             toFloat <| second model.windowSize
 
         chars =
-            Set.toList <| Set.fromList <| List.map (\( _, n ) -> n) <| Dict.toList model.transitionNames
+            Set.toList <| Set.fromList <| List.map (\( _, n ) -> n) <| Dict.toList oldMachine.transitionNames
 
         getStateName sId =
-            case Dict.get sId model.stateNames of
+            case Dict.get sId oldMachine.stateNames of
                 Just n ->
                     n
 
@@ -1869,15 +1870,15 @@ renderSimulate model =
                     |> move ( -winX / 2 + 750, winY / 6 - 25 )
                 , latex 500 14 "where" AlignLeft
                     |> move ( -winX / 2 + 750, winY / 6 - 45 )
-                , latex 500 18 ("Q = \\{ " ++ String.join "," (Dict.values model.stateNames) ++ " \\}") AlignLeft
+                , latex 500 18 ("Q = \\{ " ++ String.join "," (Dict.values oldMachine.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 65 )
-                , latex 500 18 ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.fromList <| Dict.values model.transitionNames) ++ " \\}") AlignLeft
+                , latex 500 18 ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.fromList <| Dict.values oldMachine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 90 )
                 , latex 500 18 "\\Delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 115 )
-                , latex 500 18 ("S = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| model.machine.start) ++ " \\}") AlignLeft
+                , latex 500 18 ("S = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| oldMachine.start) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 140 )
-                , latex 500 18 ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| model.machine.final) ++ " \\}") AlignLeft
+                , latex 500 18 ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| oldMachine.final) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 165 )
                 , case model.appState of
                     Simulating (SimRegular tapeId charId) ->
