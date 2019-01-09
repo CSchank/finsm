@@ -129,25 +129,29 @@ type SimulatingState
 
 type alias SimulateData =
     { tapes : Dict Int (Array Character)
+    , currentStates : Set StateID
     }
 
-
+initSimData : SimulateData
 initSimData =
     { tapes =
         Dict.fromList
             [ ( 0, Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ] )
             , ( 1, Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0", "1", "1", "1", "1", "0" ] )
             ]
+    , currentStates = test.start
     }
 
+type alias Environment =
+    { windowSize : ( Int, Int )
+    , holdingShift : Bool
+    }
 
 type alias Model =
     { appState : ApplicationState
     , simulateData : SimulateData
     , machine : Machine
-    , states : Set StateID
-    , windowSize : ( Int, Int )
-    , holdingShift : Bool
+    , environment : Environment
     }
 
 
@@ -246,10 +250,9 @@ main =
                 ( { appState = Building Regular
                   , machine = test
                   , simulateData = initSimData
-                  , states = test.start
-                  
-                  , windowSize = ( 0, 0 )
-                  , holdingShift = False
+                  , environment = {
+                    windowSize = ( 0, 0 )
+                  , holdingShift = False }
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
                 )
@@ -270,6 +273,7 @@ main =
 update msg model =
     let 
         oldMachine = model.machine
+        oldEnvironment = model.environment
     in case msg of
         GoTo state ->
             ( { model | appState = state }, Cmd.none )
@@ -291,7 +295,7 @@ update msg model =
                     ( model, Cmd.none )
 
         WindowSize ( w, h ) ->
-            ( { model | windowSize = ( w, h ) }, Cmd.none )
+            ( { model | environment = { oldEnvironment | windowSize = ( w, h ) }}, Cmd.none )
 
         UrlChange _ ->
             ( model, Cmd.none )
@@ -301,7 +305,7 @@ update msg model =
 
         KeyReleased k ->
             if k == 16 then
-                ( { model | holdingShift = False }, Cmd.none )
+                ( { model | environment = { oldEnvironment | holdingShift = False }}, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -411,12 +415,12 @@ update msg model =
 
                     Simulating (SimEditing tapeId) ->
                         let
-                            oldSimData =
+                            oldSimulateData =
                                 model.simulateData
                         in
                         ( { model
                             | simulateData =
-                                { oldSimData
+                                { oldSimulateData
                                     | tapes =
                                         Dict.update tapeId
                                             (\m ->
@@ -427,7 +431,7 @@ update msg model =
                                                     _ ->
                                                         m
                                             )
-                                            oldSimData.tapes
+                                            oldSimulateData.tapes
                                 }
                           }
                         , Cmd.none
@@ -446,7 +450,7 @@ update msg model =
                         ( model, Cmd.none )
 
             else if k == 16 then
-                ( { model | holdingShift = True }, Cmd.none )
+                ( { model | environment = { oldEnvironment | holdingShift = True }}, Cmd.none )
 
             else
                 case model.appState of
@@ -541,12 +545,12 @@ update msg model =
                             newChar =
                                 Array.get charCode chars
 
-                            oldSimData =
+                            oldSimulateData =
                                 model.simulateData
                         in
                         ( { model
                             | simulateData =
-                                { oldSimData
+                                { oldSimulateData
                                     | tapes =
                                         Dict.update tapeId
                                             (\m ->
@@ -560,7 +564,7 @@ update msg model =
                                                     _ ->
                                                         m
                                             )
-                                            oldSimData.tapes
+                                            oldSimulateData.tapes
                                 }
                           }
                         , Cmd.none
@@ -889,6 +893,7 @@ simulatingUpdate : SimulatingMsg -> Model -> ( Model, Cmd Msg )
 simulatingUpdate msg model =
     let
         oldMachine = model.machine
+        oldSimulateData = model.simulateData
     in case msg of
         Step ->
             case model.appState of
@@ -909,7 +914,7 @@ simulatingUpdate msg model =
                     in
                     if nextCh /= "" then
                         ( { model
-                            | states = deltaHat oldMachine.transitionNames oldMachine.delta nextCh model.states
+                            | simulateData = { oldSimulateData | currentStates = deltaHat oldMachine.transitionNames oldMachine.delta nextCh oldSimulateData.currentStates }
                             , appState = Simulating (SimRegular tapeId (charId + 1))
                           }
                         , Cmd.none
@@ -925,16 +930,10 @@ simulatingUpdate msg model =
             ( { model | appState = Simulating (SimEditing tId) }, Cmd.none )
 
         DeleteTape tId ->
-            let
-                oldSimData =
-                    model.simulateData
-            in
-            ( { model | simulateData = { oldSimData | tapes = Dict.remove tId oldSimData.tapes } }, Cmd.none )
+            ( { model | simulateData = { oldSimulateData | tapes = Dict.remove tId oldSimulateData.tapes } }, Cmd.none )
 
         AddNewTape ->
             let
-                oldSimData =
-                    model.simulateData
 
                 newId =
                     (case List.maximum <| Dict.keys model.simulateData.tapes of
@@ -946,11 +945,11 @@ simulatingUpdate msg model =
                     )
                         + 1
             in
-            ( { model | simulateData = { oldSimData | tapes = Dict.insert newId Array.empty oldSimData.tapes } }, Cmd.none )
+            ( { model | simulateData = { oldSimulateData | tapes = Dict.insert newId Array.empty oldSimulateData.tapes } }, Cmd.none )
 
         ChangeTape tId ->
             ( { model
-                | states = oldMachine.start
+                | simulateData = { oldSimulateData | currentStates = oldMachine.start }
                 , appState = Simulating (SimRegular tId -1)
               }
             , Cmd.none
@@ -977,7 +976,7 @@ simulatingUpdate msg model =
                     ( { model
                         | machine = newMachine
                         , appState = Simulating (SimRegular tapeId 0)
-                        , states = newMachine.start
+                        , simulateData = { oldSimulateData | currentStates = newMachine.start }
                       }
                     , Cmd.none
                     )
@@ -1665,10 +1664,10 @@ view model =
            isAccept model.states oldMachine.final model.input model.inputAt
         -}
         winX =
-            toFloat <| first model.windowSize
+            toFloat <| first model.environment.windowSize
 
         winY =
-            toFloat <| second model.windowSize
+            toFloat <| second model.environment.windowSize
         
         oldMachine = model.machine
     in
@@ -1681,7 +1680,7 @@ view model =
             Building _ ->
                 rect winX winY
                     |> filled blank
-                    |> (if model.holdingShift then
+                    |> (if model.environment.holdingShift then
                             notifyTapAt (BMsg << AddState)
 
                         else
@@ -1691,7 +1690,7 @@ view model =
             _ ->
                 group []
         , group
-            [ renderStates oldMachine.q model.states oldMachine.final oldMachine.statePositions model
+            [ renderStates oldMachine.q model.simulateData.currentStates oldMachine.final oldMachine.statePositions model
             , renderArrows oldMachine.q oldMachine.delta oldMachine.statePositions oldMachine.stateTransitions model
             ]
             |> move
@@ -1821,10 +1820,10 @@ renderSimulate model =
     let
         oldMachine = model.machine
         winX =
-            toFloat <| first model.windowSize
+            toFloat <| first model.environment.windowSize
 
         winY =
-            toFloat <| second model.windowSize
+            toFloat <| second model.environment.windowSize
 
         chars =
             Set.toList <| Set.fromList <| List.map (\( _, n ) -> n) <| Dict.toList oldMachine.transitionNames
@@ -1940,10 +1939,10 @@ renderSimulate model =
 modeButtons model =
     let
         winX =
-            toFloat <| first model.windowSize
+            toFloat <| first model.environment.windowSize
 
         winY =
-            toFloat <| second model.windowSize
+            toFloat <| second model.environment.windowSize
 
         building =
             case model.appState of
