@@ -132,6 +132,7 @@ type alias SimulateData =
     , currentStates : Set StateID
     }
 
+
 initSimData : SimulateData
 initSimData =
     { tapes =
@@ -142,10 +143,12 @@ initSimData =
     , currentStates = test.start
     }
 
+
 type alias Environment =
     { windowSize : ( Int, Int )
     , holdingShift : Bool
     }
+
 
 type alias Model =
     { appState : ApplicationState
@@ -224,9 +227,15 @@ test =
         final =
             Set.fromList [ 0 ]
 
-        statePositions = Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
-        stateNames = Dict.fromList [ ( 0, "q_0" ), ( 1, "q_1" ), ( 2, "q_2" ), ( 3, "q_3" ) ]
-        transitionNames = Dict.fromList [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ), ( 8, "1" ) ]
+        statePositions =
+            Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
+
+        stateNames =
+            Dict.fromList [ ( 0, "q_0" ), ( 1, "q_1" ), ( 2, "q_2" ), ( 3, "q_3" ) ]
+
+        transitionNames =
+            Dict.fromList [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ), ( 8, "1" ) ]
+
         stateTransitions =
             Dict.fromList
                 [ ( ( 0, 0, 1 ), ( 0, 10 ) )
@@ -239,7 +248,7 @@ test =
                 , ( ( 3, 7, 1 ), ( 0, 10 ) )
                 ]
     in
-        Machine q delta0 start final statePositions stateTransitions stateNames transitionNames 
+    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
 
 
 main : App () Model Msg
@@ -250,9 +259,10 @@ main =
                 ( { appState = Building Regular
                   , machine = test
                   , simulateData = initSimData
-                  , environment = {
-                    windowSize = ( 0, 0 )
-                  , holdingShift = False }
+                  , environment =
+                        { windowSize = ( 0, 0 )
+                        , holdingShift = False
+                        }
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
                 )
@@ -271,10 +281,14 @@ main =
 
 
 update msg model =
-    let 
-        oldMachine = model.machine
-        oldEnvironment = model.environment
-    in case msg of
+    let
+        oldMachine =
+            model.machine
+
+        oldEnvironment =
+            model.environment
+    in
+    case msg of
         GoTo state ->
             ( { model | appState = state }, Cmd.none )
 
@@ -295,7 +309,7 @@ update msg model =
                     ( model, Cmd.none )
 
         WindowSize ( w, h ) ->
-            ( { model | environment = { oldEnvironment | windowSize = ( w, h ) }}, Cmd.none )
+            ( { model | environment = { oldEnvironment | windowSize = ( w, h ) } }, Cmd.none )
 
         UrlChange _ ->
             ( model, Cmd.none )
@@ -305,7 +319,7 @@ update msg model =
 
         KeyReleased k ->
             if k == 16 then
-                ( { model | environment = { oldEnvironment | holdingShift = False }}, Cmd.none )
+                ( { model | environment = { oldEnvironment | holdingShift = False } }, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -350,7 +364,7 @@ update msg model =
 
                         else
                             ( { model
-                                | machine = { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames}
+                                | machine = { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames }
                                 , appState = Building Regular
                               }
                             , Cmd.none
@@ -371,11 +385,13 @@ update msg model =
                                 Dict.map (\_ d -> Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d) oldMachine.delta
 
                             newMachine =
-                                { oldMachine | q = Set.remove stId oldMachine.q, delta = newDelta 
-                                , statePositions = Dict.remove stId oldMachine.statePositions
-                                , stateTransitions = newStateTransitions
-                                , stateNames = Dict.remove stId oldMachine.stateNames
-                                , transitionNames = Dict.diff oldMachine.transitionNames removedTransitions
+                                { oldMachine
+                                    | q = Set.remove stId oldMachine.q
+                                    , delta = newDelta
+                                    , statePositions = Dict.remove stId oldMachine.statePositions
+                                    , stateTransitions = newStateTransitions
+                                    , stateNames = Dict.remove stId oldMachine.stateNames
+                                    , transitionNames = Dict.diff oldMachine.transitionNames removedTransitions
                                 }
 
                             newStateTransitions =
@@ -393,14 +409,15 @@ update msg model =
 
                     Building (SelectedArrow ( _, tId, _ )) ->
                         let
-
                             newDelta =
                                 Dict.map (\_ d -> Dict.filter (\tId0 _ -> tId /= tId0) d) oldMachine.delta
 
                             newMachine =
-                                { oldMachine | delta = newDelta
-                                , stateTransitions = newStateTransitions
-                                , transitionNames = Dict.remove tId oldMachine.transitionNames }
+                                { oldMachine
+                                    | delta = newDelta
+                                    , stateTransitions = newStateTransitions
+                                    , transitionNames = Dict.remove tId oldMachine.transitionNames
+                                }
 
                             newStateTransitions =
                                 Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.stateTransitions
@@ -408,7 +425,6 @@ update msg model =
                         ( { model
                             | machine = newMachine
                             , appState = Building Regular
-                            
                           }
                         , Cmd.none
                         )
@@ -450,7 +466,7 @@ update msg model =
                         ( model, Cmd.none )
 
             else if k == 16 then
-                ( { model | environment = { oldEnvironment | holdingShift = True }}, Cmd.none )
+                ( { model | environment = { oldEnvironment | holdingShift = True } }, Cmd.none )
 
             else
                 case model.appState of
@@ -598,8 +614,10 @@ update msg model =
 buildingUpdate : BuildingMsg -> Model -> ( Model, Cmd Msg )
 buildingUpdate msg model =
     let
-        oldMachine = model.machine
-    in case msg of
+        oldMachine =
+            model.machine
+    in
+    case msg of
         StartDragging st ( x, y ) ->
             let
                 ( sx, sy ) =
@@ -684,10 +702,12 @@ buildingUpdate msg model =
                     in
                     ( { model
                         | appState = Building Regular
-                        , machine = { oldMachine | delta = newDelta 
-                        , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
-                        , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions
-                        }
+                        , machine =
+                            { oldMachine
+                                | delta = newDelta
+                                , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
+                                , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions
+                            }
                       }
                     , Cmd.none
                     )
@@ -872,9 +892,11 @@ buildingUpdate msg model =
                             setMax oldMachine.q + 1
 
                         newMachine =
-                            { oldMachine | q = Set.insert newId oldMachine.q
-                            , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
-                            , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames}
+                            { oldMachine
+                                | q = Set.insert newId oldMachine.q
+                                , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
+                                , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames
+                            }
                     in
                     ( { model
                         | machine = newMachine
@@ -892,9 +914,13 @@ buildingUpdate msg model =
 simulatingUpdate : SimulatingMsg -> Model -> ( Model, Cmd Msg )
 simulatingUpdate msg model =
     let
-        oldMachine = model.machine
-        oldSimulateData = model.simulateData
-    in case msg of
+        oldMachine =
+            model.machine
+
+        oldSimulateData =
+            model.simulateData
+    in
+    case msg of
         Step ->
             case model.appState of
                 Simulating (SimRegular tapeId charId) ->
@@ -934,7 +960,6 @@ simulatingUpdate msg model =
 
         AddNewTape ->
             let
-
                 newId =
                     (case List.maximum <| Dict.keys model.simulateData.tapes of
                         Just n ->
@@ -1153,7 +1178,8 @@ trashIcon =
 renderStates : Set StateID -> Set StateID -> Set StateID -> StatePositions -> Model -> Shape Msg
 renderStates states currents finals pos model =
     let
-        oldMachine = model.machine
+        oldMachine =
+            model.machine
 
         stateList =
             Set.toList states
@@ -1532,7 +1558,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
 renderArrows : Set StateID -> Delta -> StatePositions -> StateTransitions -> Model -> Shape Msg
 renderArrows states del pos transPos model =
     let
-        oldMachine = model.machine
+        oldMachine =
+            model.machine
 
         stateList =
             Set.toList states
@@ -1668,8 +1695,9 @@ view model =
 
         winY =
             toFloat <| second model.environment.windowSize
-        
-        oldMachine = model.machine
+
+        oldMachine =
+            model.machine
     in
     collage
         winX
@@ -1818,7 +1846,9 @@ view model =
 renderSimulate : Model -> Shape Msg
 renderSimulate model =
     let
-        oldMachine = model.machine
+        oldMachine =
+            model.machine
+
         winX =
             toFloat <| first model.environment.windowSize
 
