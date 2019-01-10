@@ -1,22 +1,25 @@
-module Building exposing (..)
-import Machine exposing(..)
+module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, icon, update, updateArrowPos, updateStatePos, view)
+
 import Dict exposing (Dict)
 import Environment exposing (Environment)
+import Machine exposing (..)
 import SharedModel exposing (SharedModel)
 
-type alias Model
-    = 
-    {
-        machineState : Machine.Model
+
+type alias Model =
+    { machineState : Machine.Model
     }
 
-type PersistentModel =
-    Empty
+
+type PersistentModel
+    = Empty
+
 
 type Msg
     = MachineMsg Machine.Msg
 
-update : Environment -> Msg -> (Model, PersistentModel, SharedModel) -> ( (Model, PersistentModel, SharedModel), Bool, Cmd Msg )
+
+update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 update msg model =
     let
         oldMachine =
@@ -55,7 +58,7 @@ update msg model =
 
         MoveMouseOverRim ( x, y ) ->
             case model.appState of
-                (MousingOverRim stId _) ->
+                MousingOverRim stId _ ->
                     ( { model | appState = MousingOverRim stId ( x, y ) }, Cmd.none )
 
                 _ ->
@@ -66,10 +69,10 @@ update msg model =
 
         StopDragging ->
             case model.appState of
-                (DraggingState st _) ->
-                    ( { model | appState = (SelectedState st) }, Cmd.none )
+                DraggingState st _ ->
+                    ( { model | appState = SelectedState st }, Cmd.none )
 
-                (AddingArrowOverOtherState st _ s1) ->
+                AddingArrowOverOtherState st _ s1 ->
                     let
                         newTrans =
                             case List.head <| Dict.values oldMachine.transitionNames of
@@ -125,7 +128,7 @@ update msg model =
 
         Drag ( x, y ) ->
             case model.appState of
-                (DraggingState st ( ox, oy )) ->
+                DraggingState st ( ox, oy ) ->
                     let
                         ( sx, sy ) =
                             case Dict.get st oldMachine.statePositions of
@@ -141,7 +144,7 @@ update msg model =
                     , Cmd.none
                     )
 
-                (DraggingArrow ( s1, char, s2 )) ->
+                DraggingArrow ( s1, char, s2 ) ->
                     let
                         ( x0, y0 ) =
                             case Dict.get s1 oldMachine.statePositions of
@@ -173,7 +176,7 @@ update msg model =
                     in
                     ( { model | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } }, Cmd.none )
 
-                (AddingArrow st _) ->
+                AddingArrow st _ ->
                     let
                         aboveStates =
                             List.map (\( sId, _ ) -> sId) <|
@@ -196,7 +199,7 @@ update msg model =
                     , Cmd.none
                     )
 
-                (AddingArrowOverOtherState st _ s1) ->
+                AddingArrowOverOtherState st _ s1 ->
                     let
                         aboveStates =
                             List.map (\( sId, _ ) -> sId) <|
@@ -242,10 +245,10 @@ update msg model =
             ( { model
                 | appState =
                     case model.appState of
-                        (MousingOverStateLabel _) ->
+                        MousingOverStateLabel _ ->
                             Regular
 
-                        (MousingOverTransitionLabel _) ->
+                        MousingOverTransitionLabel _ ->
                             Regular
 
                         _ ->
@@ -280,11 +283,11 @@ update msg model =
 
         EditLabel _ lbl ->
             case model.appState of
-                (EditingStateLabel st _) ->
-                    ( { model | appState = (EditingStateLabel st lbl) }, Cmd.none )
+                EditingStateLabel st _ ->
+                    ( { model | appState = EditingStateLabel st lbl }, Cmd.none )
 
-                (EditingTransitionLabel tr _) ->
-                    ( { model | appState = (EditingTransitionLabel tr lbl) }, Cmd.none )
+                EditingTransitionLabel tr _ ->
+                    ( { model | appState = EditingTransitionLabel tr lbl }, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -315,12 +318,13 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-view : Environment -> (Model, PersistentModel, SharedModel) -> Shape Msg
-view env (model, pModel, sModel) =
+
+view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
+view env ( model, pModel, sModel ) =
     group
-        [
-            Machine.view env model.machineState Set.empty 
+        [ Machine.view env model.machineState Set.empty
         ]
+
 
 updateStatePos : StateID -> ( Float, Float ) -> StatePositions -> StatePositions
 updateStatePos st ( x, y ) pos =
@@ -350,6 +354,7 @@ updateArrowPos st angle pos =
                 ( x, y )
         )
         pos
+
 
 editingButtons =
     group

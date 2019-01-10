@@ -1,8 +1,10 @@
-module Simulating exposing(..)
-import Set exposing (Set)
-import Machine exposing(..)
-import Dict exposing (Dict)
+module Simulating exposing (Character, InputTape, PersistentModel, initPersistentModel, latexKeyboard, view)
+
 import Array exposing (Array)
+import Dict exposing (Dict)
+import Machine exposing (..)
+import Set exposing (Set)
+
 
 type alias PersistentModel =
     { tapes : Dict Int (Array Character)
@@ -13,8 +15,10 @@ type alias PersistentModel =
 type alias InputTape =
     Array Character
 
+
 type alias Character =
     String
+
 
 initPersistentModel : PersistentModel
 initPersistentModel =
@@ -26,8 +30,9 @@ initPersistentModel =
     , currentStates = test.start
     }
 
-view : Environment -> (Model, PersistentModel, SharedModel) -> Shape Msg
-view env (model, pModel, sModel) =
+
+view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
+view env ( model, pModel, sModel ) =
     let
         oldMachine =
             model.machine sModel.machine
@@ -148,6 +153,7 @@ view env (model, pModel, sModel) =
                 group []
         ]
 
+
 latexKeyboard : Float -> Float -> List Character -> Shape Msg
 latexKeyboard w h chars =
     let
@@ -202,4 +208,3 @@ latexKeyboard w h chars =
         , oneRow homeRow (fillOutExtras 9 0 chars) |> move ( -keyW / 3, -keyH - 2 )
         , oneRow botRow (fillOutExtras 7 19 chars) |> move ( -keyW, -(keyH + 2) * 2 )
         ]
-

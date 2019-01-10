@@ -1,30 +1,38 @@
-module Machine exposing (..)
+module Machine exposing (Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionNames, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
 
 import Dict exposing (Dict)
+import GraphicSVG exposing (..)
+import Helpers exposing (editIcon)
 import Set exposing (Set)
-import GraphicSVG exposing(..)
-import Helpers exposing(editIcon)
+
 
 type alias StateID =
     Int
 
+
 type alias StatePositions =
     Dict StateID ( Float, Float )
+
 
 type alias TransitionID =
     Int
 
+
 type alias StateNames =
     Dict StateID String
+
 
 type alias TransitionNames =
     Dict TransitionID String
 
+
 type alias StateTransitions =
     Dict ( StateID, TransitionID, StateID ) ( Float, Float )
 
+
 type alias Delta =
     Dict StateID (Dict TransitionID StateID)
+
 
 type alias Machine =
     { q : Set StateID
@@ -37,8 +45,9 @@ type alias Machine =
     , transitionNames : TransitionNames
     }
 
-type Model = 
-      Regular
+
+type Model
+    = Regular
     | DraggingState StateID ( Float, Float )
     | SelectedState StateID
     | MousingOverRim StateID ( Float, Float )
@@ -52,7 +61,9 @@ type Model =
     | DraggingArrow ( StateID, TransitionID, StateID )
     | CreatingNewArrow StateID
 
-type Msg = StartDragging StateID ( Float, Float )
+
+type Msg
+    = StartDragging StateID ( Float, Float )
     | StartDraggingArrow ( StateID, TransitionID, StateID )
     | StartMouseOverRim StateID ( Float, Float )
     | MoveMouseOverRim ( Float, Float )
@@ -112,13 +123,19 @@ test =
     in
     Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
 
+
 view : Environment -> Model -> Machine -> Set StateID -> Shape Msg
 view env model machine currentStates =
     group
-            [ renderStates machine.q currentStates machine.final machine.statePositions model
-            , renderArrows machine.q machine.delta machine.statePositions machine.stateTransitions model
-            ]
+        [ renderStates machine.q currentStates machine.final machine.statePositions model
+        , renderArrows machine.q machine.delta machine.statePositions machine.stateTransitions model
+        ]
+
+
+
 --These two functions will eventually become part of GraphicSVG in some form
+
+
 textBox : String -> Float -> Float -> String -> (String -> Msg) -> Shape Msg
 textBox txt w h place msg =
     move ( -w / 2, h / 2 ) <|
@@ -133,6 +150,7 @@ textBox txt w h place msg =
                 , style "font-family" "monospace"
                 ]
                 []
+
 
 arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
     let
@@ -152,6 +170,7 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
             |> rotate (atan2 dy dx)
             |> move ( x2 - 4 * cos (atan2 dy dx), y2 - 4 * sin (atan2 dy dx) )
         ]
+
 
 renderArrow : ( Float, Float ) -> ( Float, Float ) -> ( Float, Float ) -> Float -> Float -> Character -> TransitionID -> Bool -> StateID -> StateID -> ApplicationState -> Shape Msg
 renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appState =
@@ -357,6 +376,7 @@ renderArrows states del pos transPos =
                     )
             )
             stateList
+
 
 renderStates : Set StateID -> Set StateID -> Set StateID -> StatePositions -> Model -> Shape Msg
 renderStates states currents finals pos model =

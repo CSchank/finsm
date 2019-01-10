@@ -1,6 +1,7 @@
-module Helpers exposing(..)
+module Helpers exposing (add, dot, editIcon, mult, p, sub, vertex)
 
-import GraphicSVG exposing(..)
+import GraphicSVG exposing (..)
+
 
 vertex ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
     let
@@ -40,6 +41,7 @@ sub ( x0, y0 ) ( x1, y1 ) =
 
 dot ( x0, y0 ) ( x1, y1 ) =
     x0 * x1 + y0 * y1
+
 
 editIcon =
     group

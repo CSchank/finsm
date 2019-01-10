@@ -1,13 +1,14 @@
-module SharedModel exposing (..)
-import Machine exposing(Machine)
+module SharedModel exposing (SharedModel, init)
+
+import Machine exposing (Machine)
+
 
 init : SharedModel
-init = 
-    {
-        machine = Machine.test
+init =
+    { machine = Machine.test
     }
 
+
 type alias SharedModel =
-    {
-        machine : Machine
+    { machine : Machine
     }
