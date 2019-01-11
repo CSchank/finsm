@@ -1,9 +1,13 @@
-module Machine exposing (Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionNames, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
+module Machine exposing (..)
 
 import Dict exposing (Dict)
 import GraphicSVG exposing (..)
-import Helpers exposing (editIcon)
+import Helpers exposing (..)
 import Set exposing (Set)
+import Html as H exposing (Html, input, node)
+import Html.Attributes exposing (attribute, placeholder, style, value)
+import Html.Events exposing (onInput)
+import Environment exposing (Environment)
 
 
 type alias StateID =
@@ -32,6 +36,10 @@ type alias StateTransitions =
 
 type alias Delta =
     Dict StateID (Dict TransitionID StateID)
+
+
+type alias Character =
+    String
 
 
 type alias Machine =
@@ -76,8 +84,9 @@ type Msg
     | SelectTransitionLabel StateID
     | EditLabel StateID String
     | Drag ( Float, Float )
-    | AddState ( Float, Float )
+    | TapState StateID
     | StopDragging
+    | Reset
 
 
 test : Machine
@@ -126,9 +135,84 @@ test =
 
 view : Environment -> Model -> Machine -> Set StateID -> Shape Msg
 view env model machine currentStates =
+    let
+        (winX,winY) = env.windowSize
+    in
+    
     group
-        [ renderStates machine.q currentStates machine.final machine.statePositions model
-        , renderArrows machine.q machine.delta machine.statePositions machine.stateTransitions model
+        [ renderStates currentStates machine model
+        , renderArrows machine model
+        , rect (toFloat winX) (toFloat winY)
+                    |> filled blank
+                    |> notifyMouseMoveAt Drag
+                    |> notifyMouseUp StopDragging
+        , case model of
+            AddingArrow s ( x, y ) ->
+                let
+                    s0Pos =
+                        case Dict.get s machine.statePositions of
+                            Just pos ->
+                                pos
+
+                            _ ->
+                                ( 0, 0 )
+
+                    newTrans =
+                        case List.head <| Dict.values machine.transitionNames of
+                            Just char ->
+                                char
+
+                            Nothing ->
+                                " "
+
+                    newTransID =
+                        case List.head <| Dict.keys machine.transitionNames of
+                            Just char ->
+                                char
+
+                            Nothing ->
+                                0
+                in
+                renderArrow s0Pos ( 0, 0 ) ( x, y ) 20 0 newTrans newTransID False s -1 model
+
+            AddingArrowOverOtherState s ( x, y ) s1 ->
+                let
+                    s0Pos =
+                        case Dict.get s machine.statePositions of
+                            Just pos ->
+                                pos
+
+                            _ ->
+                                ( 0, 0 )
+
+                    s1Pos =
+                        case Dict.get s1 machine.statePositions of
+                            Just pos ->
+                                pos
+
+                            _ ->
+                                ( 0, 0 )
+
+                    newTrans =
+                        case List.head <| Dict.values machine.transitionNames of
+                            Just char ->
+                                char
+
+                            Nothing ->
+                                " "
+
+                    newTransID =
+                        case List.head <| Dict.keys machine.transitionNames of
+                            Just char ->
+                                char
+
+                            Nothing ->
+                                0
+                in
+                renderArrow s0Pos ( 0, 0 ) s1Pos 20 20 newTrans newTransID False s -1 model
+
+            _ ->
+                group []
         ]
 
 
@@ -172,8 +256,8 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
         ]
 
 
-renderArrow : ( Float, Float ) -> ( Float, Float ) -> ( Float, Float ) -> Float -> Float -> Character -> TransitionID -> Bool -> StateID -> StateID -> ApplicationState -> Shape Msg
-renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appState =
+renderArrow : ( Float, Float ) -> ( Float, Float ) -> ( Float, Float ) -> Float -> Float -> Character -> TransitionID -> Bool -> StateID -> StateID -> Model -> Shape Msg
+renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
     let
         ( tx, ty ) =
             --tangent between to and from states
@@ -215,10 +299,10 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
     group
         [ group
             [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
-                |> notifyMouseDown (BMsg <| SelectArrow ( s1, charID, s2 ))
+                |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
             , group
-                [ case appState of
-                    Building (EditingTransitionLabel tId str) ->
+                [ case model of
+                    EditingTransitionLabel tId str ->
                         if tId == charID then
                             textBox str
                                 (if String.length str == 0 then
@@ -229,21 +313,21 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
                                 )
                                 20
                                 "LaTeX"
-                                (BMsg << EditLabel tId)
+                                (EditLabel tId)
 
                         else
                             latex 50 12 char AlignCentre
 
                     _ ->
                         latex 50 12 char AlignCentre
-                , case appState of
-                    Building (MousingOverTransitionLabel tId) ->
+                , case model of
+                    MousingOverTransitionLabel tId ->
                         if tId == charID then
                             group
                                 [ editIcon |> move ( 10, 0 )
                                 , rect 50 20
                                     |> filled blank
-                                    |> notifyTap (BMsg <| SelectTransitionLabel charID)
+                                    |> notifyTap (SelectTransitionLabel charID)
                                 ]
 
                         else
@@ -258,8 +342,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
                     ( -offset * sin theta
                     , offset * cos theta
                     )
-                |> notifyEnter (BMsg <| MouseOverTransitionLabel charID)
-                |> notifyLeave (BMsg MouseLeaveLabel)
+                |> notifyEnter (MouseOverTransitionLabel charID)
+                |> notifyLeave MouseLeaveLabel
             ]
 
         {- ( (x2 + x0)
@@ -283,8 +367,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
                 , circle 3
                     |> filled red
                     |> move ( mx, my )
-                    |> notifyMouseDown (BMsg <| StartDraggingArrow ( s1, charID, s2 ))
-                    |> notifyMouseMoveAt (BMsg << Drag)
+                    |> notifyMouseDown (StartDraggingArrow ( s1, charID, s2 ))
+                    |> notifyMouseMoveAt Drag
                 ]
 
           else
@@ -292,18 +376,23 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 appStat
         ]
 
 
-renderArrows : Set StateID -> Delta -> StatePositions -> StateTransitions -> Shape Msg
-renderArrows states del pos transPos =
+renderArrows : Machine -> Model -> Shape Msg
+renderArrows machine model =
     let
-        oldMachine =
-            model.machine
+        states = machine.q
 
+        pos = machine.statePositions
+
+        delta = machine.delta
+
+        transPos = machine.stateTransitions
+        
         stateList =
             Set.toList states
 
         edgeToList state =
             Dict.toList
-                (case Dict.get state del of
+                (case Dict.get state delta of
                     Just d ->
                         d
 
@@ -347,7 +436,7 @@ renderArrows states del pos transPos =
                                                 getPos s2
 
                                             ch =
-                                                case Dict.get chId oldMachine.transitionNames of
+                                                case Dict.get chId machine.transitionNames of
                                                     Just c ->
                                                         c
 
@@ -366,7 +455,7 @@ renderArrows states del pos transPos =
                                                         False
                                         in
                                         group
-                                            [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel s1 s2 model.appState
+                                            [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel s1 s2 model
                                             ]
                                     )
                                     [ ss ]
@@ -378,12 +467,15 @@ renderArrows states del pos transPos =
             stateList
 
 
-renderStates : Set StateID -> Set StateID -> Set StateID -> StatePositions -> Model -> Shape Msg
-renderStates states currents finals pos model =
+renderStates : Set StateID ->  Machine -> Model -> Shape Msg
+renderStates currentStates machine model =
     let
-        oldMachine =
-            model.machine
+        states = machine.q
 
+        pos = machine.statePositions
+
+        finals = machine.final
+        
         stateList =
             Set.toList states
 
@@ -396,14 +488,14 @@ renderStates states currents finals pos model =
                     ( 0, 0 )
 
         thickness state =
-            if Set.member state currents then
+            if Set.member state currentStates then
                 2
 
             else
                 1
 
         stateName sId =
-            case Dict.get sId oldMachine.stateNames of
+            case Dict.get sId machine.stateNames of
                 Just n ->
                     n
 
@@ -531,12 +623,6 @@ renderStates states currents finals pos model =
                                 group []--}
                     ]
                     |> move (getPos sId)
-                    |> (case model.appState of
-                            Simulating _ ->
-                                notifyTap (SMsg <| ToggleStart sId)
-
-                            _ ->
-                                identity
-                       )
+                    |>  notifyTap (TapState sId)
             )
             stateList

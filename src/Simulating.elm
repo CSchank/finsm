@@ -1,10 +1,18 @@
-module Simulating exposing (Character, InputTape, PersistentModel, initPersistentModel, latexKeyboard, view)
+module Simulating exposing (..)
 
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Machine exposing (..)
 import Set exposing (Set)
+import GraphicSVG exposing(..)
+import Helpers exposing(..)
+import SharedModel exposing(SharedModel)
+import Environment exposing(Environment)
+import Tuple exposing (first, second)
 
+subscriptions : Model -> Sub Msg
+subscriptions model = 
+    Sub.none
 
 type alias PersistentModel =
     { tapes : Dict Int (Array Character)
@@ -15,13 +23,22 @@ type alias PersistentModel =
 type alias InputTape =
     Array Character
 
+type Model
+    = Default Int {- tapeID -} Int {- charID -}
+    | Editing Int
 
-type alias Character =
-    String
+type Msg
+    = Step
+    | EditTape Int
+    | DeleteTape Int
+    | AddNewTape
+    | ChangeTape Int
+    | ToggleStart StateID
 
 
-initPersistentModel : PersistentModel
-initPersistentModel =
+
+init : PersistentModel
+init =
     { tapes =
         Dict.fromList
             [ ( 0, Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ] )
@@ -30,18 +47,178 @@ initPersistentModel =
     , currentStates = test.start
     }
 
+renderTape : Array String -> Int -> Int -> Int -> Bool -> Shape Msg
+renderTape input tapeId selectedId inputAt showButtons =
+    let
+        xpad =
+            20
+    in
+    group <|
+        Array.toList
+            (Array.indexedMap
+                (\n st ->
+                    group
+                        [ square xpad
+                            |> filled white
+                            |> addOutline
+                                (solid 1)
+                                black
+                            |> move ( 0, 3 )
+                        , latex (xpad * 0.9) (xpad * 0.7) st AlignCentre
+                            |> move ( 0, 10.25 )
+                        ]
+                        |> move ( toFloat n * xpad, 0 )
+                        |> notifyTap (ChangeTape tapeId)
+                )
+                input
+            )
+            ++ (if tapeId == selectedId then
+                    [ group
+                        [ triangle 2.25
+                            |> filled black
+                            |> rotate (degrees 30)
+                            |> move ( 0, xpad / 2 + 5.75 )
+                        , triangle 2.25
+                            |> filled black
+                            |> rotate (degrees -30)
+                            |> move ( 0, -xpad / 2 + 0.25 )
+                        , rect 2 (xpad + 1)
+                            |> filled black
+                            |> move ( 0, 3 )
+                        ]
+                        |> move ( xpad / 2 + xpad * toFloat inputAt, 0 )
+                    ]
+
+                else
+                    []
+               )
+            ++ (if showButtons then
+                    [ group
+                        [ roundedRect 15 15 2
+                            |> filled white
+                            |> addOutline (solid 1) darkGray
+                        , editIcon
+                            |> scale 1.5
+                            |> move ( -3, -3 )
+                            |> repaint black
+                        ]
+                        |> move ( toFloat <| Array.length input * xpad, 3 )
+                        |> notifyTap (EditTape tapeId)
+                    , group
+                        [ roundedRect 15 15 2
+                            |> filled white
+                            |> addOutline (solid 1) darkGray
+                        , trashIcon |> scale 0.2 |> move ( 0, -1 )
+                        ]
+                        |> move ( toFloat <| (Array.length input + 1) * xpad, 3 )
+                        |> notifyTap (DeleteTape tapeId)
+                    ]
+
+                else
+                    []
+               )
+
+update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+update env msg (model, pModel, sModel) =
+    let
+        oldMachine =
+            sModel.machine
+    in
+    case msg of
+        Step ->
+            case model of
+                Default tapeId charId ->
+                    let
+                        nextCh =
+                            case Dict.get tapeId pModel.tapes of
+                                Just ar ->
+                                    case Array.get (charId + 1) ar of
+                                        Just ch ->
+                                            ch
+
+                                        _ ->
+                                            ""
+
+                                _ ->
+                                    ""
+                    in
+                    if nextCh /= "" then
+                        ( ( Default tapeId (charId + 1) , { pModel | currentStates = deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates } , sModel ), False, Cmd.none )
+
+                    else
+                        ( (model, pModel, sModel), False, Cmd.none )
+
+                _ ->
+                    ( (model, pModel, sModel), False, Cmd.none )
+
+        EditTape tId ->
+            ( ( Editing tId , pModel , sModel ), False, Cmd.none )
+
+        DeleteTape tId ->
+            let
+                newModel = 
+                    case model of
+                        Default tId0 chId ->
+                            -- FIXME: choose a good tape to go to
+                            if tId0 == tId then Default 0 -1 else Default tId0 chId
+                        _ -> model       
+            in
+            
+            ( ( newModel , { pModel | tapes = Dict.remove tId pModel.tapes } , sModel ), True, Cmd.none )
+
+        AddNewTape ->
+            let
+                newId =
+                    (case List.maximum <| Dict.keys pModel.tapes of
+                        Just n ->
+                            n
+
+                        Nothing ->
+                            0
+                    )
+                        + 1
+            in
+            ( ( model , { pModel | tapes = Dict.insert newId Array.empty pModel.tapes } , sModel ), True, Cmd.none )
+
+        ChangeTape tId ->
+            ( ( Default tId -1 , { pModel | currentStates = oldMachine.start } , sModel ), False, Cmd.none )
+
+        ToggleStart sId ->
+            let
+                tests =
+                    oldMachine.start
+
+                newMachine =
+                    { oldMachine
+                        | start =
+                            case Set.member sId oldMachine.start of
+                                True ->
+                                    Set.remove sId oldMachine.start
+
+                                False ->
+                                    Set.insert sId oldMachine.start
+                    }
+            in
+            case model of
+                Default tId _ ->
+                    ( ( Default tId -1 , { pModel | currentStates = newMachine.start } , {sModel | machine = newMachine} ), True, Cmd.none )
+
+                _ ->
+                    ( (model, pModel, sModel), False, Cmd.none )
+
+
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
 view env ( model, pModel, sModel ) =
     let
         oldMachine =
-            model.machine sModel.machine
+            sModel.machine
 
         winX =
-            toFloat <| first model.environment.windowSize
+            toFloat <| first env.windowSize
 
         winY =
-            toFloat <| second model.environment.windowSize
+            toFloat <| second env.windowSize
 
         chars =
             Set.toList <| Set.fromList <| List.map (\( _, n ) -> n) <| Dict.toList oldMachine.transitionNames
@@ -75,9 +252,9 @@ view env ( model, pModel, sModel ) =
                         |> fixedwidth
                         |> filled black
                         |> move ( -4.5, -5 )
-                        |> notifyTap (SMsg AddNewTape)
+                        |> notifyTap AddNewTape
                     ]
-                    |> move ( -winX / 2 + 20, winY / 6 - 35 - 25 * (toFloat <| Dict.size model.simulateData.tapes) )
+                    |> move ( -winX / 2 + 20, winY / 6 - 35 - 25 * (toFloat <| Dict.size pModel.tapes) )
                 , text "Machine"
                     |> size 16
                     |> fixedwidth
@@ -97,8 +274,8 @@ view env ( model, pModel, sModel ) =
                     |> move ( -winX / 2 + 760, winY / 6 - 140 )
                 , latex 500 18 ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| oldMachine.final) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 165 )
-                , case model.appState of
-                    Simulating (SimRegular tapeId charId) ->
+                , case model of
+                    Default tapeId charId ->
                         group (List.indexedMap (\x ( chId, ch ) -> renderTape ch chId tapeId charId True |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList tapes)
                             |> move ( -winX / 2 + 20, winY / 6 - 40 )
 
@@ -107,11 +284,11 @@ view env ( model, pModel, sModel ) =
                 ]
 
         tapes =
-            model.simulateData.tapes
+            pModel.tapes
     in
     group
-        [ case model.appState of
-            Simulating (SimRegular _ _) ->
+        [ case model of
+            Default _ _ ->
                 group
                     [ rect winX (winY / 3)
                         |> filled lightGray
@@ -119,10 +296,10 @@ view env ( model, pModel, sModel ) =
                     ]
                     |> move ( 0, -winY / 3 )
 
-            Simulating (SimEditing tapeId) ->
+            Editing tapeId ->
                 let
                     tape =
-                        case Dict.get tapeId model.simulateData.tapes of
+                        case Dict.get tapeId pModel.tapes of
                             Just t ->
                                 t
 
@@ -148,11 +325,43 @@ view env ( model, pModel, sModel ) =
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
-
-            _ ->
-                group []
         ]
 
+delta : TransitionNames -> Delta -> Character -> StateID -> Set StateID
+delta tNames d ch state =
+    let
+        getName trans =
+            case Dict.get trans tNames of
+                Just n ->
+                    n
+
+                _ ->
+                    ""
+    in
+    case Dict.get state d of
+        Just transMap ->
+            let
+                states =
+                    List.filterMap
+                        (\( tId, sId ) ->
+                            if getName tId == ch then
+                                Just sId
+
+                            else
+                                Nothing
+                        )
+                    <|
+                        Dict.toList transMap
+            in
+            Set.fromList states
+
+        Nothing ->
+            Set.empty
+
+
+deltaHat : TransitionNames -> Delta -> Character -> Set StateID -> Set StateID
+deltaHat tNames d ch states =
+    Set.foldl (\curr ss -> Set.union ss (delta tNames d ch curr)) Set.empty states
 
 latexKeyboard : Float -> Float -> List Character -> Shape Msg
 latexKeyboard w h chars =

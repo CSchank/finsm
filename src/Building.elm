@@ -1,9 +1,13 @@
-module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, icon, update, updateArrowPos, updateStatePos, view)
+module Building exposing (..)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import Machine exposing (..)
 import SharedModel exposing (SharedModel)
+import Helpers exposing(..)
+import GraphicSVG exposing(..)
+import Tuple exposing (first, second)
+import Set
 
 
 type alias Model =
@@ -17,118 +21,32 @@ type PersistentModel
 
 type Msg
     = MachineMsg Machine.Msg
+    | AddState (Float, Float)
 
+subscriptions : Model -> Sub Msg
+subscriptions model = 
+    Sub.none
+
+init : Model
+init = 
+    {
+        machineState = Regular
+    }
+
+onEnter : Environment -> (Model, PersistentModel, SharedModel) -> ((Model, PersistentModel, SharedModel), Bool, Cmd Msg)
+onEnter env (model, pModel, sModel) = 
+    ( (model, pModel, sModel), False, Cmd.none)
 
 update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
-update msg model =
+update env msg (model, pModel, sModel) =
     let
         oldMachine =
-            model.machine
+            sModel.machine
     in
     case msg of
-        StartDragging st ( x, y ) ->
-            let
-                ( sx, sy ) =
-                    case Dict.get st oldMachine.statePositions of
-                        Just ( xx, yy ) ->
-                            ( xx, yy )
-
-                        Nothing ->
-                            ( 0, 0 )
-            in
-            case model of
-                MousingOverRim sId _ ->
-                    ( { model | appState = AddingArrow sId ( x, y ) }
-                    , Cmd.none
-                    )
-
-                _ ->
-                    ( { model | appState = DraggingState st ( x - sx, y - sy ) }, Cmd.none )
-
-        StartDraggingArrow ( st1, char, st2 ) ->
-            ( { model | appState = DraggingArrow ( st1, char, st2 ) }, Cmd.none )
-
-        StartMouseOverRim stId ( x, y ) ->
-            case model.appState of
-                Regular ->
-                    ( { model | appState = MousingOverRim stId ( x, y ) }, Cmd.none )
-
-                _ ->
-                    ( model, Cmd.none )
-
-        MoveMouseOverRim ( x, y ) ->
-            case model.appState of
-                MousingOverRim stId _ ->
-                    ( { model | appState = MousingOverRim stId ( x, y ) }, Cmd.none )
-
-                _ ->
-                    ( model, Cmd.none )
-
-        StopMouseOverRim ->
-            ( { model | appState = Regular }, Cmd.none )
-
-        StopDragging ->
-            case model.appState of
-                DraggingState st _ ->
-                    ( { model | appState = SelectedState st }, Cmd.none )
-
-                AddingArrowOverOtherState st _ s1 ->
-                    let
-                        newTrans =
-                            case List.head <| Dict.values oldMachine.transitionNames of
-                                Just char ->
-                                    char
-
-                                Nothing ->
-                                    "x"
-
-                        newTransID =
-                            case List.maximum <| Dict.keys oldMachine.transitionNames of
-                                Just n ->
-                                    n + 1
-
-                                Nothing ->
-                                    0
-
-                        newDelta : Delta
-                        newDelta =
-                            Dict.update st
-                                (\mcDict ->
-                                    case mcDict of
-                                        Just ss ->
-                                            Just <|
-                                                Dict.update newTransID
-                                                    (\mState ->
-                                                        Just s1
-                                                    )
-                                                    ss
-
-                                        Nothing ->
-                                            Just <| Dict.singleton newTransID s1
-                                )
-                                oldMachine.delta
-                    in
-                    ( { model
-                        | appState = Regular
-                        , machine =
-                            { oldMachine
-                                | delta = newDelta
-                                , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
-                                , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions
-                            }
-                      }
-                    , Cmd.none
-                    )
-
-                _ ->
-                    ( { model | appState = Regular }, Cmd.none )
-
-        SelectArrow ( s0, char, s1 ) ->
-            ( { model | appState = SelectedArrow ( s0, char, s1 ) }, Cmd.none )
-
-        Drag ( x, y ) ->
-            case model.appState of
-                DraggingState st ( ox, oy ) ->
+        MachineMsg mmsg ->
+            case mmsg of
+                StartDragging st ( x, y ) ->
                     let
                         ( sx, sy ) =
                             case Dict.get st oldMachine.statePositions of
@@ -138,191 +56,307 @@ update msg model =
                                 Nothing ->
                                     ( 0, 0 )
                     in
-                    ( { model
-                        | machine = { oldMachine | statePositions = updateStatePos st ( x - ox, y - oy ) oldMachine.statePositions }
-                      }
-                    , Cmd.none
-                    )
+                    case model.machineState of
+                        MousingOverRim sId _ ->
+                            ( ( { model | machineState = AddingArrow sId ( x, y ) }, pModel, sModel ), False, Cmd.none )
 
-                DraggingArrow ( s1, char, s2 ) ->
-                    let
-                        ( x0, y0 ) =
-                            case Dict.get s1 oldMachine.statePositions of
-                                Just ( xx, yy ) ->
-                                    ( xx, yy )
+                        _ ->
+                            ( ( { model | machineState = DraggingState st ( x - sx, y - sy ) }, pModel, sModel ), False, Cmd.none )
 
-                                Nothing ->
-                                    ( 0, 0 )
+                StartDraggingArrow ( st1, char, st2 ) ->
+                    ( ( { model | machineState = DraggingArrow ( st1, char, st2 ) }, pModel, sModel ), False, Cmd.none )
 
-                        ( x1, y1 ) =
-                            case Dict.get s2 oldMachine.statePositions of
-                                Just ( xx, yy ) ->
-                                    ( xx, yy )
-
-                                Nothing ->
-                                    ( 0, 0 )
-
-                        theta =
-                            -1 * atan2 (y1 - y0) (x1 - x0)
-
-                        ( mx, my ) =
-                            ( (x0 + x1) / 2, (y0 + y1) / 2 )
-
-                        ( nx, ny ) =
-                            sub ( x, y ) ( mx, my )
-
-                        nprot =
-                            ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
-                    in
-                    ( { model | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } }, Cmd.none )
-
-                AddingArrow st _ ->
-                    let
-                        aboveStates =
-                            List.map (\( sId, _ ) -> sId) <|
-                                Dict.toList <|
-                                    Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.statePositions
-
-                        newState =
-                            case aboveStates of
-                                h :: _ ->
-                                    if st /= h then
-                                        AddingArrowOverOtherState st ( x, y ) h
-
-                                    else
-                                        AddingArrow st ( x, y )
-
-                                _ ->
-                                    AddingArrow st ( x, y )
-                    in
-                    ( { model | appState = newState }
-                    , Cmd.none
-                    )
-
-                AddingArrowOverOtherState st _ s1 ->
-                    let
-                        aboveStates =
-                            List.map (\( sId, _ ) -> sId) <|
-                                Dict.toList <|
-                                    Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.statePositions
-
-                        newState =
-                            case aboveStates of
-                                h :: _ ->
-                                    if st /= h then
-                                        AddingArrowOverOtherState st ( x, y ) h
-
-                                    else
-                                        AddingArrow st ( x, y )
-
-                                _ ->
-                                    AddingArrow st ( x, y )
-                    in
-                    ( { model | appState = newState }
-                    , Cmd.none
-                    )
-
-                _ ->
-                    ( model, Cmd.none )
-
-        MouseOverStateLabel st ->
-            ( { model | appState = MousingOverStateLabel st }, Cmd.none )
-
-        MouseOverTransitionLabel tr ->
-            ( { model
-                | appState =
-                    case model.appState of
+                StartMouseOverRim stId ( x, y ) ->
+                    case model.machineState of
                         Regular ->
-                            MousingOverTransitionLabel tr
+                           ( ( { model | machineState = MousingOverRim stId ( x, y ) }, pModel, sModel ), False, Cmd.none )
 
                         _ ->
-                            model.appState
-              }
-            , Cmd.none
-            )
+                            ( (model, pModel, sModel), False, Cmd.none )
 
-        MouseLeaveLabel ->
-            ( { model
-                | appState =
-                    case model.appState of
-                        MousingOverStateLabel _ ->
-                            Regular
-
-                        MousingOverTransitionLabel _ ->
-                            Regular
+                MoveMouseOverRim ( x, y ) ->
+                    case model.machineState of
+                        MousingOverRim stId _ ->
+                            ( ( { model | machineState = MousingOverRim stId ( x, y ) }, pModel, sModel ), False, Cmd.none )
 
                         _ ->
-                            model.appState
-              }
-            , Cmd.none
-            )
+                            ( (model, pModel, sModel), False, Cmd.none )
 
-        SelectStateLabel st ->
-            let
-                stateName =
-                    case Dict.get st oldMachine.stateNames of
-                        Just n ->
-                            n
+                StopMouseOverRim ->
+                    ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
-                        Nothing ->
-                            ""
-            in
-            ( { model | appState = EditingStateLabel st stateName }, Cmd.none )
+                StopDragging ->
+                    case model.machineState of
+                        DraggingState st _ ->
+                            ( ( { model | machineState = SelectedState st }, pModel, sModel ), True, Cmd.none )
 
-        SelectTransitionLabel tr ->
-            let
-                transName =
-                    case Dict.get tr oldMachine.transitionNames of
-                        Just n ->
-                            n
+                        AddingArrowOverOtherState st _ s1 ->
+                            let
+                                newTrans =
+                                    case List.head <| Dict.values oldMachine.transitionNames of
+                                        Just char ->
+                                            char
 
-                        Nothing ->
-                            ""
-            in
-            ( { model | appState = EditingTransitionLabel tr transName }, Cmd.none )
+                                        Nothing ->
+                                            "x"
 
-        EditLabel _ lbl ->
-            case model.appState of
-                EditingStateLabel st _ ->
-                    ( { model | appState = EditingStateLabel st lbl }, Cmd.none )
+                                newTransID =
+                                    case List.maximum <| Dict.keys oldMachine.transitionNames of
+                                        Just n ->
+                                            n + 1
 
-                EditingTransitionLabel tr _ ->
-                    ( { model | appState = EditingTransitionLabel tr lbl }, Cmd.none )
+                                        Nothing ->
+                                            0
 
-                _ ->
-                    ( model, Cmd.none )
+                                newDelta : Delta
+                                newDelta =
+                                    Dict.update st
+                                        (\mcDict ->
+                                            case mcDict of
+                                                Just ss ->
+                                                    Just <|
+                                                        Dict.update newTransID
+                                                            (\mState ->
+                                                                Just s1
+                                                            )
+                                                            ss
 
-        AddState ( x, y ) ->
-            case model.appState of
-                Regular ->
+                                                Nothing ->
+                                                    Just <| Dict.singleton newTransID s1
+                                        )
+                                        oldMachine.delta
+                            in
+                            ( ( { model | machineState = Regular }, pModel, {sModel | machine =
+                                    { oldMachine
+                                        | delta = newDelta
+                                        , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
+                                        , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions
+                                    }} ), True, Cmd.none )
+
+
+                        _ ->
+                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+
+                SelectArrow ( s0, char, s1 ) ->
+                    ( ( { model | machineState = SelectedArrow ( s0, char, s1 ) }, pModel, sModel ), False, Cmd.none )
+
+                Drag ( x, y ) ->
+                    case model.machineState of
+                        DraggingState st ( ox, oy ) ->
+                            let
+                                ( sx, sy ) =
+                                    case Dict.get st oldMachine.statePositions of
+                                        Just ( xx, yy ) ->
+                                            ( xx, yy )
+
+                                        Nothing ->
+                                            ( 0, 0 )
+                            in 
+                            ( ( { model | machineState = model.machineState }, pModel, { sModel | machine = { oldMachine | statePositions = updateStatePos st ( x - ox, y - oy ) oldMachine.statePositions } } )
+                            , False, Cmd.none )
+
+
+                        DraggingArrow ( s1, char, s2 ) ->
+                            let
+                                ( x0, y0 ) =
+                                    case Dict.get s1 oldMachine.statePositions of
+                                        Just ( xx, yy ) ->
+                                            ( xx, yy )
+
+                                        Nothing ->
+                                            ( 0, 0 )
+
+                                ( x1, y1 ) =
+                                    case Dict.get s2 oldMachine.statePositions of
+                                        Just ( xx, yy ) ->
+                                            ( xx, yy )
+
+                                        Nothing ->
+                                            ( 0, 0 )
+
+                                theta =
+                                    -1 * atan2 (y1 - y0) (x1 - x0)
+
+                                ( mx, my ) =
+                                    ( (x0 + x1) / 2, (y0 + y1) / 2 )
+
+                                ( nx, ny ) =
+                                    sub ( x, y ) ( mx, my )
+
+                                nprot =
+                                    ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
+                            in
+                            ( ( { model | machineState = Regular }, pModel, {sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), False, Cmd.none )
+
+                        AddingArrow st _ ->
+                            let
+                                aboveStates =
+                                    List.map (\( sId, _ ) -> sId) <|
+                                        Dict.toList <|
+                                            Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.statePositions
+
+                                newState =
+                                    case aboveStates of
+                                        h :: _ ->
+                                            if st /= h then
+                                                AddingArrowOverOtherState st ( x, y ) h
+
+                                            else
+                                                AddingArrow st ( x, y )
+
+                                        _ ->
+                                            AddingArrow st ( x, y )
+                            in
+                            ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+
+                            
+
+                        AddingArrowOverOtherState st _ s1 ->
+                            let
+                                aboveStates =
+                                    List.map (\( sId, _ ) -> sId) <|
+                                        Dict.toList <|
+                                            Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.statePositions
+
+                                newState =
+                                    case aboveStates of
+                                        h :: _ ->
+                                            if st /= h then
+                                                AddingArrowOverOtherState st ( x, y ) h
+
+                                            else
+                                                AddingArrow st ( x, y )
+
+                                        _ ->
+                                            AddingArrow st ( x, y )
+                            in
+                            ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+
+                        _ ->
+                            ( ( { model | machineState = model.machineState }, pModel, sModel ), False, Cmd.none )
+
+
+                MouseOverStateLabel st ->
+                    ( ( { model | machineState = MousingOverStateLabel st }, pModel, sModel ), False, Cmd.none )
+
+                MouseOverTransitionLabel tr ->
                     let
-                        newId =
-                            setMax oldMachine.q + 1
+                        newState =
+                            case model.machineState of
+                                Regular ->
+                                    MousingOverTransitionLabel tr
 
-                        newMachine =
-                            { oldMachine
-                                | q = Set.insert newId oldMachine.q
-                                , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
-                                , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames
-                            }
+                                _ ->
+                                    model.machineState
                     in
-                    ( { model
-                        | machine = newMachine
-                      }
-                    , Cmd.none
-                    )
+                    ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
 
-                _ ->
-                    ( { model | appState = Regular }, Cmd.none )
 
-                _ ->
-                    ( model, Cmd.none )
+                MouseLeaveLabel ->
+                    let
+                        newState =
+                            case model.machineState of
+                                MousingOverStateLabel _ ->
+                                    Regular
+
+                                MousingOverTransitionLabel _ ->
+                                    Regular
+
+                                _ ->
+                                    model.machineState
+                    in
+                    ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+
+                SelectStateLabel st ->
+                    let
+                        stateName =
+                            case Dict.get st oldMachine.stateNames of
+                                Just n ->
+                                    n
+
+                                Nothing ->
+                                    ""
+                    in
+                    ( ( { model | machineState = EditingStateLabel st stateName }, pModel, sModel ), False, Cmd.none )
+
+                SelectTransitionLabel tr ->
+                    let
+                        transName =
+                            case Dict.get tr oldMachine.transitionNames of
+                                Just n ->
+                                    n
+
+                                Nothing ->
+                                    ""
+                    in
+                    ( ( { model | machineState = EditingTransitionLabel tr transName }, pModel, sModel ), False, Cmd.none )
+
+                EditLabel _ lbl ->
+                    let
+                        newState =
+                            case model.machineState of
+                                EditingStateLabel st _ ->
+                                    EditingStateLabel st lbl
+
+                                EditingTransitionLabel tr _ ->
+                                    EditingTransitionLabel tr lbl
+
+                                _ ->
+                                    model.machineState 
+                    in
+                        ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+
+                TapState sId -> 
+                    ( ( { model | machineState = SelectedState sId }, pModel, sModel ), False, Cmd.none )
+
+                Reset -> 
+                    ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+
+
+
+        AddState (x,y) ->
+                    case model.machineState of
+                        Regular ->
+                            let
+                                newId =
+                                    setMax oldMachine.q + 1
+
+                                newMachine =
+                                    { oldMachine
+                                        | q = Set.insert newId oldMachine.q
+                                        , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
+                                        , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames
+                                    }
+                            in
+                            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+
+
+                        _ ->
+                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+
 
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
 view env ( model, pModel, sModel ) =
+    let
+        winX =
+            toFloat <| first env.windowSize
+
+        winY =
+            toFloat <| second env.windowSize
+
+    in
+    
     group
-        [ Machine.view env model.machineState Set.empty
+        [ GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
+        , rect winX winY
+                    |> filled blank
+                    |> (if env.holdingShift then
+                            notifyTapAt AddState
+
+                        else
+                            notifyTap (MachineMsg Reset)
+                       )
         ]
 
 
