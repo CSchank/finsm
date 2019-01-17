@@ -1,31 +1,30 @@
-module Main exposing (..)
+module Main exposing (ApplicationModel, ApplicationState(..), Model, Module(..), Msg(..), initAppModel, main, modeButtons, replace, textHtml, update, view)
 
 import Array exposing (Array)
 import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events
+import Building
+import Debug exposing (log)
 import Dict exposing (Dict)
+import Environment exposing (Environment)
 import GraphicSVG exposing (..)
+import Helpers
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
 import Html.Events exposing (onInput)
 import Json.Decode as D
 import Json.Encode
 import List
+import Machine exposing (..)
 import Random
 import Set exposing (Set)
-import Task
-import Machine exposing (..)
 import SharedModel exposing (SharedModel)
-import Environment exposing(Environment)
-import Building
 import Simulating
-import Helpers
-import Url exposing (Url)
+import Task
 import Tuple exposing (first, second)
 import UndoList as U exposing (UndoList)
-import Debug exposing(log)
-
+import Url exposing (Url)
 
 
 type Msg
@@ -38,9 +37,11 @@ type Msg
     | UrlRequest UrlRequest
     | GoTo Module
 
-type Module = 
-    BuildingModule
+
+type Module
+    = BuildingModule
     | SimulatingModule
+
 
 type ApplicationState
     = Building Building.Model
@@ -48,32 +49,35 @@ type ApplicationState
 
 
 type alias Model =
-    { 
-      appModel : UndoList ApplicationModel
+    { appModel : UndoList ApplicationModel
     , environment : Environment
     }
 
-type alias ApplicationModel = {
-      appState : ApplicationState
+
+type alias ApplicationModel =
+    { appState : ApplicationState
     , simulatingData : Simulating.PersistentModel
     , buildingData : Building.PersistentModel
-    , sharedModel : SharedModel}
+    , sharedModel : SharedModel
+    }
+
 
 initAppModel : UndoList ApplicationModel
-initAppModel = U.fresh 
-                  { appState = Building Building.init
-                  , sharedModel = SharedModel.init
-                  , simulatingData = Simulating.initPModel
-                  , buildingData = Building.initPModel
-                  }
+initAppModel =
+    U.fresh
+        { appState = Building Building.init
+        , sharedModel = SharedModel.init
+        , simulatingData = Simulating.initPModel
+        , buildingData = Building.initPModel
+        }
+
 
 main : App () Model Msg
 main =
     app
         { init =
             \flags url key ->
-                ( { 
-                    appModel = initAppModel
+                ( { appModel = initAppModel
                   , environment = Environment.init
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
@@ -87,21 +91,28 @@ main =
                     , Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
                     , Browser.Events.onKeyUp (D.map KeyReleased (D.field "keyCode" D.int))
                     , case model.appModel.present.appState of
-                        Building m -> Sub.map BMsg (Building.subscriptions m)
-                        Simulating m -> Sub.map SMsg (Simulating.subscriptions m)
+                        Building m ->
+                            Sub.map BMsg (Building.subscriptions m)
+
+                        Simulating m ->
+                            Sub.map SMsg (Simulating.subscriptions m)
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
         }
 
+
 replace : state -> UndoList state -> UndoList state
-replace st stul = { stul | present = st }
+replace st stul =
+    { stul | present = st }
+
 
 update msg model =
     let
         oldEnvironment =
             model.environment
-        currentAppState = 
+
+        currentAppState =
             model.appModel.present
     in
     case Debug.log "msg" msg of
@@ -109,21 +120,26 @@ update msg model =
             case currentAppState.appState of
                 Building m ->
                     let
-                        ( (newM, newPModel, newSModel), checkpoint, cmd ) =
-                            Building.update oldEnvironment bmsg (m, currentAppState.buildingData, currentAppState.sharedModel)
-                        newAppState = 
-                            {
-                                currentAppState |
-                                    appState = Building newM
-                                ,   buildingData = newPModel
-                                ,   sharedModel = newSModel
+                        ( ( newM, newPModel, newSModel ), checkpoint, cmd ) =
+                            Building.update oldEnvironment bmsg ( m, currentAppState.buildingData, currentAppState.sharedModel )
+
+                        newAppState =
+                            { currentAppState
+                                | appState = Building newM
+                                , buildingData = newPModel
+                                , sharedModel = newSModel
                             }
                     in
-                        ( { model | appModel = if checkpoint then 
-                                                    U.new newAppState model.appModel
-                                               else
-                                                    replace newAppState model.appModel
-                         }, Cmd.map BMsg cmd )
+                    ( { model
+                        | appModel =
+                            if checkpoint then
+                                U.new newAppState model.appModel
+
+                            else
+                                replace newAppState model.appModel
+                      }
+                    , Cmd.map BMsg cmd
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -132,21 +148,26 @@ update msg model =
             case currentAppState.appState of
                 Simulating m ->
                     let
-                        ( (newM, newPModel, newSModel), checkpoint, cmd ) =
-                            Simulating.update oldEnvironment smsg (m, currentAppState.simulatingData, currentAppState.sharedModel)
-                        newAppState = 
-                            {
-                                currentAppState |
-                                    appState = Simulating newM
-                                ,   simulatingData = newPModel
-                                ,   sharedModel = newSModel
+                        ( ( newM, newPModel, newSModel ), checkpoint, cmd ) =
+                            Simulating.update oldEnvironment smsg ( m, currentAppState.simulatingData, currentAppState.sharedModel )
+
+                        newAppState =
+                            { currentAppState
+                                | appState = Simulating newM
+                                , simulatingData = newPModel
+                                , sharedModel = newSModel
                             }
                     in
-                        ( { model | appModel = if checkpoint then 
-                                                    U.new newAppState model.appModel
-                                               else
-                                                    replace newAppState model.appModel
-                         }, Cmd.map SMsg cmd )
+                    ( { model
+                        | appModel =
+                            if checkpoint then
+                                U.new newAppState model.appModel
+
+                            else
+                                replace newAppState model.appModel
+                      }
+                    , Cmd.map SMsg cmd
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -170,56 +191,77 @@ update msg model =
         KeyPressed k ->
             if k == 16 then
                 ( { model | environment = { oldEnvironment | holdingShift = True } }, Cmd.none )
-            else ( model, Cmd.none)
-    
+
+            else
+                ( model, Cmd.none )
+
         GoTo mod ->
             let
                 exit =
                     case currentAppState.appState of
-                        Building m -> 
+                        Building m ->
                             let
-                                ((pModel, sModel), checkpoint) = Building.onExit oldEnvironment (m, currentAppState.buildingData, currentAppState.sharedModel)
-                                newAppState = { currentAppState | buildingData = pModel, sharedModel = sModel }
-                            in
-                                if checkpoint then 
-                                    U.new newAppState model.appModel
-                                  else
-                                    replace newAppState model.appModel
-                        Simulating m -> 
-                            let
-                                ((pModel, sModel), checkpoint) = Simulating.onExit oldEnvironment (m, currentAppState.simulatingData, currentAppState.sharedModel)
-                                newAppState = { currentAppState | simulatingData = pModel, sharedModel = sModel }
-                            in
-                                if checkpoint then 
-                                    U.new newAppState model.appModel
-                                  else
-                                    replace newAppState model.appModel
-                                               
-                (enter, cmd) =
-                    case mod of
-                        BuildingModule -> 
-                            let
-                                ((bModel, pModel, sModel), checkpoint, bCmd) = Building.onEnter oldEnvironment (exit.present.buildingData, exit.present.sharedModel)
-                                newAppState = { currentAppState | appState = Building bModel, buildingData = pModel, sharedModel = sModel }
-                            in
-                                ( if checkpoint then 
-                                    U.new newAppState model.appModel
-                                  else
-                                    replace newAppState model.appModel
-                                , Cmd.map BMsg bCmd)
-                        SimulatingModule -> 
-                            let
-                                ((simModel, pModel, sModel), checkpoint, sCmd) = Simulating.onEnter oldEnvironment (exit.present.simulatingData, exit.present.sharedModel)
-                                newAppState = { currentAppState | appState = Simulating simModel, simulatingData = pModel, sharedModel = sModel }
-                            in
-                                ( if checkpoint then 
-                                    U.new newAppState model.appModel
-                                  else
-                                    replace newAppState model.appModel
-                                , Cmd.map SMsg sCmd) 
-            in
-                ( { model | appModel = enter },  cmd)
+                                ( ( pModel, sModel ), checkpoint ) =
+                                    Building.onExit oldEnvironment ( m, currentAppState.buildingData, currentAppState.sharedModel )
 
+                                newAppState =
+                                    { currentAppState | buildingData = pModel, sharedModel = sModel }
+                            in
+                            if checkpoint then
+                                U.new newAppState model.appModel
+
+                            else
+                                replace newAppState model.appModel
+
+                        Simulating m ->
+                            let
+                                ( ( pModel, sModel ), checkpoint ) =
+                                    Simulating.onExit oldEnvironment ( m, currentAppState.simulatingData, currentAppState.sharedModel )
+
+                                newAppState =
+                                    { currentAppState | simulatingData = pModel, sharedModel = sModel }
+                            in
+                            if checkpoint then
+                                U.new newAppState model.appModel
+
+                            else
+                                replace newAppState model.appModel
+
+                ( enter, cmd ) =
+                    case mod of
+                        BuildingModule ->
+                            let
+                                ( ( bModel, pModel, sModel ), checkpoint, bCmd ) =
+                                    Building.onEnter oldEnvironment ( exit.present.buildingData, exit.present.sharedModel )
+
+                                newAppState =
+                                    { currentAppState | appState = Building bModel, buildingData = pModel, sharedModel = sModel }
+                            in
+                            ( if checkpoint then
+                                U.new newAppState model.appModel
+
+                              else
+                                replace newAppState model.appModel
+                            , Cmd.map BMsg bCmd
+                            )
+
+                        SimulatingModule ->
+                            let
+                                ( ( simModel, pModel, sModel ), checkpoint, sCmd ) =
+                                    Simulating.onEnter oldEnvironment ( exit.present.simulatingData, exit.present.sharedModel )
+
+                                newAppState =
+                                    { currentAppState | appState = Simulating simModel, simulatingData = pModel, sharedModel = sModel }
+                            in
+                            ( if checkpoint then
+                                U.new newAppState model.appModel
+
+                              else
+                                replace newAppState model.appModel
+                            , Cmd.map SMsg sCmd
+                            )
+            in
+            ( { model | appModel = enter }, cmd )
 
 
 textHtml : String -> Html msg
@@ -242,20 +284,21 @@ view model =
         winY =
             toFloat <| second model.environment.windowSize
 
-        appState = model.appModel.present
+        appState =
+            model.appModel.present
     in
     collage
         winX
         --winX
         winY
         --winY
-        [ 
-            case appState.appState of
-                Building m -> 
-                    GraphicSVG.map BMsg <| Building.view model.environment ( m, appState.buildingData, appState.sharedModel )
-                Simulating m -> 
-                    GraphicSVG.map SMsg <| Simulating.view model.environment ( m, appState.simulatingData, appState.sharedModel )
-        ,   modeButtons model
+        [ case appState.appState of
+            Building m ->
+                GraphicSVG.map BMsg <| Building.view model.environment ( m, appState.buildingData, appState.sharedModel )
+
+            Simulating m ->
+                GraphicSVG.map SMsg <| Simulating.view model.environment ( m, appState.simulatingData, appState.sharedModel )
+        , modeButtons model
         ]
 
 

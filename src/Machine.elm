@@ -1,13 +1,13 @@
-module Machine exposing (..)
+module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionNames, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
 
 import Dict exposing (Dict)
+import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
-import Set exposing (Set)
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
 import Html.Events exposing (onInput)
-import Environment exposing (Environment)
+import Set exposing (Set)
 
 
 type alias StateID =
@@ -136,22 +136,33 @@ test =
 view : Environment -> Model -> Machine -> Set StateID -> Shape Msg
 view env model machine currentStates =
     let
-        (winX,winY) = env.windowSize
-        dragRegion = rect (toFloat winX) (toFloat winY)
-                    |> filled blank
-                    |> notifyMouseMoveAt Drag
-                    |> notifyMouseUp StopDragging
+        ( winX, winY ) =
+            env.windowSize
+
+        dragRegion =
+            rect (toFloat winX) (toFloat winY)
+                |> filled blank
+                |> notifyMouseMoveAt Drag
+                |> notifyMouseUp StopDragging
     in
-    
     group
         [ renderStates currentStates machine model
         , renderArrows machine model
-        ,   case model of
-                DraggingState _ _ -> dragRegion
-                DraggingArrow _ -> dragRegion
-                AddingArrow _ _ -> dragRegion
-                AddingArrowOverOtherState _ _ _ -> dragRegion
-                _ -> group []
+        , case model of
+            DraggingState _ _ ->
+                dragRegion
+
+            DraggingArrow _ ->
+                dragRegion
+
+            AddingArrow _ _ ->
+                dragRegion
+
+            AddingArrowOverOtherState _ _ _ ->
+                dragRegion
+
+            _ ->
+                group []
         , case model of
             AddingArrow s ( x, y ) ->
                 let
@@ -338,14 +349,15 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
 
                         else
                             group []
-                    
-                    EditingTransitionLabel _ _ -> group []
+
+                    EditingTransitionLabel _ _ ->
+                        group []
 
                     _ ->
-                        group [
-                                rect 50 20
-                                    |> filled blank
-                                    |> notifyEnter (MouseOverTransitionLabel charID)
+                        group
+                            [ rect 50 20
+                                |> filled blank
+                                |> notifyEnter (MouseOverTransitionLabel charID)
                             ]
                 ]
                 |> move ( 0, 7 )
@@ -390,14 +402,18 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
 renderArrows : Machine -> Model -> Shape Msg
 renderArrows machine model =
     let
-        states = machine.q
+        states =
+            machine.q
 
-        pos = machine.statePositions
+        pos =
+            machine.statePositions
 
-        delta = machine.delta
+        delta =
+            machine.delta
 
-        transPos = machine.stateTransitions
-        
+        transPos =
+            machine.stateTransitions
+
         stateList =
             Set.toList states
 
@@ -478,15 +494,18 @@ renderArrows machine model =
             stateList
 
 
-renderStates : Set StateID ->  Machine -> Model -> Shape Msg
+renderStates : Set StateID -> Machine -> Model -> Shape Msg
 renderStates currentStates machine model =
     let
-        states = machine.q
+        states =
+            machine.q
 
-        pos = machine.statePositions
+        pos =
+            machine.statePositions
 
-        finals = machine.final
-        
+        finals =
+            machine.final
+
         stateList =
             Set.toList states
 

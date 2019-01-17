@@ -1,15 +1,15 @@
-module Building exposing (..)
+module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, icon, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
+import Browser.Events
 import Dict exposing (Dict)
 import Environment exposing (Environment)
-import Machine exposing (..)
-import SharedModel exposing (SharedModel)
-import Helpers exposing(..)
-import GraphicSVG exposing(..)
-import Tuple exposing (first, second)
-import Set
-import Browser.Events
+import GraphicSVG exposing (..)
+import Helpers exposing (..)
 import Json.Decode as D
+import Machine exposing (..)
+import Set
+import SharedModel exposing (SharedModel)
+import Tuple exposing (first, second)
 
 
 type alias Model =
@@ -23,35 +23,40 @@ type PersistentModel
 
 type Msg
     = MachineMsg Machine.Msg
-    | AddState (Float, Float)
+    | AddState ( Float, Float )
     | KeyPressed Int
 
+
 subscriptions : Model -> Sub Msg
-subscriptions model = 
-    Sub.batch 
-    [
-        Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-    ]
+subscriptions model =
+    Sub.batch
+        [ Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+        ]
+
 
 init : Model
-init = 
-    {
-        machineState = Regular
+init =
+    { machineState = Regular
     }
 
+
 initPModel : PersistentModel
-initPModel = Empty
+initPModel =
+    Empty
 
-onEnter : Environment -> (PersistentModel, SharedModel) -> ((Model, PersistentModel, SharedModel), Bool, Cmd Msg)
-onEnter env (pModel, sModel) = 
-    ( (init , pModel, sModel), False, Cmd.none)
 
-onExit : Environment -> (Model, PersistentModel, SharedModel) -> ((PersistentModel, SharedModel), Bool)
-onExit env (model, pModel, sModel) = 
-    ( (pModel, sModel), False)
+onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+onEnter env ( pModel, sModel ) =
+    ( ( init, pModel, sModel ), False, Cmd.none )
+
+
+onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
+onExit env ( model, pModel, sModel ) =
+    ( ( pModel, sModel ), False )
+
 
 update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
-update env msg (model, pModel, sModel) =
+update env msg ( model, pModel, sModel ) =
     let
         oldMachine =
             sModel.machine
@@ -82,10 +87,10 @@ update env msg (model, pModel, sModel) =
                 StartMouseOverRim stId ( x, y ) ->
                     case model.machineState of
                         Regular ->
-                           ( ( { model | machineState = MousingOverRim stId ( x, y ) }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = MousingOverRim stId ( x, y ) }, pModel, sModel ), False, Cmd.none )
 
                         _ ->
-                            ( (model, pModel, sModel), False, Cmd.none )
+                            ( ( model, pModel, sModel ), False, Cmd.none )
 
                 MoveMouseOverRim ( x, y ) ->
                     case model.machineState of
@@ -93,7 +98,7 @@ update env msg (model, pModel, sModel) =
                             ( ( { model | machineState = MousingOverRim stId ( x, y ) }, pModel, sModel ), False, Cmd.none )
 
                         _ ->
-                            ( (model, pModel, sModel), False, Cmd.none )
+                            ( ( model, pModel, sModel ), False, Cmd.none )
 
                 StopMouseOverRim ->
                     ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
@@ -139,13 +144,20 @@ update env msg (model, pModel, sModel) =
                                         )
                                         oldMachine.delta
                             in
-                            ( ( { model | machineState = Regular }, pModel, {sModel | machine =
-                                    { oldMachine
-                                        | delta = newDelta
-                                        , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
-                                        , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions
-                                    }} ), True, Cmd.none )
-
+                            ( ( { model | machineState = Regular }
+                              , pModel
+                              , { sModel
+                                    | machine =
+                                        { oldMachine
+                                            | delta = newDelta
+                                            , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
+                                            , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions
+                                        }
+                                }
+                              )
+                            , True
+                            , Cmd.none
+                            )
 
                         _ ->
                             ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
@@ -164,10 +176,11 @@ update env msg (model, pModel, sModel) =
 
                                         Nothing ->
                                             ( 0, 0 )
-                            in 
+                            in
                             ( ( { model | machineState = model.machineState }, pModel, { sModel | machine = { oldMachine | statePositions = updateStatePos st ( x - ox, y - oy ) oldMachine.statePositions } } )
-                            , False, Cmd.none )
-
+                            , False
+                            , Cmd.none
+                            )
 
                         DraggingArrow ( s1, char, s2 ) ->
                             let
@@ -199,7 +212,7 @@ update env msg (model, pModel, sModel) =
                                 nprot =
                                     ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
                             in
-                            ( ( { model | machineState = Regular }, pModel, {sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), False, Cmd.none )
+                            ( ( { model | machineState = Regular }, pModel, { sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), False, Cmd.none )
 
                         AddingArrow st _ ->
                             let
@@ -221,8 +234,6 @@ update env msg (model, pModel, sModel) =
                                             AddingArrow st ( x, y )
                             in
                             ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
-
-                            
 
                         AddingArrowOverOtherState st _ s1 ->
                             let
@@ -248,7 +259,6 @@ update env msg (model, pModel, sModel) =
                         _ ->
                             ( ( { model | machineState = model.machineState }, pModel, sModel ), False, Cmd.none )
 
-
                 MouseOverStateLabel st ->
                     ( ( { model | machineState = MousingOverStateLabel st }, pModel, sModel ), False, Cmd.none )
 
@@ -263,7 +273,6 @@ update env msg (model, pModel, sModel) =
                                     model.machineState
                     in
                     ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
-
 
                 MouseLeaveLabel ->
                     let
@@ -315,37 +324,35 @@ update env msg (model, pModel, sModel) =
                                     EditingTransitionLabel tr lbl
 
                                 _ ->
-                                    model.machineState 
+                                    model.machineState
                     in
-                        ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
 
-                TapState sId -> 
+                TapState sId ->
                     ( ( { model | machineState = SelectedState sId }, pModel, sModel ), False, Cmd.none )
 
-                Reset -> 
+                Reset ->
                     ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
+        AddState ( x, y ) ->
+            case model.machineState of
+                Regular ->
+                    let
+                        newId =
+                            setMax oldMachine.q + 1
 
+                        newMachine =
+                            { oldMachine
+                                | q = Set.insert newId oldMachine.q
+                                , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
+                                , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames
+                            }
+                    in
+                    ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
-        AddState (x,y) ->
-                    case model.machineState of
-                        Regular ->
-                            let
-                                newId =
-                                    setMax oldMachine.q + 1
+                _ ->
+                    ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
-                                newMachine =
-                                    { oldMachine
-                                        | q = Set.insert newId oldMachine.q
-                                        , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
-                                        , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames
-                                    }
-                            in
-                            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
-
-
-                        _ ->
-                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
         KeyPressed k ->
             if k == 13 then
                 --pressed enter
@@ -365,10 +372,10 @@ update env msg (model, pModel, sModel) =
 
                         else
                             let
-                                newMachine = { oldMachine | stateNames = Dict.insert stId newLbl oldMachine.stateNames }
+                                newMachine =
+                                    { oldMachine | stateNames = Dict.insert stId newLbl oldMachine.stateNames }
                             in
-                            
-                            ( ( { model | machineState = Regular }, pModel, {sModel | machine = newMachine} ), True, Cmd.none )
+                            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                     EditingTransitionLabel tId newLbl ->
                         let
@@ -385,10 +392,10 @@ update env msg (model, pModel, sModel) =
 
                         else
                             let
-                                newMachine = { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames }
+                                newMachine =
+                                    { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames }
                             in
-                            
-                            ( ( { model | machineState = Regular }, pModel, {sModel | machine = newMachine} ), True, Cmd.none )
+                            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -417,7 +424,7 @@ update env msg (model, pModel, sModel) =
                             removedTransitions =
                                 Dict.fromList <| List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) oldMachine.stateTransitions
                         in
-                        ( ( { model | machineState = Regular }, pModel, {sModel | machine = newMachine } ), True, Cmd.none )
+                        ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                     SelectedArrow ( _, tId, _ ) ->
                         let
@@ -434,7 +441,7 @@ update env msg (model, pModel, sModel) =
                             newStateTransitions =
                                 Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.stateTransitions
                         in
-                        ( ( { model | machineState = Regular }, pModel, {sModel | machine = newMachine} ), True, Cmd.none )
+                        ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -455,14 +462,13 @@ update env msg (model, pModel, sModel) =
                                                     Set.insert sId oldMachine.final
                                     }
                             in
-                            ( ( model, pModel, {sModel | machine = newMachine} ), True, Cmd.none )
+                            ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                         else
                             ( ( model, pModel, sModel ), True, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), True, Cmd.none )
-
 
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
@@ -473,19 +479,17 @@ view env ( model, pModel, sModel ) =
 
         winY =
             toFloat <| second env.windowSize
-
     in
-    
     group
-        [   rect winX winY
-                    |> filled blank
-                    |> (if env.holdingShift then
-                            notifyTapAt AddState
+        [ rect winX winY
+            |> filled blank
+            |> (if env.holdingShift then
+                    notifyTapAt AddState
 
-                        else
-                            notifyTap (MachineMsg Reset)
-                       )
-         ,   GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
+                else
+                    notifyTap (MachineMsg Reset)
+               )
+        , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
         ]
 
 

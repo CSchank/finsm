@@ -1,12 +1,11 @@
-module Helpers exposing (..)
+module Helpers exposing (LatexAlign(..), add, dot, editIcon, latex, latexurl, mult, p, setMax, sub, trashIcon, vertex)
 
 import GraphicSVG exposing (..)
-import Url exposing (Url, percentEncode)
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
 import Html.Events exposing (onInput)
-import Set exposing(Set)
-
+import Set exposing (Set)
+import Url exposing (Url, percentEncode)
 
 
 vertex ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
@@ -60,6 +59,8 @@ editIcon =
             |> filled blue
             |> rotate (degrees -15)
         ]
+
+
 trashIcon =
     group
         [ roundedRect 30 40 3
@@ -72,10 +73,12 @@ trashIcon =
         , rect 4 30 |> filled black |> move ( 8, 0 )
         ]
 
+
 type LatexAlign
     = AlignLeft
     | AlignRight
     | AlignCentre
+
 
 latex w h txt align =
     (html w h <|

@@ -1,20 +1,21 @@
-module Simulating exposing (..)
+module Simulating exposing (InputTape, Model(..), Msg(..), PersistentModel, delta, deltaHat, initPModel, isAccept, latexKeyboard, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
+import Browser.Events
 import Dict exposing (Dict)
+import Environment exposing (Environment)
+import GraphicSVG exposing (..)
+import Helpers exposing (..)
+import Json.Decode as D
 import Machine exposing (..)
 import Set exposing (Set)
-import GraphicSVG exposing(..)
-import Helpers exposing(..)
-import SharedModel exposing(SharedModel)
-import Environment exposing(Environment)
-import Tuple exposing (first, second)
+import SharedModel exposing (SharedModel)
 import Task
-import Browser.Events
-import Json.Decode as D
+import Tuple exposing (first, second)
+
 
 subscriptions : Model -> Sub Msg
-subscriptions model = 
+subscriptions model =
     Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
 
 
@@ -27,9 +28,11 @@ type alias PersistentModel =
 type alias InputTape =
     Array Character
 
+
 type Model
     = Default Int {- tapeID -} Int {- charID -}
     | Editing Int
+
 
 type Msg
     = Step
@@ -41,13 +44,15 @@ type Msg
     | KeyPressed Int
     | MachineMsg Machine.Msg
 
-onEnter : Environment -> (PersistentModel, SharedModel) -> ((Model, PersistentModel, SharedModel), Bool, Cmd Msg)
-onEnter env (pModel, sModel) = 
-    ( (Default 0 -1, pModel, sModel), False, Cmd.none )
 
-onExit : Environment -> (Model, PersistentModel, SharedModel) -> ((PersistentModel, SharedModel), Bool)
-onExit env (model, pModel, sModel) = 
-    ( (pModel, sModel), False )
+onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+onEnter env ( pModel, sModel ) =
+    ( ( Default 0 -1, pModel, sModel ), False, Cmd.none )
+
+
+onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
+onExit env ( model, pModel, sModel ) =
+    ( ( pModel, sModel ), False )
 
 
 initPModel : PersistentModel
@@ -59,6 +64,7 @@ initPModel =
             ]
     , currentStates = test.start
     }
+
 
 renderTape : Array String -> Int -> Int -> Int -> Bool -> Shape Msg
 renderTape input tapeId selectedId inputAt showButtons =
@@ -131,8 +137,9 @@ renderTape input tapeId selectedId inputAt showButtons =
                     []
                )
 
+
 update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
-update env msg (model, pModel, sModel) =
+update env msg ( model, pModel, sModel ) =
     let
         oldMachine =
             sModel.machine
@@ -156,28 +163,33 @@ update env msg (model, pModel, sModel) =
                                     ""
                     in
                     if nextCh /= "" then
-                        ( ( Default tapeId (charId + 1) , { pModel | currentStates = deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates } , sModel ), False, Cmd.none )
+                        ( ( Default tapeId (charId + 1), { pModel | currentStates = deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates }, sModel ), False, Cmd.none )
 
                     else
-                        ( (model, pModel, sModel), False, Cmd.none )
+                        ( ( model, pModel, sModel ), False, Cmd.none )
 
                 _ ->
-                    ( (model, pModel, sModel), False, Cmd.none )
+                    ( ( model, pModel, sModel ), False, Cmd.none )
 
         EditTape tId ->
-            ( ( Editing tId , pModel , sModel ), False, Cmd.none )
+            ( ( Editing tId, pModel, sModel ), False, Cmd.none )
 
         DeleteTape tId ->
             let
-                newModel = 
+                newModel =
                     case model of
                         Default tId0 chId ->
                             -- FIXME: choose a good tape to go to
-                            if tId0 == tId then Default 0 -1 else Default tId0 chId
-                        _ -> model       
+                            if tId0 == tId then
+                                Default 0 -1
+
+                            else
+                                Default tId0 chId
+
+                        _ ->
+                            model
             in
-            
-            ( ( newModel , { pModel | tapes = Dict.remove tId pModel.tapes } , sModel ), True, Cmd.none )
+            ( ( newModel, { pModel | tapes = Dict.remove tId pModel.tapes }, sModel ), True, Cmd.none )
 
         AddNewTape ->
             let
@@ -191,28 +203,28 @@ update env msg (model, pModel, sModel) =
                     )
                         + 1
             in
-            ( ( model , { pModel | tapes = Dict.insert newId Array.empty pModel.tapes } , sModel ), True, Cmd.none )
+            ( ( model, { pModel | tapes = Dict.insert newId Array.empty pModel.tapes }, sModel ), True, Cmd.none )
 
         ChangeTape tId ->
-            ( ( Default tId -1 , { pModel | currentStates = oldMachine.start } , sModel ), False, Cmd.none )
-            
+            ( ( Default tId -1, { pModel | currentStates = oldMachine.start }, sModel ), False, Cmd.none )
 
         KeyPressed k ->
             if k == 13 then
                 --pressed enter
                 case model of
                     Editing tId ->
-                        ( (Default tId -1, pModel, sModel), True, Cmd.none )
+                        ( ( Default tId -1, pModel, sModel ), True, Cmd.none )
 
                     _ ->
-                        ( (model, pModel, sModel), False, Cmd.none )
+                        ( ( model, pModel, sModel ), False, Cmd.none )
 
             else if k == 8 then
                 --pressed delete
                 case model of
                     Editing tapeId ->
                         let
-                            newPModel = { pModel
+                            newPModel =
+                                { pModel
                                     | tapes =
                                         Dict.update tapeId
                                             (\m ->
@@ -226,20 +238,20 @@ update env msg (model, pModel, sModel) =
                                             pModel.tapes
                                 }
                         in
-                        ( (model, newPModel, sModel), False, Cmd.none )
-
+                        ( ( model, newPModel, sModel ), False, Cmd.none )
 
                     _ ->
-                        ( (model, pModel, sModel), False, Cmd.none )
+                        ( ( model, pModel, sModel ), False, Cmd.none )
 
             else if k == 39 then
                 --right arrow key
                 case model of
                     Default _ _ ->
-                        ( (model, pModel, sModel), False, Task.perform identity (Task.succeed <| Step) )
+                        ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
 
                     _ ->
-                        ( (model, pModel, sModel), False, Cmd.none )
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
             else
                 case model of
                     Editing tapeId ->
@@ -333,7 +345,8 @@ update env msg (model, pModel, sModel) =
                             newChar =
                                 Array.get charCode chars
 
-                            newPModel = { pModel
+                            newPModel =
+                                { pModel
                                     | tapes =
                                         Dict.update tapeId
                                             (\m ->
@@ -350,39 +363,45 @@ update env msg (model, pModel, sModel) =
                                             pModel.tapes
                                 }
                         in
-                        ( (model, newPModel, sModel), False, Cmd.none )
-                    _ -> ( (model, pModel, sModel), False, Cmd.none )
-                    
+                        ( ( model, newPModel, sModel ), False, Cmd.none )
+
+                    _ ->
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
         MachineMsg mmsg ->
-                        case mmsg of
-                            StartDragging sId _ -> 
-                                ( (model, pModel, sModel), False, Task.perform identity (Task.succeed <| ToggleStart sId) )
-                            SelectStateLabel sId -> 
-                                ( (model, pModel, sModel), False, Task.perform identity (Task.succeed <| ToggleStart sId) )
-                            _ ->
-                                        ( (model, pModel, sModel), False, Cmd.none )
+            case mmsg of
+                StartDragging sId _ ->
+                    ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| ToggleStart sId) )
 
-        ToggleStart sId -> let
-                                    tests =
-                                        oldMachine.start
+                SelectStateLabel sId ->
+                    ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| ToggleStart sId) )
 
-                                    newMachine =
-                                        { oldMachine
-                                            | start =
-                                                case Set.member sId oldMachine.start of
-                                                    True ->
-                                                        Set.remove sId oldMachine.start
+                _ ->
+                    ( ( model, pModel, sModel ), False, Cmd.none )
 
-                                                    False ->
-                                                        Set.insert sId oldMachine.start
-                                        }
-                                in
-                                case model of
-                                    Default tId _ ->
-                                        ( ( Default tId -1 , { pModel | currentStates = newMachine.start } , {sModel | machine = newMachine} ), True, Cmd.none )
+        ToggleStart sId ->
+            let
+                tests =
+                    oldMachine.start
 
-                                    _ ->
-                                        ( (model, pModel, sModel), False, Cmd.none )
+                newMachine =
+                    { oldMachine
+                        | start =
+                            case Set.member sId oldMachine.start of
+                                True ->
+                                    Set.remove sId oldMachine.start
+
+                                False ->
+                                    Set.insert sId oldMachine.start
+                    }
+            in
+            case model of
+                Default tId _ ->
+                    ( ( Default tId -1, { pModel | currentStates = newMachine.start }, { sModel | machine = newMachine } ), True, Cmd.none )
+
+                _ ->
+                    ( ( model, pModel, sModel ), False, Cmd.none )
+
 
 isAccept : Set StateID -> Set StateID -> InputTape -> Int -> Bool
 isAccept states finals input inputAt =
@@ -391,6 +410,7 @@ isAccept states finals input inputAt =
 
     else
         False
+
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
 view env ( model, pModel, sModel ) =
@@ -509,9 +529,9 @@ view env ( model, pModel, sModel ) =
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
-            ,                (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move (0, winY/6)
-
+        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
         ]
+
 
 delta : TransitionNames -> Delta -> Character -> StateID -> Set StateID
 delta tNames d ch state =
@@ -548,6 +568,7 @@ delta tNames d ch state =
 deltaHat : TransitionNames -> Delta -> Character -> Set StateID -> Set StateID
 deltaHat tNames d ch states =
     Set.foldl (\curr ss -> Set.union ss (delta tNames d ch curr)) Set.empty states
+
 
 latexKeyboard : Float -> Float -> List Character -> Shape Msg
 latexKeyboard w h chars =
