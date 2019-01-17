@@ -82,9 +82,9 @@ latex w h txt align =
         H.div
             [ style "width" "100%"
             , style "height" "100%"
-            , attribute "moz-user-select" "none"
-            , attribute "webkit-user-select" "none"
-            , attribute "user-select" "none"
+            , style "-moz-user-select" "none"
+            , style "-webkit-user-select" "none"
+            , style "-user-select" "none"
             ]
             [ H.img
                 ([ Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
