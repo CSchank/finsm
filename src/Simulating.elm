@@ -10,10 +10,13 @@ import SharedModel exposing(SharedModel)
 import Environment exposing(Environment)
 import Tuple exposing (first, second)
 import Task
+import Browser.Events
+import Json.Decode as D
 
 subscriptions : Model -> Sub Msg
 subscriptions model = 
-    Sub.none
+    Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+
 
 type alias PersistentModel =
     { tapes : Dict Int (Array Character)
@@ -40,7 +43,7 @@ type Msg
 
 onEnter : Environment -> (PersistentModel, SharedModel) -> ((Model, PersistentModel, SharedModel), Bool, Cmd Msg)
 onEnter env (pModel, sModel) = 
-    ( (Default 0 0, pModel, sModel), False, Cmd.none )
+    ( (Default 0 -1, pModel, sModel), False, Cmd.none )
 
 onExit : Environment -> (Model, PersistentModel, SharedModel) -> ((PersistentModel, SharedModel), Bool)
 onExit env (model, pModel, sModel) = 

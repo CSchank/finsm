@@ -139,10 +139,7 @@ view env model machine currentStates =
         (winX,winY) = env.windowSize
         dragRegion = rect (toFloat winX) (toFloat winY)
                     |> filled blank
-                    |> (case model of
-                            DraggingState _ _ -> notifyMouseMoveAt Drag
-                            DraggingArrow _ -> notifyMouseMoveAt Drag
-                            _ -> identity)
+                    |> notifyMouseMoveAt Drag
                     |> notifyMouseUp StopDragging
     in
     
@@ -152,6 +149,8 @@ view env model machine currentStates =
         ,   case model of
                 DraggingState _ _ -> dragRegion
                 DraggingArrow _ -> dragRegion
+                AddingArrow _ _ -> dragRegion
+                AddingArrowOverOtherState _ _ _ -> dragRegion
                 _ -> group []
         , case model of
             AddingArrow s ( x, y ) ->
@@ -339,9 +338,15 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
 
                         else
                             group []
+                    
+                    EditingTransitionLabel _ _ -> group []
 
                     _ ->
-                        group []
+                        group [
+                                rect 50 20
+                                    |> filled blank
+                                    |> notifyEnter (MouseOverTransitionLabel charID)
+                            ]
                 ]
                 |> move ( 0, 7 )
                 |> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
@@ -349,7 +354,6 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
                     ( -offset * sin theta
                     , offset * cos theta
                     )
-                |> notifyEnter (MouseOverTransitionLabel charID)
                 |> notifyLeave MouseLeaveLabel
             ]
 
@@ -617,19 +621,7 @@ renderStates currentStates machine model =
                                     |> notifyLeave MouseLeaveLabel
                                     |> notifyTap (SelectStateLabel sId)
                                 ]
-
-                    --, text state |> centered |> filled black |> move ( 0, -3 )
-                    {--, case model.appState of
-                            DraggingState st ->
-                                if st == state then
-                                    circle 21 |> outlined (solid 1) lightBlue
-                                else
-                                    group []
-
-                            a ->
-                                group []--}
                     ]
                     |> move (getPos sId)
-                    --|> notifyTap (TapState sId)
             )
             stateList
