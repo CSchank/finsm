@@ -8,6 +8,8 @@ import Helpers exposing(..)
 import GraphicSVG exposing(..)
 import Tuple exposing (first, second)
 import Set
+import Browser.Events
+import Json.Decode as D
 
 
 type alias Model =
@@ -22,10 +24,14 @@ type PersistentModel
 type Msg
     = MachineMsg Machine.Msg
     | AddState (Float, Float)
+    | KeyPressed Int
 
 subscriptions : Model -> Sub Msg
 subscriptions model = 
-    Sub.none
+    Sub.batch 
+    [
+        Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+    ]
 
 init : Model
 init = 
@@ -33,9 +39,16 @@ init =
         machineState = Regular
     }
 
-onEnter : Environment -> (Model, PersistentModel, SharedModel) -> ((Model, PersistentModel, SharedModel), Bool, Cmd Msg)
-onEnter env (model, pModel, sModel) = 
-    ( (model, pModel, sModel), False, Cmd.none)
+initPModel : PersistentModel
+initPModel = Empty
+
+onEnter : Environment -> (PersistentModel, SharedModel) -> ((Model, PersistentModel, SharedModel), Bool, Cmd Msg)
+onEnter env (pModel, sModel) = 
+    ( (init , pModel, sModel), False, Cmd.none)
+
+onExit : Environment -> (Model, PersistentModel, SharedModel) -> ((PersistentModel, SharedModel), Bool)
+onExit env (model, pModel, sModel) = 
+    ( (pModel, sModel), False)
 
 update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 update env msg (model, pModel, sModel) =
@@ -333,6 +346,122 @@ update env msg (model, pModel, sModel) =
 
                         _ ->
                             ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+        KeyPressed k ->
+            if k == 13 then
+                --pressed enter
+                case model.machineState of
+                    EditingStateLabel stId newLbl ->
+                        let
+                            oldStateName =
+                                case Dict.get stId oldMachine.stateNames of
+                                    Just n ->
+                                        n
+
+                                    _ ->
+                                        ""
+                        in
+                        if newLbl == oldStateName || newLbl == "" then
+                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+
+                        else
+                            let
+                                newMachine = { oldMachine | stateNames = Dict.insert stId newLbl oldMachine.stateNames }
+                            in
+                            
+                            ( ( { model | machineState = Regular }, pModel, {sModel | machine = newMachine} ), True, Cmd.none )
+
+                    EditingTransitionLabel tId newLbl ->
+                        let
+                            oldTransitionName =
+                                case Dict.get tId oldMachine.transitionNames of
+                                    Just n ->
+                                        n
+
+                                    _ ->
+                                        ""
+                        in
+                        if newLbl == oldTransitionName || newLbl == "" then
+                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+
+                        else
+                            let
+                                newMachine = { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames }
+                            in
+                            
+                            ( ( { model | machineState = Regular }, pModel, {sModel | machine = newMachine} ), True, Cmd.none )
+
+                    _ ->
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
+            else if k == 68 then
+                --pressed delete
+                case model.machineState of
+                    SelectedState stId ->
+                        let
+                            newDelta =
+                                Dict.map (\_ d -> Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d) oldMachine.delta
+
+                            newMachine =
+                                { oldMachine
+                                    | q = Set.remove stId oldMachine.q
+                                    , delta = newDelta
+                                    , statePositions = Dict.remove stId oldMachine.statePositions
+                                    , stateTransitions = newStateTransitions
+                                    , stateNames = Dict.remove stId oldMachine.stateNames
+                                    , transitionNames = Dict.diff oldMachine.transitionNames removedTransitions
+                                }
+
+                            newStateTransitions =
+                                Dict.filter (\( _, t, _ ) _ -> not <| Dict.member t removedTransitions) oldMachine.stateTransitions
+
+                            removedTransitions =
+                                Dict.fromList <| List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) oldMachine.stateTransitions
+                        in
+                        ( ( { model | machineState = Regular }, pModel, {sModel | machine = newMachine } ), True, Cmd.none )
+
+                    SelectedArrow ( _, tId, _ ) ->
+                        let
+                            newDelta =
+                                Dict.map (\_ d -> Dict.filter (\tId0 _ -> tId /= tId0) d) oldMachine.delta
+
+                            newMachine =
+                                { oldMachine
+                                    | delta = newDelta
+                                    , stateTransitions = newStateTransitions
+                                    , transitionNames = Dict.remove tId oldMachine.transitionNames
+                                }
+
+                            newStateTransitions =
+                                Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.stateTransitions
+                        in
+                        ( ( { model | machineState = Regular }, pModel, {sModel | machine = newMachine} ), True, Cmd.none )
+
+                    _ ->
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
+            else
+                case model.machineState of
+                    SelectedState sId ->
+                        if k == 70 then
+                            let
+                                newMachine =
+                                    { oldMachine
+                                        | final =
+                                            case Set.member sId oldMachine.final of
+                                                True ->
+                                                    Set.remove sId oldMachine.final
+
+                                                False ->
+                                                    Set.insert sId oldMachine.final
+                                    }
+                            in
+                            ( ( model, pModel, {sModel | machine = newMachine} ), True, Cmd.none )
+
+                        else
+                            ( ( model, pModel, sModel ), True, Cmd.none )
+
+                    _ ->
+                        ( ( model, pModel, sModel ), True, Cmd.none )
 
 
 
@@ -348,8 +477,7 @@ view env ( model, pModel, sModel ) =
     in
     
     group
-        [ GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
-        , rect winX winY
+        [   rect winX winY
                     |> filled blank
                     |> (if env.holdingShift then
                             notifyTapAt AddState
@@ -357,6 +485,7 @@ view env ( model, pModel, sModel ) =
                         else
                             notifyTap (MachineMsg Reset)
                        )
+         ,   GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
         ]
 
 

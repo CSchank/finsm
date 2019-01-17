@@ -9,6 +9,7 @@ import Helpers exposing(..)
 import SharedModel exposing(SharedModel)
 import Environment exposing(Environment)
 import Tuple exposing (first, second)
+import Task
 
 subscriptions : Model -> Sub Msg
 subscriptions model = 
@@ -34,11 +35,20 @@ type Msg
     | AddNewTape
     | ChangeTape Int
     | ToggleStart StateID
+    | KeyPressed Int
+    | MachineMsg Machine.Msg
+
+onEnter : Environment -> (PersistentModel, SharedModel) -> ((Model, PersistentModel, SharedModel), Bool, Cmd Msg)
+onEnter env (pModel, sModel) = 
+    ( (Default 0 0, pModel, sModel), False, Cmd.none )
+
+onExit : Environment -> (Model, PersistentModel, SharedModel) -> ((PersistentModel, SharedModel), Bool)
+onExit env (model, pModel, sModel) = 
+    ( (pModel, sModel), False )
 
 
-
-init : PersistentModel
-init =
+initPModel : PersistentModel
+initPModel =
     { tapes =
         Dict.fromList
             [ ( 0, Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ] )
@@ -182,31 +192,202 @@ update env msg (model, pModel, sModel) =
 
         ChangeTape tId ->
             ( ( Default tId -1 , { pModel | currentStates = oldMachine.start } , sModel ), False, Cmd.none )
+            
 
-        ToggleStart sId ->
-            let
-                tests =
-                    oldMachine.start
+        KeyPressed k ->
+            if k == 13 then
+                --pressed enter
+                case model of
+                    Editing tId ->
+                        ( (Default tId -1, pModel, sModel), True, Cmd.none )
 
-                newMachine =
-                    { oldMachine
-                        | start =
-                            case Set.member sId oldMachine.start of
-                                True ->
-                                    Set.remove sId oldMachine.start
+                    _ ->
+                        ( (model, pModel, sModel), False, Cmd.none )
 
-                                False ->
-                                    Set.insert sId oldMachine.start
-                    }
-            in
-            case model of
-                Default tId _ ->
-                    ( ( Default tId -1 , { pModel | currentStates = newMachine.start } , {sModel | machine = newMachine} ), True, Cmd.none )
+            else if k == 8 then
+                --pressed delete
+                case model of
+                    Editing tapeId ->
+                        let
+                            newPModel = { pModel
+                                    | tapes =
+                                        Dict.update tapeId
+                                            (\m ->
+                                                case m of
+                                                    Just ar ->
+                                                        Just <| Array.slice 0 -1 ar
 
-                _ ->
-                    ( (model, pModel, sModel), False, Cmd.none )
+                                                    _ ->
+                                                        m
+                                            )
+                                            pModel.tapes
+                                }
+                        in
+                        ( (model, newPModel, sModel), False, Cmd.none )
 
 
+                    _ ->
+                        ( (model, pModel, sModel), False, Cmd.none )
+
+            else if k == 39 then
+                --right arrow key
+                case model of
+                    Default _ _ ->
+                        ( (model, pModel, sModel), False, Task.perform identity (Task.succeed <| Step) )
+
+                    _ ->
+                        ( (model, pModel, sModel), False, Cmd.none )
+            else
+                case model of
+                    Editing tapeId ->
+                        let
+                            charCode =
+                                case k of
+                                    65 ->
+                                        0
+
+                                    83 ->
+                                        1
+
+                                    68 ->
+                                        2
+
+                                    70 ->
+                                        3
+
+                                    71 ->
+                                        4
+
+                                    72 ->
+                                        5
+
+                                    74 ->
+                                        6
+
+                                    75 ->
+                                        7
+
+                                    76 ->
+                                        8
+
+                                    81 ->
+                                        9
+
+                                    87 ->
+                                        10
+
+                                    69 ->
+                                        11
+
+                                    82 ->
+                                        12
+
+                                    84 ->
+                                        13
+
+                                    89 ->
+                                        14
+
+                                    85 ->
+                                        15
+
+                                    73 ->
+                                        16
+
+                                    79 ->
+                                        17
+
+                                    80 ->
+                                        18
+
+                                    90 ->
+                                        19
+
+                                    88 ->
+                                        20
+
+                                    67 ->
+                                        21
+
+                                    86 ->
+                                        22
+
+                                    66 ->
+                                        23
+
+                                    78 ->
+                                        24
+
+                                    77 ->
+                                        25
+
+                                    _ ->
+                                        -1
+
+                            chars =
+                                Array.fromList <| Set.toList <| Set.fromList <| Dict.values oldMachine.transitionNames
+
+                            newChar =
+                                Array.get charCode chars
+
+                            newPModel = { pModel
+                                    | tapes =
+                                        Dict.update tapeId
+                                            (\m ->
+                                                case ( m, newChar ) of
+                                                    ( Just ar, Just ch ) ->
+                                                        Just <| Array.push ch ar
+
+                                                    ( Nothing, Just ch ) ->
+                                                        Just <| Array.fromList [ ch ]
+
+                                                    _ ->
+                                                        m
+                                            )
+                                            pModel.tapes
+                                }
+                        in
+                        ( (model, newPModel, sModel), False, Cmd.none )
+                    _ -> ( (model, pModel, sModel), False, Cmd.none )
+                    
+        MachineMsg mmsg ->
+                        case mmsg of
+                            StartDragging sId _ -> 
+                                ( (model, pModel, sModel), False, Task.perform identity (Task.succeed <| ToggleStart sId) )
+                            SelectStateLabel sId -> 
+                                ( (model, pModel, sModel), False, Task.perform identity (Task.succeed <| ToggleStart sId) )
+                            _ ->
+                                        ( (model, pModel, sModel), False, Cmd.none )
+
+        ToggleStart sId -> let
+                                    tests =
+                                        oldMachine.start
+
+                                    newMachine =
+                                        { oldMachine
+                                            | start =
+                                                case Set.member sId oldMachine.start of
+                                                    True ->
+                                                        Set.remove sId oldMachine.start
+
+                                                    False ->
+                                                        Set.insert sId oldMachine.start
+                                        }
+                                in
+                                case model of
+                                    Default tId _ ->
+                                        ( ( Default tId -1 , { pModel | currentStates = newMachine.start } , {sModel | machine = newMachine} ), True, Cmd.none )
+
+                                    _ ->
+                                        ( (model, pModel, sModel), False, Cmd.none )
+
+isAccept : Set StateID -> Set StateID -> InputTape -> Int -> Bool
+isAccept states finals input inputAt =
+    if inputAt == Array.length input then
+        Set.size (Set.intersect states finals) > 0
+
+    else
+        False
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
 view env ( model, pModel, sModel ) =
@@ -325,6 +506,8 @@ view env ( model, pModel, sModel ) =
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
+            ,                (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move (0, winY/6)
+
         ]
 
 delta : TransitionNames -> Delta -> Character -> StateID -> Set StateID

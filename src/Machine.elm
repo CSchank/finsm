@@ -137,15 +137,22 @@ view : Environment -> Model -> Machine -> Set StateID -> Shape Msg
 view env model machine currentStates =
     let
         (winX,winY) = env.windowSize
+        dragRegion = rect (toFloat winX) (toFloat winY)
+                    |> filled blank
+                    |> (case model of
+                            DraggingState _ _ -> notifyMouseMoveAt Drag
+                            DraggingArrow _ -> notifyMouseMoveAt Drag
+                            _ -> identity)
+                    |> notifyMouseUp StopDragging
     in
     
     group
         [ renderStates currentStates machine model
         , renderArrows machine model
-        , rect (toFloat winX) (toFloat winY)
-                    |> filled blank
-                    |> notifyMouseMoveAt Drag
-                    |> notifyMouseUp StopDragging
+        ,   case model of
+                DraggingState _ _ -> dragRegion
+                DraggingArrow _ -> dragRegion
+                _ -> group []
         , case model of
             AddingArrow s ( x, y ) ->
                 let
@@ -623,6 +630,6 @@ renderStates currentStates machine model =
                                 group []--}
                     ]
                     |> move (getPos sId)
-                    |>  notifyTap (TapState sId)
+                    --|> notifyTap (TapState sId)
             )
             stateList
