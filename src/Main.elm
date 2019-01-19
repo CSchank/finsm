@@ -6,6 +6,7 @@ import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events
 import Building
+import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)

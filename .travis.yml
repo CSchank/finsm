@@ -7,8 +7,10 @@ env:
 jobs:
   include:
   - stage: test
-    script: elm-format --validate .
-    name: elm-format validation
+    script: 
+      - elm-format --validate .
+      - elm-make src/Main.elm --optimize
+    name: elm-format and optimization validation
   - script: elm-test
     name: elm-test test run
   - stage: deploy
