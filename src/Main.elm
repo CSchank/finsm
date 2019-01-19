@@ -6,7 +6,6 @@ import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events
 import Building
-import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
@@ -77,7 +76,7 @@ main =
     app
         { init =
             \flags url key ->
-                ( { appModel = Debug.log "test" initAppModel
+                ( { appModel = initAppModel
                   , environment = Environment.init
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
