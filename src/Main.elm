@@ -77,7 +77,7 @@ main =
     app
         { init =
             \flags url key ->
-                ( { appModel = initAppModel
+                ( { appModel = Debug.log "test" initAppModel
                   , environment = Environment.init
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
