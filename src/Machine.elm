@@ -146,23 +146,8 @@ view env model machine currentStates =
                 |> notifyMouseUp StopDragging
     in
     group
-        [ renderStates currentStates machine model
-        , renderArrows machine model
-        , case model of
-            DraggingState _ _ ->
-                dragRegion
-
-            DraggingArrow _ ->
-                dragRegion
-
-            AddingArrow _ _ ->
-                dragRegion
-
-            AddingArrowOverOtherState _ _ _ ->
-                dragRegion
-
-            _ ->
-                group []
+        [ renderArrows machine model
+        , renderStates currentStates machine model
         , case model of
             AddingArrow s ( x, y ) ->
                 let
@@ -227,6 +212,21 @@ view env model machine currentStates =
                                 0
                 in
                 renderArrow s0Pos ( 0, 0 ) s1Pos 20 20 newTrans newTransID False s -1 model
+
+            _ ->
+                group []
+        , case model of
+            DraggingState _ _ ->
+                dragRegion
+
+            DraggingArrow _ ->
+                dragRegion
+
+            AddingArrow _ _ ->
+                dragRegion
+
+            AddingArrowOverOtherState _ _ _ ->
+                dragRegion
 
             _ ->
                 group []
