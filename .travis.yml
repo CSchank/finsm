@@ -9,7 +9,7 @@ jobs:
   - stage: test
     script: 
       - elm-format --validate .
-      - elm-make src/Main.elm --optimize
+      - elm make src/Main.elm --optimize
     name: elm-format and optimization validation
   - script: elm-test
     name: elm-test test run
