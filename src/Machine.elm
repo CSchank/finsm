@@ -5,7 +5,7 @@ import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Html as H exposing (Html, input, node)
-import Html.Attributes exposing (attribute, placeholder, style, value)
+import Html.Attributes exposing (attribute, id, placeholder, style, value)
 import Html.Events exposing (onInput)
 import Set exposing (Set)
 
@@ -242,7 +242,8 @@ textBox txt w h place msg =
     move ( -w / 2, h / 2 ) <|
         html (w * 1.5) (h * 1.5) <|
             input
-                [ placeholder place
+                [ id "input"
+                , placeholder place
                 , onInput msg
                 , value txt
                 , style "width" (String.fromFloat w ++ "px")

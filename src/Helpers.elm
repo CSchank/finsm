@@ -1,10 +1,12 @@
-module Helpers exposing (LatexAlign(..), add, dot, editIcon, latex, latexurl, mult, p, setMax, sub, trashIcon, vertex)
+module Helpers exposing (LatexAlign(..), add, dot, editIcon, focusInput, latex, latexurl, mult, p, sendMsg, setMax, sub, trashIcon, vertex)
 
+import Browser.Dom as Dom
 import GraphicSVG exposing (..)
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
 import Html.Events exposing (onInput)
 import Set exposing (Set)
+import Task
 import Url exposing (Url, percentEncode)
 
 
@@ -128,3 +130,13 @@ latexurl lx =
 setMax : Set Int -> Int
 setMax s =
     Set.foldl max 0 s
+
+
+sendMsg : msg -> Cmd msg
+sendMsg msg =
+    Task.perform identity (Task.succeed msg)
+
+
+focusInput : msg -> Cmd msg
+focusInput msg =
+    Task.attempt (\_ -> msg) (Dom.focus "input")

@@ -28,6 +28,7 @@ type Msg
     | SaveTransitionName TransitionID String
     | AddState ( Float, Float )
     | KeyPressed Int
+    | NoOp
 
 
 subscriptions : Model -> Sub Msg
@@ -56,11 +57,6 @@ onEnter env ( pModel, sModel ) =
 onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
 onExit env ( model, pModel, sModel ) =
     ( ( pModel, sModel ), False )
-
-
-sendMsg : Msg -> Cmd Msg
-sendMsg msg =
-    Task.perform identity (Task.succeed msg)
 
 
 update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
@@ -310,7 +306,7 @@ update env msg ( model, pModel, sModel ) =
                                 Nothing ->
                                     ""
                     in
-                    ( ( { model | machineState = EditingStateLabel st stateName }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = EditingStateLabel st stateName }, pModel, sModel ), False, focusInput NoOp )
 
                 SelectTransitionLabel tr ->
                     let
@@ -322,7 +318,7 @@ update env msg ( model, pModel, sModel ) =
                                 Nothing ->
                                     ""
                     in
-                    ( ( { model | machineState = EditingTransitionLabel tr transName }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = EditingTransitionLabel tr transName }, pModel, sModel ), False, focusInput NoOp )
 
                 EditLabel _ lbl ->
                     let
@@ -486,6 +482,9 @@ update env msg ( model, pModel, sModel ) =
                     { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames }
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+
+        NoOp ->
+            ( ( model, pModel, sModel ), False, Cmd.none )
 
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
