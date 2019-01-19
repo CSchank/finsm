@@ -167,6 +167,9 @@ update env msg ( model, pModel, sModel ) =
                             , Cmd.none
                             )
 
+                        DraggingArrow tId ->
+                            ( ( { model | machineState = Regular }, pModel, sModel ), True, Cmd.none )
+
                         _ ->
                             ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
