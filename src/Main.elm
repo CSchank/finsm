@@ -1,6 +1,7 @@
-module Main exposing (ApplicationModel, ApplicationState(..), Model, Module(..), Msg(..), initAppModel, main, modeButtons, replace, textHtml, update, view)
+module Main exposing (ApplicationModel, ApplicationState(..), Model, Module(..), Msg(..), initAppModel, main, modeButtons, textHtml, update, view)
 
 import Array exposing (Array)
+import BetterUndoList exposing (..)
 import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events
@@ -8,7 +9,6 @@ import Building
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
-import Debug
 import Helpers
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
@@ -23,7 +23,6 @@ import SharedModel exposing (SharedModel)
 import Simulating
 import Task
 import Tuple exposing (first, second)
-import UndoList as U exposing (UndoList)
 import Url exposing (Url)
 
 
@@ -49,8 +48,7 @@ type ApplicationState
 
 
 type alias Model =
-    { appModel : ApplicationModel
-    , appHistory : UndoList ApplicationModel
+    { appModel : BetterUndoList ApplicationModel
     , environment : Environment
     }
 
@@ -63,8 +61,9 @@ type alias ApplicationModel =
     }
 
 
-initAppModel : ApplicationModel
+initAppModel : BetterUndoList ApplicationModel
 initAppModel =
+    fresh
         { appState = Building Building.init
         , sharedModel = SharedModel.init
         , simulatingData = Simulating.initPModel
@@ -78,7 +77,6 @@ main =
         { init =
             \flags url key ->
                 ( { appModel = initAppModel
-                  , appHistory = U.fresh initAppModel
                   , environment = Environment.init
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
@@ -103,9 +101,11 @@ main =
         }
 
 
-replace : state -> UndoList state -> UndoList state
-replace st stul =
-    { stul | present = st }
+
+{- replace : state -> UndoList state -> UndoList state
+   replace st stul =
+       { stul | present = st }
+-}
 
 
 update msg model =
@@ -114,9 +114,9 @@ update msg model =
             model.environment
 
         currentAppState =
-            model.appModel
+            model.appModel.present
     in
-    case Tuple.second <| Debug.log "((lpast,lfuture),msg)" ((List.length model.appModel.past,List.length model.appModel.future),msg) of
+    case msg of
         BMsg bmsg ->
             case currentAppState.appState of
                 Building m ->
@@ -131,14 +131,13 @@ update msg model =
                                 , sharedModel = newSModel
                             }
                     in
-                    ({ model
-                        | appModel = newAppState
-                        , appHistory =
+                    ( { model
+                        | appModel =
                             if checkpoint then
-                                U.new newAppState model.appHistory
+                                new newAppState model.appModel
 
                             else
-                                replace newAppState model.appHistory
+                                replace newAppState model.appModel
                       }
                     , Cmd.map BMsg cmd
                     )
@@ -160,14 +159,13 @@ update msg model =
                                 , sharedModel = newSModel
                             }
                     in
-                    ({ model
-                        | appModel = newAppState
-                        , appHistory =
+                    ( { model
+                        | appModel =
                             if checkpoint then
-                                U.new newAppState model.appHistory
+                                new newAppState model.appModel
 
                             else
-                                replace newAppState model.appHistory
+                                replace newAppState model.appModel
                       }
                     , Cmd.map SMsg cmd
                     )
@@ -187,10 +185,10 @@ update msg model =
         KeyReleased k ->
             if k == 16 then
                 ( { model | environment = { oldEnvironment | holdingShift = False } }, Cmd.none )
-            
+
             else if k == 91 then
                 ( { model | environment = { oldEnvironment | holdingMeta = False } }, Cmd.none )
-            
+
             else if k == 17 then
                 ( { model | environment = { oldEnvironment | holdingControl = False } }, Cmd.none )
 
@@ -201,19 +199,35 @@ update msg model =
             if k == 16 then
                 ( { model | environment = { oldEnvironment | holdingShift = True } }, Cmd.none )
 
-            else if k == 90 then
-                ( { model | appModel = model.appHistory.present
-                          , appHistory = if oldEnvironment.holdingMeta && oldEnvironment.holdingShift
-                                        then U.redo model.appHistory
-                                        else if oldEnvironment.holdingControl || oldEnvironment.holdingMeta
-                                        then U.undo model.appHistory
-                                        else model.appHistory
-                                     }, Cmd.none )
+            else if k == 89 {- y -} || k == 90 {- z -} then
+                let
+                    doUndo =
+                        (oldEnvironment.holdingControl || oldEnvironment.holdingMeta) && k == 90
+
+                    doRedo =
+                        (oldEnvironment.holdingControl && k == 89)
+                            || (oldEnvironment.holdingMeta && oldEnvironment.holdingShift && k == 90)
+                in
+                ( { model
+                    | appModel =
+                        if doRedo then
+                            redo model.appModel
+
+                        else if doUndo then
+                            undo model.appModel
+
+                        else
+                            model.appModel
+                  }
+                , Cmd.none
+                )
 
             else if k == 91 then
+                --pressed meta key
                 ( { model | environment = { oldEnvironment | holdingMeta = True } }, Cmd.none )
 
             else if k == 17 then
+                --pressed control
                 ( { model | environment = { oldEnvironment | holdingControl = True } }, Cmd.none )
 
             else
@@ -232,7 +246,7 @@ update msg model =
                                     { currentAppState | buildingData = pModel, sharedModel = sModel }
                             in
                             if checkpoint then
-                                U.new newAppState model.appModel
+                                new newAppState model.appModel
 
                             else
                                 replace newAppState model.appModel
@@ -246,7 +260,7 @@ update msg model =
                                     { currentAppState | simulatingData = pModel, sharedModel = sModel }
                             in
                             if checkpoint then
-                                U.new newAppState model.appModel
+                                new newAppState model.appModel
 
                             else
                                 replace newAppState model.appModel
@@ -262,7 +276,7 @@ update msg model =
                                     { currentAppState | appState = Building bModel, buildingData = pModel, sharedModel = sModel }
                             in
                             ( if checkpoint then
-                                U.new newAppState model.appModel
+                                new newAppState model.appModel
 
                               else
                                 replace newAppState model.appModel
@@ -278,7 +292,7 @@ update msg model =
                                     { currentAppState | appState = Simulating simModel, simulatingData = pModel, sharedModel = sModel }
                             in
                             ( if checkpoint then
-                                U.new newAppState model.appModel
+                                new newAppState model.appModel
 
                               else
                                 replace newAppState model.appModel

@@ -1,7 +1,6 @@
 module Main exposing (Msg(..), main, textBox, update, view)
 
 import Array exposing (Array)
-import Debug exposing (log)
 import Dict exposing (Dict)
 import GraphicSVG exposing (..)
 import Html as H exposing (Html, input, node)

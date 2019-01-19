@@ -352,10 +352,10 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
 
                     Regular ->
                         group
-                                [ rect 50 20
-                                    |> filled blank
-                                    |> notifyEnter (MouseOverTransitionLabel charID)
-                                ]
+                            [ rect 50 20
+                                |> filled blank
+                                |> notifyEnter (MouseOverTransitionLabel charID)
+                            ]
 
                     _ ->
                         group []
