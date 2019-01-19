@@ -350,15 +350,15 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
                         else
                             group []
 
-                    EditingTransitionLabel _ _ ->
-                        group []
+                    Regular ->
+                        group
+                                [ rect 50 20
+                                    |> filled blank
+                                    |> notifyEnter (MouseOverTransitionLabel charID)
+                                ]
 
                     _ ->
-                        group
-                            [ rect 50 20
-                                |> filled blank
-                                |> notifyEnter (MouseOverTransitionLabel charID)
-                            ]
+                        group []
                 ]
                 |> move ( 0, 7 )
                 |> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)

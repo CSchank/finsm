@@ -5,10 +5,10 @@ import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events
 import Building
-import Debug exposing (log)
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
+import Debug
 import Helpers
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
@@ -49,7 +49,8 @@ type ApplicationState
 
 
 type alias Model =
-    { appModel : UndoList ApplicationModel
+    { appModel : ApplicationModel
+    , appHistory : UndoList ApplicationModel
     , environment : Environment
     }
 
@@ -62,9 +63,8 @@ type alias ApplicationModel =
     }
 
 
-initAppModel : UndoList ApplicationModel
+initAppModel : ApplicationModel
 initAppModel =
-    U.fresh
         { appState = Building Building.init
         , sharedModel = SharedModel.init
         , simulatingData = Simulating.initPModel
@@ -78,6 +78,7 @@ main =
         { init =
             \flags url key ->
                 ( { appModel = initAppModel
+                  , appHistory = U.fresh initAppModel
                   , environment = Environment.init
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
@@ -113,9 +114,9 @@ update msg model =
             model.environment
 
         currentAppState =
-            model.appModel.present
+            model.appModel
     in
-    case Debug.log "msg" msg of
+    case Tuple.second <| Debug.log "((lpast,lfuture),msg)" ((List.length model.appModel.past,List.length model.appModel.future),msg) of
         BMsg bmsg ->
             case currentAppState.appState of
                 Building m ->
@@ -130,13 +131,14 @@ update msg model =
                                 , sharedModel = newSModel
                             }
                     in
-                    ( { model
-                        | appModel =
+                    ({ model
+                        | appModel = newAppState
+                        , appHistory =
                             if checkpoint then
-                                U.new newAppState model.appModel
+                                U.new newAppState model.appHistory
 
                             else
-                                replace newAppState model.appModel
+                                replace newAppState model.appHistory
                       }
                     , Cmd.map BMsg cmd
                     )
@@ -158,13 +160,14 @@ update msg model =
                                 , sharedModel = newSModel
                             }
                     in
-                    ( { model
-                        | appModel =
+                    ({ model
+                        | appModel = newAppState
+                        , appHistory =
                             if checkpoint then
-                                U.new newAppState model.appModel
+                                U.new newAppState model.appHistory
 
                             else
-                                replace newAppState model.appModel
+                                replace newAppState model.appHistory
                       }
                     , Cmd.map SMsg cmd
                     )
@@ -184,6 +187,12 @@ update msg model =
         KeyReleased k ->
             if k == 16 then
                 ( { model | environment = { oldEnvironment | holdingShift = False } }, Cmd.none )
+            
+            else if k == 91 then
+                ( { model | environment = { oldEnvironment | holdingMeta = False } }, Cmd.none )
+            
+            else if k == 17 then
+                ( { model | environment = { oldEnvironment | holdingControl = False } }, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -191,6 +200,21 @@ update msg model =
         KeyPressed k ->
             if k == 16 then
                 ( { model | environment = { oldEnvironment | holdingShift = True } }, Cmd.none )
+
+            else if k == 90 then
+                ( { model | appModel = model.appHistory.present
+                          , appHistory = if oldEnvironment.holdingMeta && oldEnvironment.holdingShift
+                                        then U.redo model.appHistory
+                                        else if oldEnvironment.holdingControl || oldEnvironment.holdingMeta
+                                        then U.undo model.appHistory
+                                        else model.appHistory
+                                     }, Cmd.none )
+
+            else if k == 91 then
+                ( { model | environment = { oldEnvironment | holdingMeta = True } }, Cmd.none )
+
+            else if k == 17 then
+                ( { model | environment = { oldEnvironment | holdingControl = True } }, Cmd.none )
 
             else
                 ( model, Cmd.none )

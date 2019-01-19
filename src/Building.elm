@@ -10,6 +10,7 @@ import Machine exposing (..)
 import Set
 import SharedModel exposing (SharedModel)
 import Tuple exposing (first, second)
+import Task
 
 
 type alias Model =
@@ -23,6 +24,8 @@ type PersistentModel
 
 type Msg
     = MachineMsg Machine.Msg
+    | SaveStateName StateID String
+    | SaveTransitionName TransitionID String
     | AddState ( Float, Float )
     | KeyPressed Int
 
@@ -54,6 +57,9 @@ onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( Persisten
 onExit env ( model, pModel, sModel ) =
     ( ( pModel, sModel ), False )
 
+sendMsg : Msg -> Cmd Msg
+sendMsg msg =
+    Task.perform identity (Task.succeed msg)
 
 update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
@@ -212,7 +218,7 @@ update env msg ( model, pModel, sModel ) =
                                 nprot =
                                     ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
                             in
-                            ( ( { model | machineState = Regular }, pModel, { sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), False, Cmd.none )
+                            ( ( { model | machineState = model.machineState }, pModel, { sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), False, Cmd.none )
 
                         AddingArrow st _ ->
                             let
@@ -357,10 +363,10 @@ update env msg ( model, pModel, sModel ) =
             if k == 13 then
                 --pressed enter
                 case model.machineState of
-                    EditingStateLabel stId newLbl ->
+                    EditingStateLabel sId newLbl ->
                         let
                             oldStateName =
-                                case Dict.get stId oldMachine.stateNames of
+                                case Dict.get sId oldMachine.stateNames of
                                     Just n ->
                                         n
 
@@ -371,11 +377,7 @@ update env msg ( model, pModel, sModel ) =
                             ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
                         else
-                            let
-                                newMachine =
-                                    { oldMachine | stateNames = Dict.insert stId newLbl oldMachine.stateNames }
-                            in
-                            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                            ( ( { model | machineState = Regular }, pModel, sModel ), True, sendMsg <| SaveStateName sId newLbl)
 
                     EditingTransitionLabel tId newLbl ->
                         let
@@ -391,11 +393,7 @@ update env msg ( model, pModel, sModel ) =
                             ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
                         else
-                            let
-                                newMachine =
-                                    { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames }
-                            in
-                            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                            ( ( { model | machineState = Regular }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl)
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -465,10 +463,26 @@ update env msg ( model, pModel, sModel ) =
                             ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                         else
-                            ( ( model, pModel, sModel ), True, Cmd.none )
+                            ( ( model, pModel, sModel ), False, Cmd.none )
 
                     _ ->
-                        ( ( model, pModel, sModel ), True, Cmd.none )
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        
+        SaveStateName sId newLbl ->                
+                let
+                    newMachine =
+                        { oldMachine | stateNames = Dict.insert sId newLbl oldMachine.stateNames }
+                in
+                ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+
+        
+        SaveTransitionName tId newLbl ->
+                let
+                    newMachine =
+                        { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames }
+                in
+                ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+
 
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
@@ -487,7 +501,12 @@ view env ( model, pModel, sModel ) =
                     notifyTapAt AddState
 
                 else
-                    notifyTap (MachineMsg Reset)
+                    case model.machineState of
+                        SelectedState _ ->
+                                notifyTap (MachineMsg Reset)
+                        SelectedArrow _ ->
+                                notifyTap (MachineMsg Reset)
+                        _ -> identity
                )
         , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
         ]
