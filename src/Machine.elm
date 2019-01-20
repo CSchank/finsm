@@ -537,13 +537,13 @@ renderStates currentStates machine model =
         List.map
             (\sId ->
                 group
-                    [ circle 20
-                        |> outlined (solid (thickness sId)) black
-                        |> notifyMouseDownAt (StartDragging sId)
-                    , circle 21
+                    [ circle 21
                         |> outlined (solid 3) blank
                         |> notifyEnterAt (StartMouseOverRim sId)
                         |> notifyMouseMoveAt (StartMouseOverRim sId)
+                    , circle 20
+                        |> outlined (solid (thickness sId)) black
+                        |> notifyMouseDownAt (StartDragging sId)
                     , if Set.member sId finals then
                         circle 17
                             |> outlined (solid (thickness sId)) black
