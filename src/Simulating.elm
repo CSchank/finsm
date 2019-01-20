@@ -164,7 +164,15 @@ update env msg ( model, pModel, sModel ) =
                     in
                     if nextCh /= "" then
                         ( ( Default tapeId (charId + 1)
-                          , { pModel | currentStates = deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates }
+                          , { pModel
+                                | currentStates =
+                                    if charId == -1 then
+                                        deltaHat oldMachine.transitionNames oldMachine.delta nextCh <|
+                                            epsTrans oldMachine.transitionNames oldMachine.delta pModel.currentStates
+
+                                    else
+                                        deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates
+                            }
                           , sModel
                           )
                         , False
@@ -623,10 +631,10 @@ delta tNames d ch state =
 deltaHat : TransitionNames -> Delta -> Character -> Set StateID -> Set StateID
 deltaHat tNames d ch states =
     let
-        epsTransOnCurStates =
-            epsTrans tNames d states
+        newStates =
+            Set.foldl (\curr ss -> Set.union ss (delta tNames d ch curr)) Set.empty states
     in
-    Set.foldl (\curr ss -> Set.union ss (delta tNames d ch curr)) Set.empty epsTransOnCurStates
+    epsTrans tNames d newStates
 
 
 latexKeyboard : Float -> Float -> List Character -> Shape Msg
