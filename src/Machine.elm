@@ -570,12 +570,11 @@ renderStates currentStates machine model =
                                     ( x - x0, y - y0 )
                             in
                             if st == sId then
-                                group [
-                                    circle 500
+                                group
+                                    [ circle 500
                                         |> filled blank
                                         |> notifyEnter StopMouseOverRim
-                                    ,
-                                    group
+                                    , group
                                         [ circle 7
                                             |> filled white
                                             |> addOutline (solid 0.5) black
@@ -586,8 +585,7 @@ renderStates currentStates machine model =
                                         |> notifyMouseDownAt (StartDragging sId)
                                         |> notifyLeave StopMouseOverRim
                                         |> move ( 20 * cos (atan2 dy dx), 20 * sin (atan2 dy dx) )
-                                ]
-
+                                    ]
 
                             else
                                 group []
