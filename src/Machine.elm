@@ -543,7 +543,7 @@ renderStates currentStates machine model =
                     , circle 21
                         |> outlined (solid 3) blank
                         |> notifyEnterAt (StartMouseOverRim sId)
-                        |> notifyMouseMoveAt MoveMouseOverRim
+                        |> notifyMouseMoveAt (StartMouseOverRim sId)
                     , if Set.member sId finals then
                         circle 17
                             |> outlined (solid (thickness sId)) black
@@ -570,17 +570,24 @@ renderStates currentStates machine model =
                                     ( x - x0, y - y0 )
                             in
                             if st == sId then
-                                group
-                                    [ circle 7
-                                        |> filled white
-                                        |> addOutline (solid 0.5) black
-                                    , rect 8 1.5 |> filled black
-                                    , rect 1.5 8 |> filled black
-                                    ]
-                                    |> notifyMouseMoveAt MoveMouseOverRim
-                                    |> notifyMouseDownAt (StartDragging sId)
-                                    |> notifyLeave StopMouseOverRim
-                                    |> move ( 20 * cos (atan2 dy dx), 20 * sin (atan2 dy dx) )
+                                group [
+                                    circle 500
+                                        |> filled blank
+                                        |> notifyEnter StopMouseOverRim
+                                    ,
+                                    group
+                                        [ circle 7
+                                            |> filled white
+                                            |> addOutline (solid 0.5) black
+                                        , rect 8 1.5 |> filled black
+                                        , rect 1.5 8 |> filled black
+                                        ]
+                                        |> notifyMouseMoveAt MoveMouseOverRim
+                                        |> notifyMouseDownAt (StartDragging sId)
+                                        |> notifyLeave StopMouseOverRim
+                                        |> move ( 20 * cos (atan2 dy dx), 20 * sin (atan2 dy dx) )
+                                ]
+
 
                             else
                                 group []
