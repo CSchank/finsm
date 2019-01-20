@@ -163,7 +163,9 @@ update env msg ( model, pModel, sModel ) =
                                     ""
                     in
                     if nextCh /= "" then
-                        ( ( Default tapeId (charId + 1), { pModel | currentStates = deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates }, sModel ), False, Cmd.none )
+                        ( ( Default tapeId (charId + 1), 
+                        { pModel | currentStates = deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates },
+                         sModel ), False, Cmd.none )
 
                     else
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -532,6 +534,42 @@ view env ( model, pModel, sModel ) =
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
         ]
 
+epsTrans : TransitionNames -> Delta -> Set StateID -> Set StateID
+epsTrans tNames d states =
+    let
+        dList = (Dict.toList << Dict.filter (\k _ -> Set.member k states)) d
+
+        -- LMD: This was copy-pasted from delta
+        getName trans =
+            case Dict.get trans tNames of
+                Just n ->
+                    n
+
+                _ ->
+                    ""
+
+        findEpsTransitions : List (StateID, (Dict TransitionID StateID)) -> List StateID
+        findEpsTransitions lst =
+            case lst of
+                [] -> []
+                ((sID, dictTrans) :: xs) ->
+                    let
+                        listTrans = Dict.toList dictTrans
+                        epsStates = List.filterMap
+                                        (\( tId, sId ) ->
+                                            if getName tId == "\\epsilon" then
+                                                Just sId
+                                            else
+                                                Nothing
+                                        ) listTrans
+                    in
+                        epsStates ++ findEpsTransitions xs
+        
+        newCurrentStates =  Set.union (Set.fromList <| findEpsTransitions dList) states
+    in
+        if newCurrentStates == states
+        then states
+        else epsTrans tNames d newCurrentStates
 
 delta : TransitionNames -> Delta -> Character -> StateID -> Set StateID
 delta tNames d ch state =
@@ -564,10 +602,12 @@ delta tNames d ch state =
         Nothing ->
             Set.empty
 
-
 deltaHat : TransitionNames -> Delta -> Character -> Set StateID -> Set StateID
 deltaHat tNames d ch states =
-    Set.foldl (\curr ss -> Set.union ss (delta tNames d ch curr)) Set.empty states
+    let
+        epsTransOnCurStates = epsTrans tNames d states
+    in
+        Set.foldl (\curr ss -> Set.union ss (delta tNames d ch curr)) Set.empty epsTransOnCurStates
 
 
 latexKeyboard : Float -> Float -> List Character -> Shape Msg
