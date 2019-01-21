@@ -166,12 +166,7 @@ update env msg ( model, pModel, sModel ) =
                         ( ( Default tapeId (charId + 1)
                           , { pModel
                                 | currentStates =
-                                    if charId == -1 then
-                                        deltaHat oldMachine.transitionNames oldMachine.delta nextCh <|
-                                            epsTrans oldMachine.transitionNames oldMachine.delta pModel.currentStates
-
-                                    else
-                                        deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates
+                                    deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates
                             }
                           , sModel
                           )
@@ -220,7 +215,7 @@ update env msg ( model, pModel, sModel ) =
             ( ( model, { pModel | tapes = Dict.insert newId Array.empty pModel.tapes }, sModel ), True, Cmd.none )
 
         ChangeTape tId ->
-            ( ( Default tId -1, { pModel | currentStates = oldMachine.start }, sModel ), False, Cmd.none )
+            ( ( Default tId -1, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
 
         KeyPressed k ->
             if k == 13 then
@@ -411,7 +406,7 @@ update env msg ( model, pModel, sModel ) =
             in
             case model of
                 Default tId _ ->
-                    ( ( Default tId -1, { pModel | currentStates = newMachine.start }, { sModel | machine = newMachine } ), True, Cmd.none )
+                    ( ( Default tId -1, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta newMachine.start }, { sModel | machine = newMachine } ), True, Cmd.none )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
