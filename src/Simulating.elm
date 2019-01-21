@@ -47,7 +47,7 @@ type Msg
 
 onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 onEnter env ( pModel, sModel ) =
-    ( ( Default 0 -1, pModel, sModel ), False, Cmd.none )
+    ( ( Default 0 -1, { pModel | currentStates = epsTrans sModel.machine.transitionNames sModel.machine.delta sModel.machine.start }, sModel ), False, Cmd.none )
 
 
 onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
