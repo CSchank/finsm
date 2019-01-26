@@ -163,16 +163,7 @@ parseString2Set =
 
 
 renderString : List String -> String
-renderString sLst =
-    case sLst of
-        [] ->
-            ""
-
-        lasts :: [] ->
-            lasts
-
-        s :: ss ->
-            s ++ ", " ++ renderString ss
+renderString = String.join ","
 
 
 renderSet2String : Set String -> String
