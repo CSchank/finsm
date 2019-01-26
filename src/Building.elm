@@ -117,7 +117,7 @@ update env msg ( model, pModel, sModel ) =
                                 newTrans =
                                     case List.head <| Dict.values oldMachine.transitionNames of
                                         Just char ->
-                                            char
+                                            renderSet2String char
 
                                         Nothing ->
                                             "x"
@@ -154,7 +154,7 @@ update env msg ( model, pModel, sModel ) =
                                     | machine =
                                         { oldMachine
                                             | delta = newDelta
-                                            , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
+                                            , transitionNames = Dict.insert newTransID (parseString2Set newTrans) oldMachine.transitionNames
                                             , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions
                                         }
                                 }
@@ -313,7 +313,7 @@ update env msg ( model, pModel, sModel ) =
                         transName =
                             case Dict.get tr oldMachine.transitionNames of
                                 Just n ->
-                                    n
+                                    renderSet2String n
 
                                 Nothing ->
                                     ""
@@ -385,7 +385,7 @@ update env msg ( model, pModel, sModel ) =
                             oldTransitionName =
                                 case Dict.get tId oldMachine.transitionNames of
                                     Just n ->
-                                        n
+                                        renderSet2String n
 
                                     _ ->
                                         ""
@@ -479,7 +479,7 @@ update env msg ( model, pModel, sModel ) =
         SaveTransitionName tId newLbl ->
             let
                 newMachine =
-                    { oldMachine | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames }
+                    { oldMachine | transitionNames = Dict.insert tId (parseString2Set newLbl) oldMachine.transitionNames }
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 

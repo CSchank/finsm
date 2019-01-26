@@ -349,7 +349,7 @@ update env msg ( model, pModel, sModel ) =
                                         -1
 
                             chars =
-                                Array.fromList <| Set.toList <| Set.fromList <| Dict.values oldMachine.transitionNames
+                                Array.fromList <| Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values oldMachine.transitionNames
 
                             newChar =
                                 Array.get charCode chars
@@ -434,7 +434,8 @@ view env ( model, pModel, sModel ) =
             toFloat <| second env.windowSize
 
         chars =
-            Set.toList <| Set.fromList <| List.map (\( _, n ) -> n) <| Dict.toList oldMachine.transitionNames
+            -- This is broken?
+            Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values oldMachine.transitionNames
 
         getStateName sId =
             case Dict.get sId oldMachine.stateNames of
@@ -479,7 +480,9 @@ view env ( model, pModel, sModel ) =
                     |> move ( -winX / 2 + 750, winY / 6 - 45 )
                 , latex 500 18 ("Q = \\{ " ++ String.join "," (Dict.values oldMachine.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 65 )
-                , latex 500 18 ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.fromList <| Dict.values oldMachine.transitionNames) ++ " \\}") AlignLeft
+
+                -- This may be broken from the change of transitionLabel!
+                , latex 500 18 ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.fromList <| List.map renderSet2String <| Dict.values oldMachine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 90 )
                 , latex 500 18 "\\Delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 115 )
@@ -552,7 +555,7 @@ epsTrans tNames d states =
         getName trans =
             case Dict.get trans tNames of
                 Just n ->
-                    n
+                    renderSet2String n
 
                 _ ->
                     ""
@@ -600,7 +603,7 @@ delta tNames d ch state =
                     n
 
                 _ ->
-                    ""
+                    Set.empty
     in
     case Dict.get state d of
         Just transMap ->
@@ -608,7 +611,7 @@ delta tNames d ch state =
                 states =
                     List.filterMap
                         (\( tId, sId ) ->
-                            if getName tId == ch then
+                            if Set.member ch <| getName tId then
                                 Just sId
 
                             else

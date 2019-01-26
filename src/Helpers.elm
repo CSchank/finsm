@@ -1,4 +1,4 @@
-module Helpers exposing (LatexAlign(..), add, dot, editIcon, focusInput, latex, latexurl, mult, p, sendMsg, setMax, sub, trashIcon, vertex)
+module Helpers exposing (LatexAlign(..), add, dot, editIcon, focusInput, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, sub, trashIcon, vertex)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)
@@ -6,8 +6,13 @@ import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
 import Html.Events exposing (onInput)
 import Set exposing (Set)
+import String exposing (..)
 import Task
 import Url exposing (Url, percentEncode)
+
+
+
+-- import Parser exposing (..) -- Not working with Elm 0.19, switch when compatible
 
 
 vertex ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
@@ -140,3 +145,36 @@ sendMsg msg =
 focusInput : msg -> Cmd msg
 focusInput msg =
     Task.attempt (\_ -> msg) (Dom.focus "input")
+
+
+
+-- Custom parsing for multiple state labels
+-- We treat ',' as a special delimiter for labels, and whitespace is ignored.
+
+
+parseTLabel : String -> List String
+parseTLabel =
+    split "," >> List.map trim >> List.filter (\s -> s /= "")
+
+
+parseString2Set : String -> Set String
+parseString2Set =
+    parseTLabel >> Set.fromList
+
+
+renderString : List String -> String
+renderString sLst =
+    case sLst of
+        [] ->
+            ""
+
+        lasts :: [] ->
+            lasts
+
+        s :: ss ->
+            s ++ ", " ++ renderString ss
+
+
+renderSet2String : Set String -> String
+renderSet2String =
+    Set.toList >> renderString
