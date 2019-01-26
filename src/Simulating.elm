@@ -482,7 +482,7 @@ view env ( model, pModel, sModel ) =
                     |> move ( -winX / 2 + 760, winY / 6 - 65 )
 
                 -- This may be broken from the change of transitionLabel!
-                , latex 500 18 ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.fromList <| List.map renderSet2String <| Dict.values oldMachine.transitionNames) ++ " \\}") AlignLeft
+                , latex 500 18 ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| List.foldl Set.union Set.empty <| Dict.values oldMachine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 90 )
                 , latex 500 18 "\\Delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 115 )
