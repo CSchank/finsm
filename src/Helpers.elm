@@ -168,7 +168,7 @@ parseTLabel s =
         collect input xs xxs =
             case input of
                 [] ->
-                    List.reverse xs :: xxs
+                    xs :: xxs
 
                 y :: ys ->
                     let
@@ -182,13 +182,13 @@ parseTLabel s =
                         collect (List.drop 2 ys) [] <| hasSpecial :: xxs
 
                     else if y == ',' then
-                        collect ys [] (List.reverse xs :: xxs)
+                        collect ys [] (xs :: xxs)
 
                     else if y == ' ' then
                         collect ys xs xxs
 
                     else
-                        collect ys (y :: xs) xxs
+                        collect ys (List.reverse <| y :: xs) xxs
 
         parsedString =
             collect lst [] [] |> List.map String.fromList
