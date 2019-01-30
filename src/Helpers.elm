@@ -184,6 +184,9 @@ parseTLabel s =
                     else if y == ',' then
                         collect ys [] (xs :: xxs)
 
+                    else if y == ' ' then
+                        collect ys xs xxs
+
                     else
                         collect ys (List.reverse <| y :: xs) xxs
 
