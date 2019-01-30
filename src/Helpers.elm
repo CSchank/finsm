@@ -150,12 +150,35 @@ focusInput msg =
 
 -- Custom parsing for multiple state labels
 -- We treat ',' as a special delimiter for labels, and whitespace is ignored.
+-- To get ',' or ' ', they have to be placed inside delimiting parenthesis,
+-- which then becomes "{,}" and "{ }"
 
+specialSymbols = [ [ '{' , ',' , '}' ] , [ '{' , ' ' , '}' ] ]
 
 parseTLabel : String -> List String
-parseTLabel =
-    split "," >> List.map trim >> List.filter (\s -> s /= "")
+parseTLabel s =
+    let
+        lst = String.toList s
 
+        collect : List Char -> List Char -> List (List Char) -> List (List Char)
+        collect input xs xxs =
+            case input of
+                [] -> xs :: xxs
+                (y :: ys) -> 
+                    let
+                        hasSpecial = y :: List.take 2 ys
+                        check = List.member hasSpecial specialSymbols
+                    in
+                        if check
+                            then collect (List.drop 2 ys) [] <| hasSpecial :: xxs
+                        else if y == ','
+                            then collect ys [] (xs :: xxs)
+                        else
+                            collect ys (y :: xs) xxs
+
+        parsedString = collect lst [] [] |> List.map String.fromList
+    in
+        parsedString |> List.map trim |> List.filter (\s1 -> s1 /= "")
 
 parseString2Set : String -> Set String
 parseString2Set =
