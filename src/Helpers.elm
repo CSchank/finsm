@@ -185,7 +185,7 @@ parseTLabel s =
                         collect ys [] (xs :: xxs)
 
                     else
-                        collect ys (y :: xs) xxs
+                        collect ys (List.reverse <| y :: xs) xxs
 
         parsedString =
             collect lst [] [] |> List.map String.fromList
