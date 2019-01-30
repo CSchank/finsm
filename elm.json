@@ -13,7 +13,8 @@
             "elm/http": "1.0.0",
             "elm/json": "1.1.2",
             "elm/random": "1.0.0",
-            "elm/url": "1.0.0"
+            "elm/url": "1.0.0",
+            "elm-community/undo-redo": "3.0.0"
         },
         "indirect": {
             "elm/svg": "1.0.1",
