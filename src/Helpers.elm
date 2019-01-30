@@ -1,4 +1,4 @@
-module Helpers exposing (LatexAlign(..), add, dot, editIcon, focusInput, latex, latexurl, mult, p, sendMsg, setMax, sub, trashIcon, vertex)
+module Helpers exposing (LatexAlign(..), add, dot, editIcon, focusInput, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, sub, trashIcon, vertex)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)
@@ -6,8 +6,13 @@ import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
 import Html.Events exposing (onInput)
 import Set exposing (Set)
+import String exposing (..)
 import Task
 import Url exposing (Url, percentEncode)
+
+
+
+-- import Parser exposing (..) -- Not working with Elm 0.19, switch when compatible
 
 
 vertex ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
@@ -140,3 +145,67 @@ sendMsg msg =
 focusInput : msg -> Cmd msg
 focusInput msg =
     Task.attempt (\_ -> msg) (Dom.focus "input")
+
+
+
+-- Custom parsing for multiple state labels
+-- We treat ',' as a special delimiter for labels, and whitespace is ignored.
+-- To get ',' or ' ', they have to be placed inside delimiting parenthesis,
+-- which then becomes "{,}" and "{ }"
+
+
+specialSymbols =
+    [ [ '{', ',', '}' ], [ '{', ' ', '}' ] ]
+
+
+parseTLabel : String -> List String
+parseTLabel s =
+    let
+        lst =
+            String.toList s
+
+        collect : List Char -> List Char -> List (List Char) -> List (List Char)
+        collect input xs xxs =
+            case input of
+                [] ->
+                    xs :: xxs
+
+                y :: ys ->
+                    let
+                        hasSpecial =
+                            y :: List.take 2 ys
+
+                        check =
+                            List.member hasSpecial specialSymbols
+                    in
+                    if check then
+                        collect (List.drop 2 ys) [] <| hasSpecial :: xxs
+
+                    else if y == ',' then
+                        collect ys [] (xs :: xxs)
+
+                    else if y == ' ' then
+                        collect ys xs xxs
+
+                    else
+                        collect ys (List.reverse <| y :: xs) xxs
+
+        parsedString =
+            collect lst [] [] |> List.map String.fromList
+    in
+    parsedString |> List.map trim |> List.filter (\s1 -> s1 /= "")
+
+
+parseString2Set : String -> Set String
+parseString2Set =
+    parseTLabel >> Set.fromList
+
+
+renderString : List String -> String
+renderString =
+    String.join ","
+
+
+renderSet2String : Set String -> String
+renderSet2String =
+    Set.toList >> renderString

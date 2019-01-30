@@ -27,7 +27,7 @@ type alias StateNames =
 
 
 type alias TransitionNames =
-    Dict TransitionID String
+    Dict TransitionID (Set String)
 
 
 type alias StateTransitions =
@@ -116,7 +116,7 @@ test =
             Dict.fromList [ ( 0, "q_0" ), ( 1, "q_1" ), ( 2, "q_2" ), ( 3, "q_3" ) ]
 
         transitionNames =
-            Dict.fromList [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ), ( 8, "1" ) ]
+            Dict.fromList <| List.map (\( k, str ) -> ( k, Set.singleton str )) [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ), ( 8, "1" ) ]
 
         stateTransitions =
             Dict.fromList
@@ -161,8 +161,8 @@ view env model machine currentStates =
 
                     newTrans =
                         case List.head <| Dict.values machine.transitionNames of
-                            Just char ->
-                                char
+                            Just schar ->
+                                Set.toList schar |> renderString
 
                             Nothing ->
                                 " "
@@ -197,8 +197,8 @@ view env model machine currentStates =
 
                     newTrans =
                         case List.head <| Dict.values machine.transitionNames of
-                            Just char ->
-                                char
+                            Just schar ->
+                                Set.toList schar |> renderString
 
                             Nothing ->
                                 " "
@@ -465,8 +465,8 @@ renderArrows machine model =
 
                                             ch =
                                                 case Dict.get chId machine.transitionNames of
-                                                    Just c ->
-                                                        c
+                                                    Just setc ->
+                                                        Set.toList setc |> renderString
 
                                                     _ ->
                                                         ""
