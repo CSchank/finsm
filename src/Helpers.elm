@@ -153,32 +153,45 @@ focusInput msg =
 -- To get ',' or ' ', they have to be placed inside delimiting parenthesis,
 -- which then becomes "{,}" and "{ }"
 
-specialSymbols = [ [ '{' , ',' , '}' ] , [ '{' , ' ' , '}' ] ]
+
+specialSymbols =
+    [ [ '{', ',', '}' ], [ '{', ' ', '}' ] ]
+
 
 parseTLabel : String -> List String
 parseTLabel s =
     let
-        lst = String.toList s
+        lst =
+            String.toList s
 
         collect : List Char -> List Char -> List (List Char) -> List (List Char)
         collect input xs xxs =
             case input of
-                [] -> xs :: xxs
-                (y :: ys) -> 
-                    let
-                        hasSpecial = y :: List.take 2 ys
-                        check = List.member hasSpecial specialSymbols
-                    in
-                        if check
-                            then collect (List.drop 2 ys) [] <| hasSpecial :: xxs
-                        else if y == ','
-                            then collect ys [] (xs :: xxs)
-                        else
-                            collect ys (y :: xs) xxs
+                [] ->
+                    xs :: xxs
 
-        parsedString = collect lst [] [] |> List.map String.fromList
+                y :: ys ->
+                    let
+                        hasSpecial =
+                            y :: List.take 2 ys
+
+                        check =
+                            List.member hasSpecial specialSymbols
+                    in
+                    if check then
+                        collect (List.drop 2 ys) [] <| hasSpecial :: xxs
+
+                    else if y == ',' then
+                        collect ys [] (xs :: xxs)
+
+                    else
+                        collect ys (y :: xs) xxs
+
+        parsedString =
+            collect lst [] [] |> List.map String.fromList
     in
-        parsedString |> List.map trim |> List.filter (\s1 -> s1 /= "")
+    parsedString |> List.map trim |> List.filter (\s1 -> s1 /= "")
+
 
 parseString2Set : String -> Set String
 parseString2Set =
@@ -186,7 +199,8 @@ parseString2Set =
 
 
 renderString : List String -> String
-renderString = String.join ","
+renderString =
+    String.join ","
 
 
 renderSet2String : Set String -> String
