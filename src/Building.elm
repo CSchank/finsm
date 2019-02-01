@@ -105,7 +105,12 @@ update env msg ( model, pModel, sModel ) =
                             ( ( model, pModel, sModel ), False, Cmd.none )
 
                 StopMouseOverRim ->
-                    ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+                    case model.machineState of
+                        MousingOverRim _ _ ->
+                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+
+                        _ ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
 
                 StopDragging ->
                     case model.machineState of
