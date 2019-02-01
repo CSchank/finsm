@@ -97,7 +97,8 @@ latex w h txt align =
             , style "-user-select" "none"
             ]
             [ H.img
-                ([ Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
+                ([ style "background-color" "tomato"
+                 , Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
                  , Html.Attributes.src (latexurl txt)
 
                  --, style "width" "100%"

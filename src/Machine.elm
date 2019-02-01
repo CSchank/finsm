@@ -41,6 +41,7 @@ type alias Delta =
 type alias Character =
     String
 
+type alias TransitionMistakes = Maybe (Set TransitionID)
 
 type alias Machine =
     { q : Set StateID
@@ -51,6 +52,7 @@ type alias Machine =
     , stateTransitions : StateTransitions
     , stateNames : StateNames
     , transitionNames : TransitionNames
+    , transitionMistakes : TransitionMistakes
     }
 
 
@@ -129,8 +131,10 @@ test =
                 , ( ( 1, 3, 3 ), ( 0, 10 ) )
                 , ( ( 3, 7, 1 ), ( 0, 10 ) )
                 ]
+
+        transitionMistakes = Nothing
     in
-    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
+    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames transitionMistakes
 
 
 view : Environment -> Model -> Machine -> Set StateID -> Shape Msg

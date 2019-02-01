@@ -7,7 +7,7 @@ import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
 import Machine exposing (..)
-import Set
+import Set 
 import SharedModel exposing (SharedModel)
 import Task
 import Tuple exposing (first, second)
@@ -15,6 +15,7 @@ import Tuple exposing (first, second)
 
 type alias Model =
     { machineState : Machine.Model
+    , mistakes : Set.Set TransitionID
     }
 
 
@@ -41,6 +42,7 @@ subscriptions model =
 init : Model
 init =
     { machineState = Regular
+    , mistakes = Set.empty
     }
 
 
@@ -478,8 +480,10 @@ update env msg ( model, pModel, sModel ) =
 
         SaveTransitionName tId newLbl ->
             let
+                newTransitions = parseString2Set newLbl
+                isValidTransition = checkTransitionValid newTransition
                 newMachine =
-                    { oldMachine | transitionNames = Dict.insert tId (parseString2Set newLbl) oldMachine.transitionNames }
+                    { oldMachine | transitionNames = Dict.insert tId newTransitions oldMachine.transitionNames }
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
@@ -559,3 +563,9 @@ icon sh =
         [ circle 20 |> filled (rgb 220 220 220)
         , sh
         ]
+
+checkTransitionValid : Set String -> Bool
+checkTransitionValid set =
+    case Set.member "\\epsilon" set of
+        False -> True
+        True  -> if Set.size set == 1 then True else False
