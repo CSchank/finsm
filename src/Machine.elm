@@ -128,6 +128,7 @@ test =
                 , ( ( 3, 6, 2 ), ( 0, 10 ) )
                 , ( ( 1, 3, 3 ), ( 0, 10 ) )
                 , ( ( 3, 7, 1 ), ( 0, 10 ) )
+                , ( ( 3, 9, 3 ), ( 0, 10 ) )
                 ]
     in
     Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
@@ -316,8 +317,17 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
     in
     group
         [ group
-            [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
-                |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
+            [ 
+              if s1 == s2 then 
+                    group
+                    [
+                        curve ( xx0, yy0 ) [Pull ( -100 + x0, 100 + y0) ( mx, my )] 
+                            |> outlined (solid 1) black
+                    ,   arrow ( mx, my ) ( 100 + x0, 100 + y0 ) ( xx1, yy1 )
+                    ]|> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
+                else
+                    arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
+                        |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
             , group
                 [ case model of
                     EditingTransitionLabel tId str ->
@@ -369,21 +379,6 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
                     )
                 |> notifyLeave MouseLeaveLabel
             ]
-
-        {- ( (x2 + x0)
-               / 2
-               + rx
-               / 2
-               + if rx > 0 then
-                   10 + 0.08 * rx
-                 else
-                   -10 - 0.08 * rx
-           , (y2 + y0)
-               / 2
-               + ry
-               / 2
-           )
-        -}
         , if sel then
             group
                 [ line ( xx0, yy0 ) ( mx, my ) |> outlined (dotted 1) black

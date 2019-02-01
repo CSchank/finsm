@@ -234,11 +234,7 @@ update env msg ( model, pModel, sModel ) =
                                 newState =
                                     case aboveStates of
                                         h :: _ ->
-                                            if st /= h then
-                                                AddingArrowOverOtherState st ( x, y ) h
-
-                                            else
-                                                AddingArrow st ( x, y )
+                                            AddingArrowOverOtherState st ( x, y ) h
 
                                         _ ->
                                             AddingArrow st ( x, y )
@@ -255,11 +251,7 @@ update env msg ( model, pModel, sModel ) =
                                 newState =
                                     case aboveStates of
                                         h :: _ ->
-                                            if st /= h then
-                                                AddingArrowOverOtherState st ( x, y ) h
-
-                                            else
-                                                AddingArrow st ( x, y )
+                                            AddingArrowOverOtherState st ( x, y ) h
 
                                         _ ->
                                             AddingArrow st ( x, y )

@@ -24,6 +24,7 @@ import Simulating
 import Task
 import Tuple exposing (first, second)
 import Url exposing (Url)
+import Debug
 
 
 type Msg
@@ -122,7 +123,7 @@ update msg model =
                 Building m ->
                     let
                         ( ( newM, newPModel, newSModel ), checkpoint, cmd ) =
-                            Building.update oldEnvironment bmsg ( m, currentAppState.buildingData, currentAppState.sharedModel )
+                            Building.update oldEnvironment (Tuple.first <| Debug.log "bmsg" (bmsg,m)) ( m, currentAppState.buildingData, currentAppState.sharedModel )
 
                         newAppState =
                             { currentAppState
