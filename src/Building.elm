@@ -108,7 +108,9 @@ update env msg ( model, pModel, sModel ) =
                     case model.machineState of
                         MousingOverRim _ _ ->
                             ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
-                        _ -> ( ( model, pModel, sModel ), False, Cmd.none )
+
+                        _ ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
 
                 StopDragging ->
                     case model.machineState of
