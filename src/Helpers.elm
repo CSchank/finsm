@@ -1,4 +1,4 @@
-module Helpers exposing (LatexAlign(..), add, dot, editIcon, focusInput, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, sub, trashIcon, vertex)
+module Helpers exposing (..)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)
@@ -87,7 +87,7 @@ type LatexAlign
     | AlignCentre
 
 
-latex w h txt align =
+latex w h backclr txt align =
     (html w h <|
         H.div
             [ style "width" "100%"
@@ -97,7 +97,7 @@ latex w h txt align =
             , style "-user-select" "none"
             ]
             [ H.img
-                ([ style "background-color" "tomato"
+                ([ style "background-color" backclr
                  , Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
                  , Html.Attributes.src (latexurl txt)
 
@@ -210,3 +210,6 @@ renderString =
 renderSet2String : Set String -> String
 renderSet2String =
     Set.toList >> renderString
+
+uncurry : (a -> b -> c) -> (a , b) -> c
+uncurry f (a, b) = f a b
