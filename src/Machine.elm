@@ -211,7 +211,13 @@ view env model machine currentStates =
 
                             Nothing ->
                                 0
-                    pullPos = if s == s1 then (0,50) else (0,0)
+
+                    pullPos =
+                        if s == s1 then
+                            ( 0, 50 )
+
+                        else
+                            ( 0, 0 )
                 in
                 renderArrow s0Pos pullPos s1Pos 20 20 newTrans newTransID False s s1 model
 
@@ -403,12 +409,12 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
                         group []
                 ]
                 |> (if s1 /= s2 then
-                                 move ( 0, 7 )
-                                >> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
-                                >> move
-                                    ( -offset * sin theta
-                                    , offset * cos theta
-                                    )
+                        move ( 0, 7 )
+                            >> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
+                            >> move
+                                ( -offset * sin theta
+                                , offset * cos theta
+                                )
 
                     else
                         move ( mx, my + 12 )
