@@ -56,7 +56,7 @@ type alias Machine =
 
 type Model
     = Regular
-    | DraggingState StateID ( Float, Float )
+    | DraggingState StateID ( Float, Float ) ( Float, Float )
     | SelectedState StateID
     | MousingOverRim StateID ( Float, Float )
     | AddingArrow StateID ( Float, Float )
@@ -66,13 +66,13 @@ type Model
     | EditingStateLabel StateID String
     | EditingTransitionLabel TransitionID String
     | SelectedArrow ( StateID, TransitionID, StateID )
-    | DraggingArrow ( StateID, TransitionID, StateID )
+    | DraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
     | CreatingNewArrow StateID
 
 
 type Msg
     = StartDragging StateID ( Float, Float )
-    | StartDraggingArrow ( StateID, TransitionID, StateID )
+    | StartDraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
     | StartMouseOverRim StateID ( Float, Float )
     | MoveMouseOverRim ( Float, Float )
     | StopMouseOverRim
@@ -224,10 +224,10 @@ view env model machine currentStates =
             _ ->
                 group []
         , case model of
-            DraggingState _ _ ->
+            DraggingState _ _ _ ->
                 dragRegion
 
-            DraggingArrow _ ->
+            DraggingArrow _ _ ->
                 dragRegion
 
             AddingArrow _ _ ->
@@ -434,9 +434,9 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
                   else
                     group []
                 , circle 3
-                    |> filled red
+                    |> filled finsmBlue
                     |> move ( mx, my )
-                    |> notifyMouseDown (StartDraggingArrow ( s1, charID, s2 ))
+                    |> notifyMouseDownAt (StartDraggingArrow ( s1, charID, s2 ))
                     |> notifyMouseMoveAt Drag
                 ]
 
@@ -521,7 +521,7 @@ renderArrows machine model =
                                                     SelectedArrow ( ss1, char, ss2 ) ->
                                                         char == chId
 
-                                                    DraggingArrow ( ss1, char, ss2 ) ->
+                                                    DraggingArrow ( ss1, char, ss2 ) _ ->
                                                         char == chId
 
                                                     _ ->
@@ -638,7 +638,7 @@ renderStates currentStates machine model =
                         AddingArrowOverOtherState _ _ st ->
                             if st == sId then
                                 circle 21.5
-                                    |> outlined (solid 3) (rgb 112 190 255)
+                                    |> outlined (solid 3) finsmBlue
                                     |> notifyMouseDownAt (StartDragging sId)
                                     |> notifyLeave StopMouseOverRim
 
