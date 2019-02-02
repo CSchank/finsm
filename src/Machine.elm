@@ -302,11 +302,19 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
 
         ( xx0, yy0 ) =
             --from state position (with radius accounted for)
-            ( x0 + r0 * cos (atan2 dy0 dx0), y0 + r0 * sin (atan2 dy0 dx0) )
+            if s1 == s2 then
+                ( x0 + r0 * cos (atan2 dy0 dx0 + degrees 45), y0 + r0 * sin (atan2 dy0 dx0 + degrees 45) )
+
+            else
+                ( x0 + r0 * cos (atan2 dy0 dx0), y0 + r0 * sin (atan2 dy0 dx0) )
 
         ( xx1, yy1 ) =
             --to state position (with radius accounted for)
-            ( x2 + r1 * cos (atan2 dy1 dx1), y2 + r1 * sin (atan2 dy1 dx1) )
+            if s1 == s2 then
+                ( x0 + r0 * cos (atan2 dy0 dx0 - degrees 45), y0 + r0 * sin (atan2 dy0 dx0 - degrees 45) )
+
+            else
+                ( x2 + r1 * cos (atan2 dy1 dx1), y2 + r1 * sin (atan2 dy1 dx1) )
 
         offset =
             if y1 > 0 then
@@ -317,17 +325,39 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
     in
     group
         [ group
-            [ 
-              if s1 == s2 then 
-                    group
-                    [
-                        curve ( xx0, yy0 ) [Pull ( -100 + x0, 100 + y0) ( mx, my )] 
-                            |> outlined (solid 1) black
-                    ,   arrow ( mx, my ) ( 100 + x0, 100 + y0 ) ( xx1, yy1 )
-                    ]|> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
-                else
-                    arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
-                        |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
+            [ if s1 == s2 then
+                let
+                    mr =
+                        sqrt ((mx - x0) ^ 2 + (my - y0) ^ 2)
+
+                    mpl =
+                        mr - r0
+
+                    ppr =
+                        sqrt (mr ^ 2 + mpl ^ 2)
+
+                    beta =
+                        atan2 ry rx
+
+                    gamma =
+                        atan2 mpl mr
+
+                    ( x0s, y0s ) =
+                        ( x0 + r0 * cos (beta + gamma), y0 + r0 * sin (beta + gamma) )
+
+                    ( x1s, y1s ) =
+                        ( x0 + r0 * cos (beta - gamma), y0 + r0 * sin (beta - gamma) )
+                in
+                group
+                    [ curve ( x0s, y0s ) [ Pull ( x0 + ppr * cos (beta + gamma), y0 + ppr * sin (beta + gamma) ) ( mx, my ) ]
+                        |> outlined (solid 1) black
+                    , arrow ( mx, my ) ( x0 + ppr * cos (beta - gamma), y0 + ppr * sin (beta - gamma) ) ( x1s, y1s )
+                    ]
+                    |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
+
+              else
+                arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
+                    |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
             , group
                 [ case model of
                     EditingTransitionLabel tId str ->
@@ -371,18 +401,33 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
                     _ ->
                         group []
                 ]
-                |> move ( 0, 7 )
-                |> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
-                |> move
-                    ( -offset * sin theta
-                    , offset * cos theta
-                    )
+                |> (if s1 /= s2 then
+                        \s ->
+                            s
+                                |> move ( 0, 7 )
+                                |> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
+                                |> move
+                                    ( -offset * sin theta
+                                    , offset * cos theta
+                                    )
+
+                    else
+                        \s -> s |> move ( mx, my + 12 )
+                   )
                 |> notifyLeave MouseLeaveLabel
             ]
         , if sel then
             group
-                [ line ( xx0, yy0 ) ( mx, my ) |> outlined (dotted 1) black
-                , line ( xx1, yy1 ) ( mx, my ) |> outlined (dotted 1) black
+                [ if s1 /= s2 then
+                    line ( xx0, yy0 ) ( mx, my ) |> outlined (dotted 1) black
+
+                  else
+                    group []
+                , if s1 /= s2 then
+                    line ( xx1, yy1 ) ( mx, my ) |> outlined (dotted 1) black
+
+                  else
+                    group []
                 , circle 3
                     |> filled red
                     |> move ( mx, my )

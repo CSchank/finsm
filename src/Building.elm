@@ -152,6 +152,13 @@ update env msg ( model, pModel, sModel ) =
                                                     Just <| Dict.singleton newTransID s1
                                         )
                                         oldMachine.delta
+
+                                newTransPos =
+                                    if st == s1 then
+                                        ( 0, 50 )
+
+                                    else
+                                        ( 0, 0 )
                             in
                             ( ( { model | machineState = Regular }
                               , pModel
@@ -160,7 +167,7 @@ update env msg ( model, pModel, sModel ) =
                                         { oldMachine
                                             | delta = newDelta
                                             , transitionNames = Dict.insert newTransID (parseString2Set newTrans) oldMachine.transitionNames
-                                            , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions
+                                            , stateTransitions = Dict.insert ( st, newTransID, s1 ) newTransPos oldMachine.stateTransitions
                                         }
                                 }
                               )

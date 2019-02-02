@@ -6,6 +6,7 @@ import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events
 import Building
+import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
@@ -24,7 +25,6 @@ import Simulating
 import Task
 import Tuple exposing (first, second)
 import Url exposing (Url)
-import Debug
 
 
 type Msg
@@ -123,7 +123,7 @@ update msg model =
                 Building m ->
                     let
                         ( ( newM, newPModel, newSModel ), checkpoint, cmd ) =
-                            Building.update oldEnvironment (Tuple.first <| Debug.log "bmsg" (bmsg,m)) ( m, currentAppState.buildingData, currentAppState.sharedModel )
+                            Building.update oldEnvironment (Tuple.first <| Debug.log "bmsg" ( bmsg, m )) ( m, currentAppState.buildingData, currentAppState.sharedModel )
 
                         newAppState =
                             { currentAppState
