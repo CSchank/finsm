@@ -474,19 +474,19 @@ view env ( model, pModel, sModel ) =
                     |> fixedwidth
                     |> filled black
                     |> move ( -winX / 2 + 492, winY / 6 - 15 )
-                , latex 500 18 "white" "let\\ N = (Q,\\Sigma,\\Delta,S,F)" AlignLeft
+                , latex 500 18 "blank" "let\\ N = (Q,\\Sigma,\\Delta,S,F)" AlignLeft
                     |> move ( -winX / 2 + 750, winY / 6 - 25 )
-                , latex 500 14 "white" "where" AlignLeft
+                , latex 500 14 "blank" "where" AlignLeft
                     |> move ( -winX / 2 + 750, winY / 6 - 45 )
-                , latex 500 18 "white" ("Q = \\{ " ++ String.join "," (Dict.values oldMachine.stateNames) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values oldMachine.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 65 )
-                , latex 500 18 "white" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| List.foldl Set.union Set.empty <| Dict.values oldMachine.transitionNames) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| List.foldl Set.union Set.empty <| Dict.values oldMachine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 90 )
-                , latex 500 18 "white" "\\Delta = (above)" AlignLeft
+                , latex 500 18 "blank" "\\Delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 115 )
-                , latex 500 18 "white" ("S = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| oldMachine.start) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("S = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| oldMachine.start) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 140 )
-                , latex 500 18 "white" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| oldMachine.final) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| oldMachine.final) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 165 )
                 , case model of
                     Default tapeId charId ->
