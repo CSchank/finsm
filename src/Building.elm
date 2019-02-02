@@ -1,4 +1,4 @@
-module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, icon, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
+module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
 import Browser.Events
 import Dict exposing (Dict)
@@ -15,7 +15,13 @@ import Tuple exposing (first, second)
 
 type alias Model =
     { machineState : Machine.Model
+    , snapToGrid : Snap
     }
+
+
+type Snap
+    = SnapToGrid Int
+    | NoSnap
 
 
 type PersistentModel
@@ -28,6 +34,8 @@ type Msg
     | SaveTransitionName TransitionID String
     | AddState ( Float, Float )
     | KeyPressed Int
+    | ToggleSnap
+    | ChangeSnap Int
     | NoOp
 
 
@@ -41,6 +49,7 @@ subscriptions model =
 init : Model
 init =
     { machineState = Regular
+    , snapToGrid = NoSnap
     }
 
 
@@ -83,10 +92,10 @@ update env msg ( model, pModel, sModel ) =
                             ( ( { model | machineState = AddingArrow sId ( x, y ) }, pModel, sModel ), False, Cmd.none )
 
                         _ ->
-                            ( ( { model | machineState = DraggingState st ( x - sx, y - sy ) }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = DraggingState st ( x - sx, y - sy ) ( x, y ) }, pModel, sModel ), False, Cmd.none )
 
-                StartDraggingArrow ( st1, char, st2 ) ->
-                    ( ( { model | machineState = DraggingArrow ( st1, char, st2 ) }, pModel, sModel ), False, Cmd.none )
+                StartDraggingArrow ( st1, char, st2 ) pos ->
+                    ( ( { model | machineState = DraggingArrow ( st1, char, st2 ) pos }, pModel, sModel ), False, Cmd.none )
 
                 StartMouseOverRim stId ( x, y ) ->
                     case model.machineState of
@@ -114,7 +123,7 @@ update env msg ( model, pModel, sModel ) =
 
                 StopDragging ->
                     case model.machineState of
-                        DraggingState st _ ->
+                        DraggingState st _ _ ->
                             ( ( { model | machineState = SelectedState st }, pModel, sModel ), True, Cmd.none )
 
                         AddingArrowOverOtherState st _ s1 ->
@@ -175,7 +184,7 @@ update env msg ( model, pModel, sModel ) =
                             , Cmd.none
                             )
 
-                        DraggingArrow tId ->
+                        DraggingArrow tId _ ->
                             ( ( { model | machineState = Regular }, pModel, sModel ), True, Cmd.none )
 
                         _ ->
@@ -186,7 +195,7 @@ update env msg ( model, pModel, sModel ) =
 
                 Drag ( x, y ) ->
                     case model.machineState of
-                        DraggingState st ( ox, oy ) ->
+                        DraggingState st ( ox, oy ) _ ->
                             let
                                 ( sx, sy ) =
                                     case Dict.get st oldMachine.statePositions of
@@ -195,13 +204,21 @@ update env msg ( model, pModel, sModel ) =
 
                                         Nothing ->
                                             ( 0, 0 )
+
+                                newPos =
+                                    case model.snapToGrid of
+                                        SnapToGrid n ->
+                                            ( roundTo (toFloat n) (x - ox), roundTo (toFloat n) (y - oy) )
+
+                                        _ ->
+                                            ( x - ox, y - oy )
                             in
-                            ( ( { model | machineState = model.machineState }, pModel, { sModel | machine = { oldMachine | statePositions = updateStatePos st ( x - ox, y - oy ) oldMachine.statePositions } } )
+                            ( ( { model | machineState = DraggingState st ( ox, oy ) ( x, y ) }, pModel, { sModel | machine = { oldMachine | statePositions = updateStatePos st newPos oldMachine.statePositions } } )
                             , False
                             , Cmd.none
                             )
 
-                        DraggingArrow ( s1, char, s2 ) ->
+                        DraggingArrow ( s1, char, s2 ) _ ->
                             let
                                 ( x0, y0 ) =
                                     case Dict.get s1 oldMachine.statePositions of
@@ -219,6 +236,14 @@ update env msg ( model, pModel, sModel ) =
                                         Nothing ->
                                             ( 0, 0 )
 
+                                newPos =
+                                    case model.snapToGrid of
+                                        SnapToGrid n ->
+                                            ( roundTo (toFloat n) x, roundTo (toFloat n) y )
+
+                                        _ ->
+                                            ( x, y )
+
                                 theta =
                                     -1 * atan2 (y1 - y0) (x1 - x0)
 
@@ -226,12 +251,12 @@ update env msg ( model, pModel, sModel ) =
                                     ( (x0 + x1) / 2, (y0 + y1) / 2 )
 
                                 ( nx, ny ) =
-                                    sub ( x, y ) ( mx, my )
+                                    sub newPos ( mx, my )
 
                                 nprot =
                                     ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
                             in
-                            ( ( { model | machineState = model.machineState }, pModel, { sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), False, Cmd.none )
+                            ( ( { model | machineState = DraggingArrow ( s1, char, s2 ) ( x, y ) }, pModel, { sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), False, Cmd.none )
 
                         AddingArrow st _ ->
                             let
@@ -449,6 +474,10 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
+            else if k == 71 then
+                --pressed G
+                ( ( model, pModel, sModel ), False, sendMsg ToggleSnap )
+
             else
                 case model.machineState of
                     SelectedState sId ->
@@ -487,6 +516,39 @@ update env msg ( model, pModel, sModel ) =
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
+        ToggleSnap ->
+            ( ( { model
+                    | snapToGrid =
+                        if model.snapToGrid == NoSnap then
+                            SnapToGrid 10
+
+                        else
+                            NoSnap
+                }
+              , pModel
+              , sModel
+              )
+            , False
+            , Cmd.none
+            )
+
+        ChangeSnap nn ->
+            ( ( { model
+                    | snapToGrid =
+                        case model.snapToGrid of
+                            SnapToGrid n ->
+                                SnapToGrid (n + nn)
+
+                            NoSnap ->
+                                NoSnap
+                }
+              , pModel
+              , sModel
+              )
+            , False
+            , Cmd.none
+            )
+
         NoOp ->
             ( ( model, pModel, sModel ), False, Cmd.none )
 
@@ -517,8 +579,30 @@ view env ( model, pModel, sModel ) =
                         _ ->
                             identity
                )
+        , case ( model.machineState, model.snapToGrid ) of
+            ( DraggingState _ ( ox, oy ) ( x, y ), SnapToGrid n ) ->
+                group
+                    [ graphPaperCustom (toFloat n) 1 gray
+                        |> clip (circle 30 |> ghost |> move ( x - ox, y - oy ))
+                    , circle 3 |> filled (rgb 112 190 255) |> move ( roundTo 10 (x - ox), roundTo 10 (y - oy) )
+                    ]
+
+            ( DraggingArrow id pos, SnapToGrid n ) ->
+                group
+                    [ graphPaperCustom (toFloat n) 1 gray
+                        |> clip (circle 30 |> ghost |> move pos)
+                    ]
+
+            _ ->
+                group []
         , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
+        , editingButtons model |> move ( winX / 2 - 30, -winY / 2 + 25 )
         ]
+
+
+roundTo : Float -> Float -> Float
+roundTo n m =
+    toFloat (round (m + n / 2) // round n * round n)
 
 
 updateStatePos : StateID -> ( Float, Float ) -> StatePositions -> StatePositions
@@ -551,15 +635,65 @@ updateArrowPos st angle pos =
         pos
 
 
-editingButtons =
+editingButtons model =
+    let
+        snapping =
+            case model.snapToGrid of
+                SnapToGrid _ ->
+                    True
+
+                _ ->
+                    False
+    in
     group
-        [ icon (group [ rect 20 3 |> filled black, rect 3 20 |> filled black ])
-            |> move ( 30, -30 )
+        [ icon snapping
+            (snapIcon
+                |> scale 0.75
+                |> repaint
+                    (if snapping then
+                        white
+
+                     else
+                        gray
+                    )
+            )
+            |> notifyTap ToggleSnap
+            |> move ( -36, 0 )
         ]
 
 
-icon sh =
+snapIcon =
     group
-        [ circle 20 |> filled (rgb 220 220 220)
-        , sh
+        [ group
+            [ roundedRect 33 4 2.5 |> filled black |> move ( 0, 10 )
+            , roundedRect 33 4 2.5 |> filled black
+            , roundedRect 33 4 2.5 |> filled black |> move ( 0, -10 )
+            , roundedRect 4 33 2.5 |> filled black |> move ( 10, 0 )
+            , roundedRect 4 33 2.5 |> filled black
+            , roundedRect 4 33 2.5 |> filled black |> move ( -10, 0 )
+            ]
+            |> subtract
+                (group
+                    [ wedge 10 0.5 |> ghost |> rotate (degrees 90)
+                    , rect 8 12 |> ghost |> move ( 6, -6 )
+                    , rect 8 12 |> ghost |> move ( -6, -6 )
+                    , rect 12 8 |> ghost |> move ( 0, -3 )
+                    ]
+                    |> move ( 5, -10 )
+                )
+        , group
+            [ wedge 8 0.5
+                |> filled black
+                |> rotate (degrees 90)
+                |> subtract (wedge 2 0.5 |> ghost |> rotate (degrees 90))
+            , rect 6 6
+                |> filled black
+                |> move ( 5, -3 )
+                |> subtract (rect 2.5 3 |> ghost |> move ( 5, -3 ))
+            , rect 6 6
+                |> filled black
+                |> move ( -5, -3 )
+                |> subtract (rect 2.5 3 |> ghost |> move ( -5, -3 ))
+            ]
+            |> move ( 5, -10 )
         ]

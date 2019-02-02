@@ -6,11 +6,10 @@ import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events
 import Building
-import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
-import Helpers
+import Helpers exposing (finsmBlue, icon, sendMsg)
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
 import Html.Events exposing (onInput)
@@ -123,7 +122,7 @@ update msg model =
                 Building m ->
                     let
                         ( ( newM, newPModel, newSModel ), checkpoint, cmd ) =
-                            Building.update oldEnvironment (Tuple.first <| Debug.log "bmsg" ( bmsg, m )) ( m, currentAppState.buildingData, currentAppState.sharedModel )
+                            Building.update oldEnvironment bmsg ( m, currentAppState.buildingData, currentAppState.sharedModel )
 
                         newAppState =
                             { currentAppState
@@ -230,6 +229,12 @@ update msg model =
             else if k == 17 then
                 --pressed control
                 ( { model | environment = { oldEnvironment | holdingControl = True } }, Cmd.none )
+
+            else if k == 66 then
+                ( model, sendMsg <| GoTo BuildingModule )
+
+            else if k == 83 then
+                ( model, sendMsg <| GoTo SimulatingModule )
 
             else
                 ( model, Cmd.none )
@@ -338,6 +343,9 @@ view model =
             Simulating m ->
                 GraphicSVG.map SMsg <| Simulating.view model.environment ( m, appState.simulatingData, appState.sharedModel )
         , modeButtons model
+        , icon False (text "?" |> size 30 |> fixedwidth |> centered |> filled (rgb 220 220 220) |> move ( 0, -9 ))
+            |> addHyperlink "https://github.com/CSchank/finsm/wiki"
+            |> move ( winX / 2 - 25, -winY / 2 + 25 )
         ]
 
 
@@ -370,7 +378,7 @@ modeButtons model =
             [ roundedRect 40 15 1
                 |> filled
                     (if building then
-                        rgb 21 137 255
+                        finsmBlue
 
                      else
                         blank
@@ -394,7 +402,7 @@ modeButtons model =
             [ roundedRect 60 15 1
                 |> filled
                     (if simulating then
-                        rgb 21 137 255
+                        finsmBlue
 
                      else
                         blank
