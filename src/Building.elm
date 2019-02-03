@@ -17,7 +17,6 @@ import Tuple exposing (first, second)
 type alias Model =
     { machineState : Machine.Model
     , snapToGrid : Snap
-    , mistakes : Set.Set TransitionID
     }
 
 
@@ -52,7 +51,6 @@ init : Model
 init =
     { machineState = Regular
     , snapToGrid = NoSnap
-    , mistakes = Set.empty
     }
 
 
