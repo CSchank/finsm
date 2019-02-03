@@ -7,10 +7,9 @@ import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
 import Machine exposing (..)
-import Set 
+import Set
 import SharedModel exposing (SharedModel)
 import Task
-import Helpers exposing (..)
 import Tuple exposing (first, second)
 
 
@@ -145,21 +144,37 @@ update env msg ( model, pModel, sModel ) =
                                         Nothing ->
                                             0
 
-                                isValidTransition = checkTransitionValid newTrans
-                                oldTransitionMistakes = oldMachine.transitionMistakes
+                                isValidTransition =
+                                    checkTransitionValid newTrans
+
+                                oldTransitionMistakes =
+                                    oldMachine.transitionMistakes
+
                                 newTransitionMistakes =
                                     if isValidTransition then
                                         case oldTransitionMistakes of
                                             Just setOfMistakes ->
                                                 let
-                                                    newSetOfMistakes = Set.remove newTransID setOfMistakes
+                                                    newSetOfMistakes =
+                                                        Set.remove newTransID setOfMistakes
                                                 in
-                                                    if Set.isEmpty newSetOfMistakes then Nothing
-                                                    else Just newSetOfMistakes 
-                                            Nothing -> Nothing
-                                    else case oldTransitionMistakes of
-                                            Just setOfMistakes -> Just <| Set.insert newTransID setOfMistakes
-                                            Nothing -> Just <| Set.singleton newTransID
+                                                if Set.isEmpty newSetOfMistakes then
+                                                    Nothing
+
+                                                else
+                                                    Just newSetOfMistakes
+
+                                            Nothing ->
+                                                Nothing
+
+                                    else
+                                        case oldTransitionMistakes of
+                                            Just setOfMistakes ->
+                                                Just <| Set.insert newTransID setOfMistakes
+
+                                            Nothing ->
+                                                Just <| Set.singleton newTransID
+
                                 newDelta : Delta
                                 newDelta =
                                     Dict.update st
@@ -447,7 +462,7 @@ update env msg ( model, pModel, sModel ) =
 
             else if k == 68 then
                 --pressed delete
-                case model.machineState of 
+                case model.machineState of
                     SelectedState stId ->
                         let
                             newDelta =
@@ -467,10 +482,14 @@ update env msg ( model, pModel, sModel ) =
                             newStateTransitions =
                                 Dict.filter (\( _, t, _ ) _ -> not <| Dict.member t removedTransitions) oldMachine.stateTransitions
 
-                            newTMistakes = List.foldr (\tId mistakes -> tMistakeRemove (first tId) mistakes) oldMachine.transitionMistakes removedTransitionsLst
-                            removedTransitionsLst = List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) oldMachine.stateTransitions
-                            removedTransitions = Dict.fromList removedTransitionsLst
+                            newTMistakes =
+                                List.foldr (\tId mistakes -> tMistakeRemove (first tId) mistakes) oldMachine.transitionMistakes removedTransitionsLst
 
+                            removedTransitionsLst =
+                                List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) oldMachine.stateTransitions
+
+                            removedTransitions =
+                                Dict.fromList removedTransitionsLst
                         in
                         ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
@@ -490,7 +509,8 @@ update env msg ( model, pModel, sModel ) =
                             newStateTransitions =
                                 Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.stateTransitions
 
-                            newTMistakes = tMistakeRemove tId oldMachine.transitionMistakes
+                            newTMistakes =
+                                tMistakeRemove tId oldMachine.transitionMistakes
                         in
                         ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
@@ -534,16 +554,27 @@ update env msg ( model, pModel, sModel ) =
 
         SaveTransitionName tId newLbl ->
             let
-                newTransitions = parseString2Set newLbl
-                isValidTransition = checkTransitionValid newTransitions
-                oldTransitionMistakes = oldMachine.transitionMistakes
+                newTransitions =
+                    parseString2Set newLbl
+
+                isValidTransition =
+                    checkTransitionValid newTransitions
+
+                oldTransitionMistakes =
+                    oldMachine.transitionMistakes
+
                 newTransitionMistakes =
                     if isValidTransition then
                         tMistakeRemove tId oldTransitionMistakes
+
                     else
                         tMistakeAdd tId oldTransitionMistakes
-                newMachine = { oldMachine | transitionNames = Dict.insert tId newTransitions oldMachine.transitionNames,
-                                            transitionMistakes = newTransitionMistakes }
+
+                newMachine =
+                    { oldMachine
+                        | transitionNames = Dict.insert tId newTransitions oldMachine.transitionNames
+                        , transitionMistakes = newTransitionMistakes
+                    }
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
@@ -729,8 +760,16 @@ snapIcon =
             |> move ( 5, -10 )
         ]
 
+
 checkTransitionValid : Set.Set String -> Bool
 checkTransitionValid set =
     case Set.member "\\epsilon" set of
-        False -> True
-        True  -> if Set.size set == 1 then True else False
+        False ->
+            True
+
+        True ->
+            if Set.size set == 1 then
+                True
+
+            else
+                False

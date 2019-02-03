@@ -1,4 +1,4 @@
-module Helpers exposing (..)
+module Helpers exposing (LatexAlign(..), add, dot, editIcon, finsmBlue, finsmLightBlue, focusInput, icon, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, specialSymbols, sub, trashIcon, uncurry, vertex)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)
@@ -235,5 +235,7 @@ renderSet2String : Set String -> String
 renderSet2String =
     Set.toList >> renderString
 
-uncurry : (a -> b -> c) -> (a , b) -> c
-uncurry f (a, b) = f a b
+
+uncurry : (a -> b -> c) -> ( a, b ) -> c
+uncurry f ( a, b ) =
+    f a b

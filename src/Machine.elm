@@ -1,4 +1,5 @@
-module Machine exposing (..)
+module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, renderArrow, renderArrows, renderStates, tMistakeAdd, tMistakeRemove, test, textBox, view)
+
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
@@ -40,7 +41,10 @@ type alias Delta =
 type alias Character =
     String
 
-type alias TransitionMistakes = Maybe (Set TransitionID)
+
+type alias TransitionMistakes =
+    Maybe (Set TransitionID)
+
 
 type alias Machine =
     { q : Set StateID
@@ -132,7 +136,8 @@ test =
                 , ( ( 3, 9, 3 ), ( 0, 10 ) )
                 ]
 
-        transitionMistakes = Nothing
+        transitionMistakes =
+            Nothing
     in
     Machine q delta0 start final statePositions stateTransitions stateNames transitionNames transitionMistakes
 
@@ -243,22 +248,35 @@ view env model machine currentStates =
                 group []
         ]
 
+
 tMistakeRemove : TransitionID -> TransitionMistakes -> TransitionMistakes
 tMistakeRemove tId tMistake =
     case tMistake of
         Just setOfMistakes ->
             let
-                newSetOfMistakes = Set.remove tId setOfMistakes
+                newSetOfMistakes =
+                    Set.remove tId setOfMistakes
             in
-                if Set.isEmpty newSetOfMistakes then Nothing
-                else Just newSetOfMistakes 
-        Nothing -> Nothing
+            if Set.isEmpty newSetOfMistakes then
+                Nothing
+
+            else
+                Just newSetOfMistakes
+
+        Nothing ->
+            Nothing
+
 
 tMistakeAdd : TransitionID -> TransitionMistakes -> TransitionMistakes
 tMistakeAdd tId tMistake =
     case tMistake of
-        Nothing -> Just <| Set.singleton tId
-        Just setOfMistakes -> Just <| Set.insert tId setOfMistakes
+        Nothing ->
+            Just <| Set.singleton tId
+
+        Just setOfMistakes ->
+            Just <| Set.insert tId setOfMistakes
+
+
 
 --These two functions will eventually become part of GraphicSVG in some form
 
@@ -300,9 +318,20 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
         ]
 
 
-renderArrow : ( Float, Float ) -> ( Float, Float ) -> ( Float, Float ) -> Float -> Float -> 
-               Character -> TransitionID -> Bool -> Bool ->
-               StateID -> StateID -> Model -> Shape Msg
+renderArrow :
+    ( Float, Float )
+    -> ( Float, Float )
+    -> ( Float, Float )
+    -> Float
+    -> Float
+    -> Character
+    -> TransitionID
+    -> Bool
+    -> Bool
+    -> StateID
+    -> StateID
+    -> Model
+    -> Shape Msg
 renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2 model =
     let
         ( tx, ty ) =
@@ -401,10 +430,28 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                                 (EditLabel tId)
 
                         else
-                            latex 50 12 (if mistake then "LightSalmon" else "White") char AlignCentre
+                            latex 50
+                                12
+                                (if mistake then
+                                    "LightSalmon"
+
+                                 else
+                                    "White"
+                                )
+                                char
+                                AlignCentre
 
                     _ ->
-                        latex 50 12 (if mistake then "LightSalmon" else "White") char AlignCentre
+                        latex 50
+                            12
+                            (if mistake then
+                                "LightSalmon"
+
+                             else
+                                "White"
+                            )
+                            char
+                            AlignCentre
                 , case model of
                     MousingOverTransitionLabel tId ->
                         if tId == charID then
@@ -514,9 +561,11 @@ renderArrows machine model =
 
         getTransMistake tId =
             case transMistakes of
-                Nothing -> False
-                Just setOfMistakes -> Set.member tId setOfMistakes
+                Nothing ->
+                    False
 
+                Just setOfMistakes ->
+                    Set.member tId setOfMistakes
     in
     group <|
         List.map
@@ -555,8 +604,9 @@ renderArrows machine model =
 
                                                     _ ->
                                                         False
-                                            
-                                            mistake = getTransMistake chId
+
+                                            mistake =
+                                                getTransMistake chId
                                         in
                                         group
                                             [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel mistake s1 s2 model

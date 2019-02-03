@@ -609,8 +609,10 @@ delta tNames d ch state =
                 states =
                     List.filterMap
                         (\( tId, sId ) ->
-                            if (Set.member ch <| getName tId)
-                               || ((renderSet2String <| getName tId) == "\\epsilon" && sId == state) then
+                            if
+                                (Set.member ch <| getName tId)
+                                    || ((renderSet2String <| getName tId) == "\\epsilon" && sId == state)
+                            then
                                 Just sId
 
                             else
