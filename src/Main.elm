@@ -35,6 +35,8 @@ type Msg
     | UrlChange Url
     | UrlRequest UrlRequest
     | GoTo Module
+    | ShowModal
+    | HideModal
 
 
 type Module
@@ -50,6 +52,7 @@ type ApplicationState
 type alias Model =
     { appModel : BetterUndoList ApplicationModel
     , environment : Environment
+    , alertModalOpen : Bool
     }
 
 
@@ -78,6 +81,7 @@ main =
             \flags url key ->
                 ( { appModel = initAppModel
                   , environment = Environment.init
+                  , alertModalOpen = False
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
                 )
@@ -197,7 +201,7 @@ update msg model =
 
         KeyPressed k ->
             if k == 16 then
-                ( { model | environment = { oldEnvironment | holdingShift = True } }, Cmd.none )
+                ( { model | environment = { oldEnvironment | holdingShift = True } }, Helpers.sendMsg <| HideModal  )
 
             else if k == 89 {- y -} || k == 90 {- z -} then
                 let
@@ -219,16 +223,16 @@ update msg model =
                         else
                             model.appModel
                   }
-                , Cmd.none
+                , Helpers.sendMsg <| HideModal 
                 )
 
             else if k == 91 then
                 --pressed meta key
-                ( { model | environment = { oldEnvironment | holdingMeta = True } }, Cmd.none )
+                ( { model | environment = { oldEnvironment | holdingMeta = True } }, Helpers.sendMsg <| HideModal  )
 
             else if k == 17 then
                 --pressed control
-                ( { model | environment = { oldEnvironment | holdingControl = True } }, Cmd.none )
+                ( { model | environment = { oldEnvironment | holdingControl = True } }, Helpers.sendMsg <| HideModal  )
 
             else if k == 66 then
                 ( model, sendMsg <| GoTo BuildingModule )
@@ -237,7 +241,7 @@ update msg model =
                 ( model, sendMsg <| GoTo SimulatingModule )
 
             else
-                ( model, Cmd.none )
+                ( model, Helpers.sendMsg <| HideModal )
 
         GoTo mod ->
             let
@@ -250,7 +254,8 @@ update msg model =
 
                                 newAppState =
                                     { currentAppState | buildingData = pModel, sharedModel = sModel }
-                            in
+
+                            in 
                             if checkpoint then
                                 new newAppState model.appModel
 
@@ -296,8 +301,14 @@ update msg model =
 
                                 newAppState =
                                     { currentAppState | appState = Simulating simModel, simulatingData = pModel, sharedModel = sModel }
+
+                                hasTransitionMistakes = 
+                                    case sModel.machine.transitionMistakes of
+                                        Nothing -> False
+                                        _ -> True
                             in
-                            ( if checkpoint then
+                            if hasTransitionMistakes then (model.appModel, Helpers.sendMsg <| ShowModal )
+                            else ( if checkpoint then
                                 new newAppState model.appModel
 
                               else
@@ -307,6 +318,8 @@ update msg model =
             in
             ( { model | appModel = enter }, cmd )
 
+        ShowModal -> ( { model | alertModalOpen = True } , Cmd.none )
+        HideModal -> ( { model | alertModalOpen = False } , Cmd.none )
 
 textHtml : String -> Html msg
 textHtml t =
@@ -346,6 +359,7 @@ view model =
         , icon False (text "?" |> size 30 |> fixedwidth |> centered |> filled (rgb 220 220 220) |> move ( 0, -9 ))
             |> addHyperlink "https://github.com/CSchank/finsm/wiki"
             |> move ( winX / 2 - 25, -winY / 2 + 25 )
+        , if model.alertModalOpen then errorEpsTrans model else group []
         ]
 
 
@@ -423,3 +437,44 @@ modeButtons model =
             |> move ( -winX / 2 + 77, winY / 2 - 15 )
             |> notifyTap (GoTo SimulatingModule)
         ]
+
+errorEpsTrans model =
+    let
+        winX =
+            toFloat <| first model.environment.windowSize
+
+        winY =
+            toFloat <| second model.environment.windowSize
+    in
+        group
+            [ rectangle winX winY
+                |> filled darkGray
+                |> makeTransparent 0.75
+            , group 
+                [ 
+                roundedRect 300 150 1 |> filled lightGray
+                , text "finsm: Build Error"
+                    |> bold
+                    |> centered
+                    |> filled lightRed
+                    |> scale 2
+                    |> move (0, 40)
+                , text "You have invalid states:"
+                    |> filled darkRed
+                    |> scale 1.2
+                    |> move (-140, 5)
+                , text ("> Maybe ε-transitions are used with other transitions?")
+                    |> filled darkRed
+                    |> move (-140, -10)
+                , text "> Hint: Fix transitions highlighted in red"
+                    |> filled darkGreen
+                    |> move (-140, -25)
+                , text "Hit any key to dismiss this message"
+                    |> bold
+                    |> centered
+                    |> filled black
+                    |> scale 1.25
+                    |> move (0, -60)
+                ]
+            ]
+            
