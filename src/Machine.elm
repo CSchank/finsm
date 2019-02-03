@@ -222,7 +222,7 @@ view env model machine currentStates =
                         else
                             ( 0, 0 )
                 in
-                renderArrow s0Pos pullPos s1Pos 20 20 newTrans newTransID False s s1 model
+                renderArrow s0Pos pullPos s1Pos 20 20 newTrans newTransID False False s s1 model
 
             _ ->
                 group []

@@ -162,10 +162,6 @@ update env msg ( model, pModel, sModel ) =
                                     else case oldTransitionMistakes of
                                             Just setOfMistakes -> Just <| Set.insert newTransID setOfMistakes
                                             Nothing -> Just <| Set.singleton newTransID
-                                newMachine = { oldMachine | delta = newDelta
-                                                          , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
-                                                          , transitionMistakes = newTransitionMistakes 
-                                                          , stateTransitions = Dict.insert ( st, newTransID, s1 ) ( 0, 0 ) oldMachine.stateTransitions }
                                 newDelta : Delta
                                 newDelta =
                                     Dict.update st
@@ -197,11 +193,11 @@ update env msg ( model, pModel, sModel ) =
                                     | machine =
                                         { oldMachine
                                             | delta = newDelta
-                                            , transitionNames = Dict.insert newTransID (parseString2Set newTrans) oldMachine.transitionNames
+                                            , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
                                             , stateTransitions = Dict.insert ( st, newTransID, s1 ) newTransPos oldMachine.stateTransitions
+                                            , transitionMistakes = newTransitionMistakes
                                         }
                                 }
-                              , { sModel  | machine = newMachine }
                               )
                             , True
                             , Cmd.none
