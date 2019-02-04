@@ -1,4 +1,4 @@
-module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionNames, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
+module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, renderArrow, renderArrows, renderStates, tMistakeAdd, tMistakeRemove, test, textBox, view)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -42,6 +42,10 @@ type alias Character =
     String
 
 
+type alias TransitionMistakes =
+    Maybe (Set TransitionID)
+
+
 type alias Machine =
     { q : Set StateID
     , delta : Delta
@@ -51,6 +55,7 @@ type alias Machine =
     , stateTransitions : StateTransitions
     , stateNames : StateNames
     , transitionNames : TransitionNames
+    , transitionMistakes : TransitionMistakes
     }
 
 
@@ -128,8 +133,11 @@ test =
                 , ( ( 3, 7, 1 ), ( 0, 10 ) )
                 , ( ( 3, 9, 3 ), ( 0, 10 ) )
                 ]
+
+        transitionMistakes =
+            Nothing
     in
-    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
+    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames transitionMistakes
 
 
 view : Environment -> Model -> Machine -> Set StateID -> Shape Msg
@@ -174,7 +182,7 @@ view env model machine currentStates =
                             Nothing ->
                                 0
                 in
-                renderArrow s0Pos ( 0, 0 ) ( x, y ) 20 0 newTrans newTransID False s -1 model
+                renderArrow s0Pos ( 0, 0 ) ( x, y ) 20 0 newTrans newTransID False False s -1 model
 
             AddingArrowOverOtherState s ( x, y ) s1 ->
                 let
@@ -217,7 +225,7 @@ view env model machine currentStates =
                         else
                             ( 0, 0 )
                 in
-                renderArrow s0Pos pullPos s1Pos 20 20 newTrans newTransID False s s1 model
+                renderArrow s0Pos pullPos s1Pos 20 20 newTrans newTransID False False s s1 model
 
             _ ->
                 group []
@@ -237,6 +245,34 @@ view env model machine currentStates =
             _ ->
                 group []
         ]
+
+
+tMistakeRemove : TransitionID -> TransitionMistakes -> TransitionMistakes
+tMistakeRemove tId tMistake =
+    case tMistake of
+        Just setOfMistakes ->
+            let
+                newSetOfMistakes =
+                    Set.remove tId setOfMistakes
+            in
+            if Set.isEmpty newSetOfMistakes then
+                Nothing
+
+            else
+                Just newSetOfMistakes
+
+        Nothing ->
+            Nothing
+
+
+tMistakeAdd : TransitionID -> TransitionMistakes -> TransitionMistakes
+tMistakeAdd tId tMistake =
+    case tMistake of
+        Nothing ->
+            Just <| Set.singleton tId
+
+        Just setOfMistakes ->
+            Just <| Set.insert tId setOfMistakes
 
 
 
@@ -280,8 +316,21 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
         ]
 
 
-renderArrow : ( Float, Float ) -> ( Float, Float ) -> ( Float, Float ) -> Float -> Float -> Character -> TransitionID -> Bool -> StateID -> StateID -> Model -> Shape Msg
-renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
+renderArrow :
+    ( Float, Float )
+    -> ( Float, Float )
+    -> ( Float, Float )
+    -> Float
+    -> Float
+    -> Character
+    -> TransitionID
+    -> Bool
+    -> Bool
+    -> StateID
+    -> StateID
+    -> Model
+    -> Shape Msg
+renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2 model =
     let
         ( tx, ty ) =
             --tangent between to and from states
@@ -379,10 +428,28 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
                                 (EditLabel tId)
 
                         else
-                            latex 50 12 char AlignCentre
+                            latex 50
+                                12
+                                (if mistake then
+                                    "LightSalmon"
+
+                                 else
+                                    "White"
+                                )
+                                char
+                                AlignCentre
 
                     _ ->
-                        latex 50 12 char AlignCentre
+                        latex 50
+                            12
+                            (if mistake then
+                                "LightSalmon"
+
+                             else
+                                "White"
+                            )
+                            char
+                            AlignCentre
                 , case model of
                     EditingTransitionLabel tId str ->
                         group []
@@ -444,6 +511,9 @@ renderArrows machine model =
         transPos =
             machine.stateTransitions
 
+        transMistakes =
+            machine.transitionMistakes
+
         stateList =
             Set.toList states
 
@@ -472,6 +542,14 @@ renderArrows machine model =
 
                 Nothing ->
                     ( 0, 0 )
+
+        getTransMistake tId =
+            case transMistakes of
+                Nothing ->
+                    False
+
+                Just setOfMistakes ->
+                    Set.member tId setOfMistakes
     in
     group <|
         List.map
@@ -510,9 +588,12 @@ renderArrows machine model =
 
                                                     _ ->
                                                         False
+
+                                            mistake =
+                                                getTransMistake chId
                                         in
                                         group
-                                            [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel s1 s2 model
+                                            [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel mistake s1 s2 model
                                             ]
                                     )
                                     [ ss ]
