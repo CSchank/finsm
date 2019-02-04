@@ -472,6 +472,8 @@ update env msg ( model, pModel, sModel ) =
                                 { oldMachine
                                     | q = Set.remove stId oldMachine.q
                                     , delta = newDelta
+                                    , start = Set.remove stId oldMachine.start
+                                    , final = Set.remove stId oldMachine.final
                                     , statePositions = Dict.remove stId oldMachine.statePositions
                                     , stateTransitions = newStateTransitions
                                     , stateNames = Dict.remove stId oldMachine.stateNames
