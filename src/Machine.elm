@@ -119,7 +119,7 @@ test =
             Dict.fromList [ ( 0, "q_0" ), ( 1, "q_1" ), ( 2, "q_2" ), ( 3, "q_3" ) ]
 
         transitionNames =
-            Dict.fromList <| List.map (\( k, str ) -> ( k, Set.singleton str )) [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ), ( 8, "1" ) ]
+            Dict.fromList <| List.map (\( k, str ) -> ( k, Set.singleton str )) [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ) ]
 
         stateTransitions =
             Dict.fromList
@@ -131,7 +131,6 @@ test =
                 , ( ( 3, 6, 2 ), ( 0, 10 ) )
                 , ( ( 1, 3, 3 ), ( 0, 10 ) )
                 , ( ( 3, 7, 1 ), ( 0, 10 ) )
-                , ( ( 3, 9, 3 ), ( 0, 10 ) )
                 ]
 
         transitionMistakes =
