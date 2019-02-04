@@ -434,7 +434,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                                     "LightSalmon"
 
                                  else
-                                    "White"
+                                    "none"
                                 )
                                 char
                                 AlignCentre
@@ -446,7 +446,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                                 "LightSalmon"
 
                              else
-                                "White"
+                                "none"
                             )
                             char
                             AlignCentre
@@ -677,13 +677,13 @@ renderStates currentStates machine model env =
 
                             else
                                 group
-                                    [ latex 25 18 (stateName sId) AlignCentre
+                                    [ latex 25 18 "none" (stateName sId) AlignCentre
                                         |> move ( 0, 9 )
                                     ]
 
                         _ ->
                             group
-                                [ latex 25 18 (stateName sId) AlignCentre
+                                [ latex 25 18 "none" (stateName sId) AlignCentre
                                     |> move ( 0, 9 )
                                 ]
                     , case model of
