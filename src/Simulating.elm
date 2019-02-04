@@ -380,10 +380,10 @@ update env msg ( model, pModel, sModel ) =
         MachineMsg mmsg ->
             case mmsg of
                 StartDragging sId _ ->
-                    ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| ToggleStart sId) )
+                    ( ( model, pModel, sModel ), False, sendMsg (ToggleStart sId) )
 
-                SelectStateLabel sId ->
-                    ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| ToggleStart sId) )
+                TapState sId ->
+                    ( ( model, pModel, sModel ), False, sendMsg (ToggleStart sId) )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )

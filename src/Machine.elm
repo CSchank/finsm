@@ -85,8 +85,6 @@ type Msg
     | MouseOverStateLabel StateID
     | MouseOverTransitionLabel TransitionID
     | MouseLeaveLabel
-    | SelectStateLabel StateID
-    | SelectTransitionLabel StateID
     | EditLabel StateID String
     | Drag ( Float, Float )
     | TapState StateID
@@ -156,7 +154,7 @@ view env model machine currentStates =
     in
     group
         [ renderArrows machine model
-        , renderStates currentStates machine model
+        , renderStates currentStates machine model env
         , case model of
             AddingArrow s ( x, y ) ->
                 let
@@ -436,7 +434,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                                     "LightSalmon"
 
                                  else
-                                    "White"
+                                    "none"
                                 )
                                 char
                                 AlignCentre
@@ -448,32 +446,18 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                                 "LightSalmon"
 
                              else
-                                "White"
+                                "none"
                             )
                             char
                             AlignCentre
                 , case model of
-                    MousingOverTransitionLabel tId ->
-                        if tId == charID then
-                            group
-                                [ editIcon |> move ( 10, 0 )
-                                , rect 50 20
-                                    |> filled blank
-                                    |> notifyTap (SelectTransitionLabel charID)
-                                ]
-
-                        else
-                            group []
-
-                    Regular ->
-                        group
-                            [ rect 50 20
-                                |> filled blank
-                                |> notifyEnter (MouseOverTransitionLabel charID)
-                            ]
+                    EditingTransitionLabel tId str ->
+                        group []
 
                     _ ->
-                        group []
+                        rect 50 20
+                            |> filled blank
+                            |> notifyTap (SelectArrow ( s1, charID, s2 ))
                 ]
                 |> (if s1 /= s2 then
                         move ( 0, 7 )
@@ -621,8 +605,8 @@ renderArrows machine model =
             stateList
 
 
-renderStates : Set StateID -> Machine -> Model -> Shape Msg
-renderStates currentStates machine model =
+renderStates : Set StateID -> Machine -> Model -> Environment -> Shape Msg
+renderStates currentStates machine model env =
     let
         states =
             machine.q
@@ -664,25 +648,49 @@ renderStates currentStates machine model =
             (\sId ->
                 group
                     [ circle 21
-                        |> outlined (solid 3) blank
+                        |> filled blank
                         |> notifyEnterAt (StartMouseOverRim sId)
                         |> notifyMouseMoveAt (StartMouseOverRim sId)
                     , circle 20
-                        |> outlined (solid (thickness sId)) black
+                        |> filled blank
+                        |> addOutline (solid (thickness sId)) black
                         |> notifyMouseDownAt (StartDragging sId)
                     , if Set.member sId finals then
                         circle 17
                             |> outlined (solid (thickness sId)) black
-                            |> notifyMouseDownAt (StartDragging sId)
 
                       else
                         group []
+                    , case model of
+                        EditingStateLabel st str ->
+                            if st == sId then
+                                textBox str
+                                    (if String.length str == 0 then
+                                        34
+
+                                     else
+                                        6 * toFloat (String.length str)
+                                    )
+                                    20
+                                    "LaTeX"
+                                    (EditLabel sId)
+
+                            else
+                                group
+                                    [ latex 25 18 "none" (stateName sId) AlignCentre
+                                        |> move ( 0, 9 )
+                                    ]
+
+                        _ ->
+                            group
+                                [ latex 25 18 "none" (stateName sId) AlignCentre
+                                    |> move ( 0, 9 )
+                                ]
                     , case model of
                         SelectedState st ->
                             if st == sId then
                                 circle 20.75
                                     |> outlined (solid 1.5) lightBlue
-                                    |> notifyMouseDownAt (StartDragging sId)
 
                             else
                                 group []
@@ -708,7 +716,6 @@ renderStates currentStates machine model =
                                         , rect 1.5 8 |> filled black
                                         ]
                                         |> notifyMouseMoveAt MoveMouseOverRim
-                                        |> notifyMouseDownAt (StartDragging sId)
                                         |> notifyLeave StopMouseOverRim
                                         |> move ( 20 * cos (atan2 dy dx), 20 * sin (atan2 dy dx) )
                                     ]
@@ -719,8 +726,7 @@ renderStates currentStates machine model =
                         AddingArrowOverOtherState _ _ st ->
                             if st == sId then
                                 circle 21.5
-                                    |> outlined (solid 3) finsmBlue
-                                    |> notifyMouseDownAt (StartDragging sId)
+                                    |> outlined (solid 3) finsmLightBlue
                                     |> notifyLeave StopMouseOverRim
 
                             else
@@ -728,52 +734,15 @@ renderStates currentStates machine model =
 
                         _ ->
                             group []
-                    , case model of
-                        MousingOverStateLabel st ->
-                            if sId == st then
-                                editIcon |> scale 0.75 |> move ( 5, 5.5 )
-
-                            else
-                                group []
-
-                        _ ->
-                            group []
-                    , case model of
-                        EditingStateLabel st str ->
-                            if st == sId then
-                                textBox str
-                                    (if String.length str == 0 then
-                                        34
-
-                                     else
-                                        6 * toFloat (String.length str)
-                                    )
-                                    20
-                                    "LaTeX"
-                                    (EditLabel sId)
-
-                            else
-                                group
-                                    [ latex 25 18 "white" (stateName sId) AlignCentre
-                                        |> move ( 0, 9 )
-                                    , rect 25 18
-                                        |> filled blank
-                                        |> notifyEnter (MouseOverStateLabel sId)
-                                        |> notifyLeave MouseLeaveLabel
-                                        |> notifyTap (SelectStateLabel sId)
-                                    ]
-
-                        _ ->
-                            group
-                                [ latex 25 18 "white" (stateName sId) AlignCentre
-                                    |> move ( 0, 9 )
-                                , rect 25 18
-                                    |> filled blank
-                                    |> notifyEnter (MouseOverStateLabel sId)
-                                    |> notifyLeave MouseLeaveLabel
-                                    |> notifyTap (SelectStateLabel sId)
-                                ]
+                    , rect 25 18
+                        |> filled blank
                     ]
                     |> move (getPos sId)
+                    |> (if not env.holdingShift then
+                            notifyMouseDownAt (StartDragging sId)
+
+                        else
+                            notifyTap (TapState sId)
+                       )
             )
             stateList
