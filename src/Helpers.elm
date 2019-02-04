@@ -1,4 +1,4 @@
-module Helpers exposing (LatexAlign(..), add, dot, editIcon, finsmBlue, focusInput, icon, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, sub, trashIcon, vertex)
+module Helpers exposing (LatexAlign(..), add, dot, editIcon, finsmBlue, finsmLightBlue, focusInput, icon, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, sub, trashIcon, vertex)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)

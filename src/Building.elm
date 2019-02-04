@@ -190,8 +190,21 @@ update env msg ( model, pModel, sModel ) =
                         _ ->
                             ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
-                SelectArrow ( s0, char, s1 ) ->
-                    ( ( { model | machineState = SelectedArrow ( s0, char, s1 ) }, pModel, sModel ), False, Cmd.none )
+                SelectArrow ( s0, tId, s1 ) ->
+                    let
+                        oldTransName =
+                            case Dict.get tId sModel.machine.transitionNames of
+                                Just n ->
+                                    renderSet2String n
+
+                                Nothing ->
+                                    ""
+                    in
+                    if env.holdingShift then
+                        ( ( { model | machineState = EditingTransitionLabel tId oldTransName }, pModel, sModel ), False, focusInput NoOp )
+
+                    else
+                        ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
 
                 Drag ( x, y ) ->
                     case model.machineState of
@@ -325,30 +338,6 @@ update env msg ( model, pModel, sModel ) =
                     in
                     ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
 
-                SelectStateLabel st ->
-                    let
-                        stateName =
-                            case Dict.get st oldMachine.stateNames of
-                                Just n ->
-                                    n
-
-                                Nothing ->
-                                    ""
-                    in
-                    ( ( { model | machineState = EditingStateLabel st stateName }, pModel, sModel ), False, focusInput NoOp )
-
-                SelectTransitionLabel tr ->
-                    let
-                        transName =
-                            case Dict.get tr oldMachine.transitionNames of
-                                Just n ->
-                                    renderSet2String n
-
-                                Nothing ->
-                                    ""
-                    in
-                    ( ( { model | machineState = EditingTransitionLabel tr transName }, pModel, sModel ), False, focusInput NoOp )
-
                 EditLabel _ lbl ->
                     let
                         newState =
@@ -365,7 +354,20 @@ update env msg ( model, pModel, sModel ) =
                     ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
 
                 TapState sId ->
-                    ( ( { model | machineState = SelectedState sId }, pModel, sModel ), False, Cmd.none )
+                    let
+                        oldStateName =
+                            case Dict.get sId sModel.machine.stateNames of
+                                Just n ->
+                                    n
+
+                                _ ->
+                                    ""
+                    in
+                    if env.holdingShift then
+                        ( ( { model | machineState = EditingStateLabel sId oldStateName }, pModel, sModel ), False, focusInput NoOp )
+
+                    else
+                        ( ( { model | machineState = SelectedState sId }, pModel, sModel ), False, Cmd.none )
 
                 Reset ->
                     ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
