@@ -480,7 +480,7 @@ view env ( model, pModel, sModel ) =
                     |> move ( -winX / 2 + 750, winY / 6 - 45 )
                 , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values oldMachine.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 65 )
-                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| List.foldl Set.union Set.empty <| Dict.values oldMachine.transitionNames) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl Set.union Set.empty <| Dict.values oldMachine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 90 )
                 , latex 500 18 "blank" "\\Delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 115 )
