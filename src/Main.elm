@@ -233,12 +233,12 @@ update msg model =
             else if k == 17 then
                 --pressed control
                 ( { model | environment = { oldEnvironment | holdingControl = True } }, Helpers.sendMsg <| HideModal )
+                {- else if k == 66 then
+                       ( model, sendMsg <| GoTo BuildingModule )
 
-            else if k == 66 then
-                ( model, sendMsg <| GoTo BuildingModule )
-
-            else if k == 83 then
-                ( model, sendMsg <| GoTo SimulatingModule )
+                   else if k == 83 then
+                       ( model, sendMsg <| GoTo SimulatingModule )
+                -}
 
             else
                 ( model, Helpers.sendMsg <| HideModal )
