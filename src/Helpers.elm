@@ -1,4 +1,4 @@
-module Helpers exposing (LatexAlign(..), add, dot, editIcon, focusInput, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, sub, trashIcon, vertex)
+module Helpers exposing (LatexAlign(..), add, dot, editIcon, finsmBlue, finsmLightBlue, focusInput, icon, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, specialSymbols, sub, trashIcon, uncurry, vertex)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)
@@ -13,6 +13,14 @@ import Url exposing (Url, percentEncode)
 
 
 -- import Parser exposing (..) -- Not working with Elm 0.19, switch when compatible
+
+
+finsmBlue =
+    rgb 21 137 255
+
+
+finsmLightBlue =
+    rgb 112 190 255
 
 
 vertex ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
@@ -87,7 +95,7 @@ type LatexAlign
     | AlignCentre
 
 
-latex w h txt align =
+latex w h backclr txt align =
     (html w h <|
         H.div
             [ style "width" "100%"
@@ -97,7 +105,8 @@ latex w h txt align =
             , style "-user-select" "none"
             ]
             [ H.img
-                ([ Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
+                ([ style "background-color" backclr
+                 , Html.Attributes.attribute "onerror" ("this.src='" ++ latexurl "\\LaTeX?" ++ "'")
                  , Html.Attributes.src (latexurl txt)
 
                  --, style "width" "100%"
@@ -145,6 +154,22 @@ sendMsg msg =
 focusInput : msg -> Cmd msg
 focusInput msg =
     Task.attempt (\_ -> msg) (Dom.focus "input")
+
+
+icon : Bool -> Shape msg -> Shape msg
+icon on sh =
+    group
+        [ circle 18
+            |> filled
+                (if on then
+                    finsmBlue
+
+                 else
+                    white
+                )
+            |> addOutline (solid 1) (rgb 220 220 220)
+        , sh
+        ]
 
 
 
@@ -209,3 +234,8 @@ renderString =
 renderSet2String : Set String -> String
 renderSet2String =
     Set.toList >> renderString
+
+
+uncurry : (a -> b -> c) -> ( a, b ) -> c
+uncurry f ( a, b ) =
+    f a b

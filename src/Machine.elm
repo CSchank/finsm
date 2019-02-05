@@ -1,4 +1,4 @@
-module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionNames, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
+module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, renderArrow, renderArrows, renderStates, tMistakeAdd, tMistakeRemove, test, textBox, view)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -42,6 +42,10 @@ type alias Character =
     String
 
 
+type alias TransitionMistakes =
+    Maybe (Set TransitionID)
+
+
 type alias Machine =
     { q : Set StateID
     , delta : Delta
@@ -51,12 +55,13 @@ type alias Machine =
     , stateTransitions : StateTransitions
     , stateNames : StateNames
     , transitionNames : TransitionNames
+    , transitionMistakes : TransitionMistakes
     }
 
 
 type Model
     = Regular
-    | DraggingState StateID ( Float, Float )
+    | DraggingState StateID ( Float, Float ) ( Float, Float )
     | SelectedState StateID
     | MousingOverRim StateID ( Float, Float )
     | AddingArrow StateID ( Float, Float )
@@ -66,13 +71,13 @@ type Model
     | EditingStateLabel StateID String
     | EditingTransitionLabel TransitionID String
     | SelectedArrow ( StateID, TransitionID, StateID )
-    | DraggingArrow ( StateID, TransitionID, StateID )
+    | DraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
     | CreatingNewArrow StateID
 
 
 type Msg
     = StartDragging StateID ( Float, Float )
-    | StartDraggingArrow ( StateID, TransitionID, StateID )
+    | StartDraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
     | StartMouseOverRim StateID ( Float, Float )
     | MoveMouseOverRim ( Float, Float )
     | StopMouseOverRim
@@ -80,8 +85,6 @@ type Msg
     | MouseOverStateLabel StateID
     | MouseOverTransitionLabel TransitionID
     | MouseLeaveLabel
-    | SelectStateLabel StateID
-    | SelectTransitionLabel StateID
     | EditLabel StateID String
     | Drag ( Float, Float )
     | TapState StateID
@@ -116,7 +119,7 @@ test =
             Dict.fromList [ ( 0, "q_0" ), ( 1, "q_1" ), ( 2, "q_2" ), ( 3, "q_3" ) ]
 
         transitionNames =
-            Dict.fromList <| List.map (\( k, str ) -> ( k, Set.singleton str )) [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ), ( 8, "1" ) ]
+            Dict.fromList <| List.map (\( k, str ) -> ( k, Set.singleton str )) [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ) ]
 
         stateTransitions =
             Dict.fromList
@@ -129,8 +132,11 @@ test =
                 , ( ( 1, 3, 3 ), ( 0, 10 ) )
                 , ( ( 3, 7, 1 ), ( 0, 10 ) )
                 ]
+
+        transitionMistakes =
+            Nothing
     in
-    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
+    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames transitionMistakes
 
 
 view : Environment -> Model -> Machine -> Set StateID -> Shape Msg
@@ -147,7 +153,7 @@ view env model machine currentStates =
     in
     group
         [ renderArrows machine model
-        , renderStates currentStates machine model
+        , renderStates currentStates machine model env
         , case model of
             AddingArrow s ( x, y ) ->
                 let
@@ -175,7 +181,7 @@ view env model machine currentStates =
                             Nothing ->
                                 0
                 in
-                renderArrow s0Pos ( 0, 0 ) ( x, y ) 20 0 newTrans newTransID False s -1 model
+                renderArrow s0Pos ( 0, 0 ) ( x, y ) 20 0 newTrans newTransID False False s -1 model
 
             AddingArrowOverOtherState s ( x, y ) s1 ->
                 let
@@ -210,16 +216,23 @@ view env model machine currentStates =
 
                             Nothing ->
                                 0
+
+                    pullPos =
+                        if s == s1 then
+                            ( 0, 50 )
+
+                        else
+                            ( 0, 0 )
                 in
-                renderArrow s0Pos ( 0, 0 ) s1Pos 20 20 newTrans newTransID False s -1 model
+                renderArrow s0Pos pullPos s1Pos 20 20 newTrans newTransID False False s s1 model
 
             _ ->
                 group []
         , case model of
-            DraggingState _ _ ->
+            DraggingState _ _ _ ->
                 dragRegion
 
-            DraggingArrow _ ->
+            DraggingArrow _ _ ->
                 dragRegion
 
             AddingArrow _ _ ->
@@ -231,6 +244,34 @@ view env model machine currentStates =
             _ ->
                 group []
         ]
+
+
+tMistakeRemove : TransitionID -> TransitionMistakes -> TransitionMistakes
+tMistakeRemove tId tMistake =
+    case tMistake of
+        Just setOfMistakes ->
+            let
+                newSetOfMistakes =
+                    Set.remove tId setOfMistakes
+            in
+            if Set.isEmpty newSetOfMistakes then
+                Nothing
+
+            else
+                Just newSetOfMistakes
+
+        Nothing ->
+            Nothing
+
+
+tMistakeAdd : TransitionID -> TransitionMistakes -> TransitionMistakes
+tMistakeAdd tId tMistake =
+    case tMistake of
+        Nothing ->
+            Just <| Set.singleton tId
+
+        Just setOfMistakes ->
+            Just <| Set.insert tId setOfMistakes
 
 
 
@@ -274,8 +315,21 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
         ]
 
 
-renderArrow : ( Float, Float ) -> ( Float, Float ) -> ( Float, Float ) -> Float -> Float -> Character -> TransitionID -> Bool -> StateID -> StateID -> Model -> Shape Msg
-renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
+renderArrow :
+    ( Float, Float )
+    -> ( Float, Float )
+    -> ( Float, Float )
+    -> Float
+    -> Float
+    -> Character
+    -> TransitionID
+    -> Bool
+    -> Bool
+    -> StateID
+    -> StateID
+    -> Model
+    -> Shape Msg
+renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2 model =
     let
         ( tx, ty ) =
             --tangent between to and from states
@@ -301,11 +355,19 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
 
         ( xx0, yy0 ) =
             --from state position (with radius accounted for)
-            ( x0 + r0 * cos (atan2 dy0 dx0), y0 + r0 * sin (atan2 dy0 dx0) )
+            if s1 == s2 then
+                ( x0 + r0 * cos (atan2 dy0 dx0 + degrees 45), y0 + r0 * sin (atan2 dy0 dx0 + degrees 45) )
+
+            else
+                ( x0 + r0 * cos (atan2 dy0 dx0), y0 + r0 * sin (atan2 dy0 dx0) )
 
         ( xx1, yy1 ) =
             --to state position (with radius accounted for)
-            ( x2 + r1 * cos (atan2 dy1 dx1), y2 + r1 * sin (atan2 dy1 dx1) )
+            if s1 == s2 then
+                ( x0 + r0 * cos (atan2 dy0 dx0 - degrees 45), y0 + r0 * sin (atan2 dy0 dx0 - degrees 45) )
+
+            else
+                ( x2 + r1 * cos (atan2 dy1 dx1), y2 + r1 * sin (atan2 dy1 dx1) )
 
         offset =
             if y1 > 0 then
@@ -316,8 +378,39 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
     in
     group
         [ group
-            [ arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
-                |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
+            [ if s1 == s2 then
+                let
+                    mr =
+                        sqrt ((mx - x0) ^ 2 + (my - y0) ^ 2)
+
+                    mpl =
+                        mr - r0
+
+                    ppr =
+                        sqrt (mr ^ 2 + mpl ^ 2)
+
+                    beta =
+                        atan2 ry rx
+
+                    gamma =
+                        atan2 mpl mr
+
+                    ( x0s, y0s ) =
+                        ( x0 + r0 * cos (beta + gamma), y0 + r0 * sin (beta + gamma) )
+
+                    ( x1s, y1s ) =
+                        ( x0 + r0 * cos (beta - gamma), y0 + r0 * sin (beta - gamma) )
+                in
+                group
+                    [ curve ( x0s, y0s ) [ Pull ( x0 + ppr * cos (beta + gamma), y0 + ppr * sin (beta + gamma) ) ( mx, my ) ]
+                        |> outlined (solid 1) black
+                    , arrow ( mx, my ) ( x0 + ppr * cos (beta - gamma), y0 + ppr * sin (beta - gamma) ) ( x1s, y1s )
+                    ]
+                    |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
+
+              else
+                arrow ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 )
+                    |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
             , group
                 [ case model of
                     EditingTransitionLabel tId str ->
@@ -334,64 +427,66 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel s1 s2 model =
                                 (EditLabel tId)
 
                         else
-                            latex 50 12 char AlignCentre
+                            latex 50
+                                12
+                                (if mistake then
+                                    "LightSalmon"
+
+                                 else
+                                    "none"
+                                )
+                                char
+                                AlignCentre
 
                     _ ->
-                        latex 50 12 char AlignCentre
+                        latex 50
+                            12
+                            (if mistake then
+                                "LightSalmon"
+
+                             else
+                                "none"
+                            )
+                            char
+                            AlignCentre
                 , case model of
-                    MousingOverTransitionLabel tId ->
-                        if tId == charID then
-                            group
-                                [ editIcon |> move ( 10, 0 )
-                                , rect 50 20
-                                    |> filled blank
-                                    |> notifyTap (SelectTransitionLabel charID)
-                                ]
-
-                        else
-                            group []
-
-                    Regular ->
-                        group
-                            [ rect 50 20
-                                |> filled blank
-                                |> notifyEnter (MouseOverTransitionLabel charID)
-                            ]
+                    EditingTransitionLabel tId str ->
+                        group []
 
                     _ ->
-                        group []
+                        rect 50 20
+                            |> filled blank
+                            |> notifyTap (SelectArrow ( s1, charID, s2 ))
                 ]
-                |> move ( 0, 7 )
-                |> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
-                |> move
-                    ( -offset * sin theta
-                    , offset * cos theta
-                    )
+                |> (if s1 /= s2 then
+                        move ( 0, 7 )
+                            >> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
+                            >> move
+                                ( -offset * sin theta
+                                , offset * cos theta
+                                )
+
+                    else
+                        move ( mx, my + 12 )
+                   )
                 |> notifyLeave MouseLeaveLabel
             ]
-
-        {- ( (x2 + x0)
-               / 2
-               + rx
-               / 2
-               + if rx > 0 then
-                   10 + 0.08 * rx
-                 else
-                   -10 - 0.08 * rx
-           , (y2 + y0)
-               / 2
-               + ry
-               / 2
-           )
-        -}
         , if sel then
             group
-                [ line ( xx0, yy0 ) ( mx, my ) |> outlined (dotted 1) black
-                , line ( xx1, yy1 ) ( mx, my ) |> outlined (dotted 1) black
+                [ if s1 /= s2 then
+                    line ( xx0, yy0 ) ( mx, my ) |> outlined (dotted 1) black
+
+                  else
+                    group []
+                , if s1 /= s2 then
+                    line ( xx1, yy1 ) ( mx, my ) |> outlined (dotted 1) black
+
+                  else
+                    group []
                 , circle 3
-                    |> filled red
+                    |> filled finsmBlue
                     |> move ( mx, my )
-                    |> notifyMouseDown (StartDraggingArrow ( s1, charID, s2 ))
+                    |> notifyMouseDownAt (StartDraggingArrow ( s1, charID, s2 ))
                     |> notifyMouseMoveAt Drag
                 ]
 
@@ -414,6 +509,9 @@ renderArrows machine model =
 
         transPos =
             machine.stateTransitions
+
+        transMistakes =
+            machine.transitionMistakes
 
         stateList =
             Set.toList states
@@ -443,6 +541,14 @@ renderArrows machine model =
 
                 Nothing ->
                     ( 0, 0 )
+
+        getTransMistake tId =
+            case transMistakes of
+                Nothing ->
+                    False
+
+                Just setOfMistakes ->
+                    Set.member tId setOfMistakes
     in
     group <|
         List.map
@@ -476,14 +582,17 @@ renderArrows machine model =
                                                     SelectedArrow ( ss1, char, ss2 ) ->
                                                         char == chId
 
-                                                    DraggingArrow ( ss1, char, ss2 ) ->
+                                                    DraggingArrow ( ss1, char, ss2 ) _ ->
                                                         char == chId
 
                                                     _ ->
                                                         False
+
+                                            mistake =
+                                                getTransMistake chId
                                         in
                                         group
-                                            [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel s1 s2 model
+                                            [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel mistake s1 s2 model
                                             ]
                                     )
                                     [ ss ]
@@ -495,8 +604,8 @@ renderArrows machine model =
             stateList
 
 
-renderStates : Set StateID -> Machine -> Model -> Shape Msg
-renderStates currentStates machine model =
+renderStates : Set StateID -> Machine -> Model -> Environment -> Shape Msg
+renderStates currentStates machine model env =
     let
         states =
             machine.q
@@ -538,25 +647,49 @@ renderStates currentStates machine model =
             (\sId ->
                 group
                     [ circle 21
-                        |> outlined (solid 3) blank
+                        |> filled blank
                         |> notifyEnterAt (StartMouseOverRim sId)
                         |> notifyMouseMoveAt (StartMouseOverRim sId)
                     , circle 20
-                        |> outlined (solid (thickness sId)) black
+                        |> filled blank
+                        |> addOutline (solid (thickness sId)) black
                         |> notifyMouseDownAt (StartDragging sId)
                     , if Set.member sId finals then
                         circle 17
                             |> outlined (solid (thickness sId)) black
-                            |> notifyMouseDownAt (StartDragging sId)
 
                       else
                         group []
+                    , case model of
+                        EditingStateLabel st str ->
+                            if st == sId then
+                                textBox str
+                                    (if String.length str == 0 then
+                                        34
+
+                                     else
+                                        6 * toFloat (String.length str)
+                                    )
+                                    20
+                                    "LaTeX"
+                                    (EditLabel sId)
+
+                            else
+                                group
+                                    [ latex 25 18 "none" (stateName sId) AlignCentre
+                                        |> move ( 0, 9 )
+                                    ]
+
+                        _ ->
+                            group
+                                [ latex 25 18 "none" (stateName sId) AlignCentre
+                                    |> move ( 0, 9 )
+                                ]
                     , case model of
                         SelectedState st ->
                             if st == sId then
                                 circle 20.75
                                     |> outlined (solid 1.5) lightBlue
-                                    |> notifyMouseDownAt (StartDragging sId)
 
                             else
                                 group []
@@ -582,7 +715,6 @@ renderStates currentStates machine model =
                                         , rect 1.5 8 |> filled black
                                         ]
                                         |> notifyMouseMoveAt MoveMouseOverRim
-                                        |> notifyMouseDownAt (StartDragging sId)
                                         |> notifyLeave StopMouseOverRim
                                         |> move ( 20 * cos (atan2 dy dx), 20 * sin (atan2 dy dx) )
                                     ]
@@ -593,8 +725,7 @@ renderStates currentStates machine model =
                         AddingArrowOverOtherState _ _ st ->
                             if st == sId then
                                 circle 21.5
-                                    |> outlined (solid 3) (rgb 112 190 255)
-                                    |> notifyMouseDownAt (StartDragging sId)
+                                    |> outlined (solid 3) finsmLightBlue
                                     |> notifyLeave StopMouseOverRim
 
                             else
@@ -602,52 +733,15 @@ renderStates currentStates machine model =
 
                         _ ->
                             group []
-                    , case model of
-                        MousingOverStateLabel st ->
-                            if sId == st then
-                                editIcon |> scale 0.75 |> move ( 5, 5.5 )
-
-                            else
-                                group []
-
-                        _ ->
-                            group []
-                    , case model of
-                        EditingStateLabel st str ->
-                            if st == sId then
-                                textBox str
-                                    (if String.length str == 0 then
-                                        34
-
-                                     else
-                                        6 * toFloat (String.length str)
-                                    )
-                                    20
-                                    "LaTeX"
-                                    (EditLabel sId)
-
-                            else
-                                group
-                                    [ latex 25 18 (stateName sId) AlignCentre
-                                        |> move ( 0, 9 )
-                                    , rect 25 18
-                                        |> filled blank
-                                        |> notifyEnter (MouseOverStateLabel sId)
-                                        |> notifyLeave MouseLeaveLabel
-                                        |> notifyTap (SelectStateLabel sId)
-                                    ]
-
-                        _ ->
-                            group
-                                [ latex 25 18 (stateName sId) AlignCentre
-                                    |> move ( 0, 9 )
-                                , rect 25 18
-                                    |> filled blank
-                                    |> notifyEnter (MouseOverStateLabel sId)
-                                    |> notifyLeave MouseLeaveLabel
-                                    |> notifyTap (SelectStateLabel sId)
-                                ]
+                    , rect 25 18
+                        |> filled blank
                     ]
                     |> move (getPos sId)
+                    |> (if not env.holdingShift then
+                            notifyMouseDownAt (StartDragging sId)
+
+                        else
+                            notifyTap (TapState sId)
+                       )
             )
             stateList
