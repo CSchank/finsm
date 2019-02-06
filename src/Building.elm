@@ -467,11 +467,12 @@ update env msg ( model, pModel, sModel ) =
                 case model.machineState of
                     SelectedState stId ->
                         let
-                            new_q = Set.remove stId oldMachine.q
+                            new_q =
+                                Set.remove stId oldMachine.q
 
                             newDelta =
-                                Dict.map (\_ d -> (Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d)) oldMachine.delta
-                                |> Dict.filter (\key _ -> Set.member key new_q)
+                                Dict.map (\_ d -> Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d) oldMachine.delta
+                                    |> Dict.filter (\key _ -> Set.member key new_q)
 
                             newMachine =
                                 { oldMachine

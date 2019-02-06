@@ -1,7 +1,6 @@
-module Simulating exposing (InputTape, Model(..), Msg(..), PersistentModel, delta, deltaHat, initPModel, isAccept, latexKeyboard, onEnter, onExit, renderTape, subscriptions, update, view, validDFA)
+module Simulating exposing (InputTape, Model(..), Msg(..), PersistentModel, delta, deltaHat, initPModel, isAccept, latexKeyboard, onEnter, onExit, renderTape, subscriptions, update, validDFA, view)
 
 import Array exposing (Array)
-import Debug exposing (log)
 import Browser.Events
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -19,10 +18,23 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
 
-type MachineType = DFA | NFA
+
+type MachineType
+    = DFA
+    | NFA
+
+
 
 -- TODO: Extend data-type with info of error at the exact arrow (transitionID)?
-type DFAerror = NoError | HasEpsilon | Incomplete | Nondeterministic | Unsure -- Good for debugging?
+
+
+type DFAerror
+    = NoError
+    | HasEpsilon
+    | Incomplete
+    | Nondeterministic
+    | Unsure -- Good for debugging?
+
 
 type alias PersistentModel =
     { tapes : Dict Int (Array Character)
@@ -390,39 +402,56 @@ update env msg ( model, pModel, sModel ) =
 
         ChangeMachine mtype ->
             case mtype of
-                NFA -> 
+                NFA ->
                     case pModel.machineType of
-                        NFA -> ( ( model, pModel, sModel ), False, Cmd.none )
+                        NFA ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
+
                         DFA ->
                             case model of
-                                Editing tId -> ( ( Default tId -1, { pModel | machineType = NFA }, sModel ), False, Cmd.none )
-                                _ -> ( ( model, { pModel | machineType = NFA }, sModel ), False, Cmd.none )
-                DFA -> 
+                                Editing tId ->
+                                    ( ( Default tId -1, { pModel | machineType = NFA }, sModel ), False, Cmd.none )
+
+                                _ ->
+                                    ( ( model, { pModel | machineType = NFA }, sModel ), False, Cmd.none )
+
+                DFA ->
                     case pModel.machineType of
-                        DFA -> ( ( model, pModel, sModel ), False, Cmd.none )
+                        DFA ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
+
                         NFA ->
                             let
                                 startState =
-                                    if Set.size oldMachine.start > 1 
-                                        then Set.singleton
-                                            <| (\x -> case x of
-                                                    Just val -> val
-                                                    Nothing  -> -1 )
-                                            <| List.head
-                                            <| Set.toList oldMachine.start
-                                    else oldMachine.start
-                                
-                                newPModel = { pModel | machineType = DFA, currentStates = startState }
+                                    if Set.size oldMachine.start > 1 then
+                                        Set.singleton <|
+                                            (\x ->
+                                                case x of
+                                                    Just val ->
+                                                        val
 
-                                newSModel = { sModel | machine = { oldMachine | start = startState }}
+                                                    Nothing ->
+                                                        -1
+                                            )
+                                            <|
+                                                List.head <|
+                                                    Set.toList oldMachine.start
 
+                                    else
+                                        oldMachine.start
+
+                                newPModel =
+                                    { pModel | machineType = DFA, currentStates = startState }
+
+                                newSModel =
+                                    { sModel | machine = { oldMachine | start = startState } }
                             in
-                                case model of
-                                    Editing tId ->
-                                        ( ( Default tId -1, newPModel, newSModel ), True, Cmd.none )
+                            case model of
+                                Editing tId ->
+                                    ( ( Default tId -1, newPModel, newSModel ), True, Cmd.none )
 
-                                    _ ->
-                                        ( ( model, newPModel, newSModel ), True, Cmd.none )
+                                _ ->
+                                    ( ( model, newPModel, newSModel ), True, Cmd.none )
 
         MachineMsg mmsg ->
             case mmsg of
@@ -442,7 +471,7 @@ update env msg ( model, pModel, sModel ) =
 
                 newMachine =
                     case machineType of
-                        NFA -> 
+                        NFA ->
                             { oldMachine
                                 | start =
                                     case Set.member sId oldMachine.start of
@@ -452,6 +481,7 @@ update env msg ( model, pModel, sModel ) =
                                         False ->
                                             Set.insert sId oldMachine.start
                             }
+
                         DFA ->
                             { oldMachine
                                 | start = Set.singleton sId
@@ -526,7 +556,8 @@ view env ( model, pModel, sModel ) =
         tapes =
             pModel.tapes
 
-        dfaCheck = validDFA sModel
+        dfaCheck =
+            validDFA sModel
     in
     group
         [ case model of
@@ -534,9 +565,11 @@ view env ( model, pModel, sModel ) =
                 group
                     [ rect winX (winY / 3)
                         |> filled lightGray
-                    , if pModel.machineType == DFA && dfaCheck /= NoError
-                        then errorMenu dfaCheck winX winY
-                        else menu
+                    , if pModel.machineType == DFA && dfaCheck /= NoError then
+                        errorMenu dfaCheck winX winY
+
+                      else
+                        menu
                     , machineDefn sModel pModel.machineType winX winY
                     ]
                     |> move ( 0, -winY / 3 )
@@ -574,52 +607,71 @@ view env ( model, pModel, sModel ) =
         , machineModeButtons pModel.machineType winX winY
         ]
 
+
 errorMenu : DFAerror -> Float -> Float -> Shape Msg
 errorMenu err winX winY =
     let
-        errorHeader = 
-            group 
+        errorHeader =
+            group
                 [ triangle 20 |> filled red |> rotate 22.5
-                , roundedRect 7.5 10 5 |> filled white |> move ( 0, 7.5)
-                , circle 3 |> filled white |> move (0, -2.5)
+                , roundedRect 7.5 10 5 |> filled white |> move ( 0, 7.5 )
+                , circle 3 |> filled white |> move ( 0, -2.5 )
                 , text "DFA error: your machine has a problem!"
                     |> size 20
                     |> fixedwidth
                     |> filled darkRed
-                    |> move (20, 0)
-                ] |> scale 0.75 |> move ( -winX / 2 + 20, winY / 6 - 20 )
+                    |> move ( 20, 0 )
+                ]
+                |> scale 0.75
+                |> move ( -winX / 2 + 20, winY / 6 - 20 )
 
         errorReason =
             group
                 [ circle 3 |> filled red
-                , (text <| 
+                , (text <|
                     case err of
-                        HasEpsilon -> "Possible cause: There are epsilon transitions"
-                        Incomplete -> "Possible cause: There are missing transitions"
-                        Nondeterministic -> "Possible cause: There are extraneous transitions"
-                        _ -> "You might have missed something somewhere?"
+                        HasEpsilon ->
+                            "Possible cause: There are epsilon transitions"
+
+                        Incomplete ->
+                            "Possible cause: There are missing transitions"
+
+                        Nondeterministic ->
+                            "Possible cause: There are extraneous transitions"
+
+                        _ ->
+                            "You might have missed something somewhere?"
                   )
                     |> size 12
                     |> fixedwidth
                     |> filled darkRed
-                    |> move (15, -5)
-                ] |> move ( -winX / 2 + 20, winY / 6 - 40 )
+                    |> move ( 15, -5 )
+                ]
+                |> move ( -winX / 2 + 20, winY / 6 - 40 )
 
         errorHint =
             group
                 [ circle 3 |> filled red
-                , (text <| 
+                , (text <|
                     case err of
-                        HasEpsilon -> "Hint: Try removing all your epsilon transitions"
-                        Incomplete -> "Hint: Find for states that have missing transitions"
-                        Nondeterministic -> "Hint: Find and remove extra transitions"
-                        _ -> ""
+                        HasEpsilon ->
+                            "Hint: Try removing all your epsilon transitions"
+
+                        Incomplete ->
+                            "Hint: Find for states that have missing transitions"
+
+                        Nondeterministic ->
+                            "Hint: Find and remove extra transitions"
+
+                        _ ->
+                            ""
                   )
                     |> size 12
                     |> fixedwidth
                     |> filled darkRed
-                    |> move (15, -5)
-                ] |> move ( -winX / 2 + 20, winY / 6 - 60 )
+                    |> move ( 15, -5 )
+                ]
+                |> move ( -winX / 2 + 20, winY / 6 - 60 )
 
         actionHint =
             group
@@ -628,15 +680,19 @@ errorMenu err winX winY =
                     |> size 12
                     |> fixedwidth
                     |> filled darkRed
-                    |> move (15, -5)
-                ] |> move ( -winX / 2 + 20, winY / 6 - 80 )
+                    |> move ( 15, -5 )
+                ]
+                |> move ( -winX / 2 + 20, winY / 6 - 80 )
     in
-        group [ errorHeader, errorReason, errorHint, actionHint ]
+    group [ errorHeader, errorReason, errorHint, actionHint ]
+
 
 machineDefn : SharedModel -> MachineType -> Float -> Float -> Shape Msg
-machineDefn sModel mtype winX winY = 
+machineDefn sModel mtype winX winY =
     let
-        machine = sModel.machine
+        machine =
+            sModel.machine
+
         getStateName sId =
             case Dict.get sId machine.stateNames of
                 Just n ->
@@ -645,15 +701,16 @@ machineDefn sModel mtype winX winY =
                 Nothing ->
                     "\\ "
 
-        machineHeader = 
+        machineHeader =
             text "Machine"
                 |> size 16
                 |> fixedwidth
                 |> filled black
                 |> move ( -winX / 2 + 492, winY / 6 - 15 )
     in
-        case mtype of
-            NFA -> group
+    case mtype of
+        NFA ->
+            group
                 [ machineHeader
                 , latex 500 18 "blank" "let\\ N = (Q,\\Sigma,\\Delta,S,F)" AlignLeft
                     |> move ( -winX / 2 + 750, winY / 6 - 25 )
@@ -668,8 +725,11 @@ machineDefn sModel mtype winX winY =
                 , latex 500 18 "blank" ("S = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.start) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 140 )
                 , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 165 ) ]
-            DFA -> group
+                    |> move ( -winX / 2 + 760, winY / 6 - 165 )
+                ]
+
+        DFA ->
+            group
                 [ machineHeader
                 , latex 500 18 "blank" "let\\ M = (Q,\\Sigma,\\delta,s,F)" AlignLeft
                     |> move ( -winX / 2 + 750, winY / 6 - 25 )
@@ -681,14 +741,27 @@ machineDefn sModel mtype winX winY =
                     |> move ( -winX / 2 + 760, winY / 6 - 90 )
                 , latex 500 18 "blank" "\\delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 115 )
-                , latex 500 14 "blank" ("s = " ++ 
-                    case Set.toList machine.start of
-                            [] -> "Please\\ select\\ a\\ start\\ state"
-                            (x :: []) -> getStateName x
-                            (x :: xs) -> "Congratulations,\\ you\\ found\\ a\\ bug!") AlignLeft
+                , latex 500
+                    14
+                    "blank"
+                    ("s = "
+                        ++ (case Set.toList machine.start of
+                                [] ->
+                                    "Please\\ select\\ a\\ start\\ state"
+
+                                x :: [] ->
+                                    getStateName x
+
+                                x :: xs ->
+                                    "Congratulations,\\ you\\ found\\ a\\ bug!"
+                           )
+                    )
+                    AlignLeft
                     |> move ( -winX / 2 + 760, winY / 6 - 140 )
                 , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 160 ) ]
+                    |> move ( -winX / 2 + 760, winY / 6 - 160 )
+                ]
+
 
 epsTrans : TransitionNames -> Delta -> Set StateID -> Set StateID
 epsTrans tNames d states =
@@ -838,8 +911,9 @@ latexKeyboard w h chars =
         , oneRow botRow (fillOutExtras 7 19 chars) |> move ( -keyW, -(keyH + 2) * 2 )
         ]
 
+
 machineModeButtons : MachineType -> Float -> Float -> Shape Msg
-machineModeButtons mtype winX winY =     
+machineModeButtons mtype winX winY =
     group
         [ group
             [ roundedRect 30 15 1
@@ -891,39 +965,66 @@ machineModeButtons mtype winX winY =
             |> notifyTap (ChangeMachine NFA)
         ]
 
+
 validDFA : SharedModel -> DFAerror
 validDFA sModel =
     let
-        mac = sModel.machine
-        allTransitionLabels = log "allTransitionLabels" <| List.sort <| Set.toList <| List.foldr Set.union Set.empty <| Dict.values mac.transitionNames
-        hehe = log "delta" sModel.machine.delta
-        
+        mac =
+            sModel.machine
+
+        allTransitionLabels =
+            List.sort <| Set.toList <| List.foldr Set.union Set.empty <| Dict.values mac.transitionNames
+
         catch : Maybe (Set String) -> List String
         catch ms =
             case ms of
-                Nothing -> []
-                Just s  -> Set.toList s
+                Nothing ->
+                    []
+
+                Just s ->
+                    Set.toList s
 
         getTrans : Dict TransitionID StateID -> List String
-        getTrans d = (List.concatMap (\e -> Dict.get e mac.transitionNames |> catch) <| Dict.keys d) |> List.sort
+        getTrans d =
+            (List.concatMap (\e -> Dict.get e mac.transitionNames |> catch) <| Dict.keys d) |> List.sort
 
         foldingFunc : Dict TransitionID StateID -> DFAerror -> DFAerror
         foldingFunc strList err =
             case err of
-                HasEpsilon -> HasEpsilon
-                Incomplete -> Incomplete
-                Nondeterministic -> Nondeterministic
-                Unsure -> Unsure
-                NoError ->
-                    let transitions = log "transitions" <| getTrans strList
-                    in 
-                    if transitions == allTransitionLabels then NoError
-                        else case compare (List.length transitions) (List.length allTransitionLabels) of
-                            LT -> Incomplete
-                            EQ -> Incomplete -- e.g. compare [1,1,2] [1,2,3], can be Nondeterministic too
-                            GT -> Nondeterministic
+                HasEpsilon ->
+                    HasEpsilon
 
+                Incomplete ->
+                    Incomplete
+
+                Nondeterministic ->
+                    Nondeterministic
+
+                Unsure ->
+                    Unsure
+
+                NoError ->
+                    let
+                        transitions =
+                            getTrans strList
+                    in
+                    if transitions == allTransitionLabels then
+                        NoError
+
+                    else
+                        case compare (List.length transitions) (List.length allTransitionLabels) of
+                            LT ->
+                                Incomplete
+
+                            EQ ->
+                                Incomplete
+
+                            -- e.g. compare [1,1,2] [1,2,3], can be Nondeterministic too
+                            GT ->
+                                Nondeterministic
     in
-        if (List.member "\\epsilon" allTransitionLabels)
-            then HasEpsilon
-            else List.foldr (\x acc -> foldingFunc x acc) NoError <| (log "vals" <| Dict.values mac.delta)
+    if List.member "\\epsilon" allTransitionLabels then
+        HasEpsilon
+
+    else
+        List.foldr (\x acc -> foldingFunc x acc) NoError <| Dict.values mac.delta
