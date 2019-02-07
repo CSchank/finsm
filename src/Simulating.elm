@@ -998,7 +998,7 @@ validDFA sModel =
             sModel.machine
 
         allTransitionLabels =
-            List.sort <| Set.toList <| List.foldr Set.union Set.empty <| Dict.values mac.transitionNames
+            List.sort <| Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values mac.transitionNames
 
         catch : Maybe (Set String) -> List String
         catch ms =
