@@ -24,13 +24,13 @@ type MachineType
     | NFA
 
 
-
--- TODO: Extend data-type with info of error at the exact arrow (transitionID)?
-
-
-type DFAerror
+type DFAError
     = NoError
-    | HasEpsilon
+    | DFAError DFAErrorType StateID
+
+
+type DFAErrorType
+    = HasEpsilon
     | Incomplete
     | Nondeterministic
     | Unsure -- Good for debugging?
@@ -566,7 +566,7 @@ view env ( model, pModel, sModel ) =
                     [ rect winX (winY / 3)
                         |> filled lightGray
                     , if pModel.machineType == DFA && dfaCheck /= NoError then
-                        errorMenu dfaCheck winX winY
+                        errorMenu dfaCheck oldMachine winX winY
 
                       else
                         menu
@@ -608,15 +608,28 @@ view env ( model, pModel, sModel ) =
         ]
 
 
-errorMenu : DFAerror -> Float -> Float -> Shape Msg
-errorMenu err winX winY =
+errorMenu : DFAError -> Machine -> Float -> Float -> Shape Msg
+errorMenu err mac winX winY =
     let
+        errStId =
+            case err of
+                NoError ->
+                    ""
+
+                DFAError _ stId ->
+                    case Dict.get stId mac.stateNames of
+                        Just name ->
+                            name
+
+                        Nothing ->
+                            ""
+
         errorHeader =
             group
                 [ triangle 20 |> filled red |> rotate 22.5
                 , roundedRect 7.5 10 5 |> filled white |> move ( 0, 7.5 )
                 , circle 3 |> filled white |> move ( 0, -2.5 )
-                , text "DFA error: your machine has a problem!"
+                , text "DFA error: Your machine has a problem!"
                     |> size 20
                     |> fixedwidth
                     |> filled darkRed
@@ -630,13 +643,13 @@ errorMenu err winX winY =
                 [ circle 3 |> filled red
                 , (text <|
                     case err of
-                        HasEpsilon ->
+                        DFAError HasEpsilon _ ->
                             "Possible cause: There are epsilon transitions"
 
-                        Incomplete ->
+                        DFAError Incomplete _ ->
                             "Possible cause: There are missing transitions"
 
-                        Nondeterministic ->
+                        DFAError Nondeterministic _ ->
                             "Possible cause: There are extraneous transitions"
 
                         _ ->
@@ -654,13 +667,13 @@ errorMenu err winX winY =
                 [ circle 3 |> filled red
                 , (text <|
                     case err of
-                        HasEpsilon ->
+                        DFAError HasEpsilon _ ->
                             "Hint: Try removing all your epsilon transitions"
 
-                        Incomplete ->
-                            "Hint: Find for states that have missing transitions"
+                        DFAError Incomplete _ ->
+                            "Hint: Check states for missing transitions"
 
-                        Nondeterministic ->
+                        DFAError Nondeterministic _ ->
                             "Hint: Find and remove extra transitions"
 
                         _ ->
@@ -673,6 +686,18 @@ errorMenu err winX winY =
                 ]
                 |> move ( -winX / 2 + 20, winY / 6 - 60 )
 
+        errorState =
+            group
+                [ circle 3 |> filled red
+                , text "Hint: Check state "
+                    |> size 12
+                    |> fixedwidth
+                    |> filled darkRed
+                    |> move ( 15, -5 )
+                , latex 50 12 "blank" errStId AlignLeft |> move ( 170, 3 )
+                ]
+                |> move ( -winX / 2 + 20, winY / 6 - 80 )
+
         actionHint =
             group
                 [ circle 3 |> filled red
@@ -682,9 +707,9 @@ errorMenu err winX winY =
                     |> filled darkRed
                     |> move ( 15, -5 )
                 ]
-                |> move ( -winX / 2 + 20, winY / 6 - 80 )
+                |> move ( -winX / 2 + 20, winY / 6 - 100 )
     in
-    group [ errorHeader, errorReason, errorHint, actionHint ]
+    group [ errorHeader, errorReason, errorHint, errorState, actionHint ]
 
 
 machineDefn : SharedModel -> MachineType -> Float -> Float -> Shape Msg
@@ -966,7 +991,7 @@ machineModeButtons mtype winX winY =
         ]
 
 
-validDFA : SharedModel -> DFAerror
+validDFA : SharedModel -> DFAError
 validDFA sModel =
     let
         mac =
@@ -988,43 +1013,36 @@ validDFA sModel =
         getTrans d =
             (List.concatMap (\e -> Dict.get e mac.transitionNames |> catch) <| Dict.keys d) |> List.sort
 
-        foldingFunc : Dict TransitionID StateID -> DFAerror -> DFAerror
-        foldingFunc strList err =
+        foldingFunc : ( StateID, Dict TransitionID StateID ) -> DFAError -> DFAError
+        foldingFunc sTuple err =
             case err of
-                HasEpsilon ->
-                    HasEpsilon
-
-                Incomplete ->
-                    Incomplete
-
-                Nondeterministic ->
-                    Nondeterministic
-
-                Unsure ->
-                    Unsure
+                DFAError errType x ->
+                    DFAError errType x
 
                 NoError ->
                     let
                         transitions =
-                            getTrans strList
+                            getTrans <| second sTuple
+
+                        stId =
+                            first sTuple
                     in
                     if transitions == allTransitionLabels then
                         NoError
 
+                    else if List.member "\\epsilon" transitions then
+                        DFAError HasEpsilon stId
+
                     else
                         case compare (List.length transitions) (List.length allTransitionLabels) of
                             LT ->
-                                Incomplete
+                                DFAError Incomplete stId
 
                             EQ ->
-                                Incomplete
+                                DFAError Incomplete stId
 
                             -- e.g. compare [1,1,2] [1,2,3], can be Nondeterministic too
                             GT ->
-                                Nondeterministic
+                                DFAError Nondeterministic stId
     in
-    if List.member "\\epsilon" allTransitionLabels then
-        HasEpsilon
-
-    else
-        List.foldr (\x acc -> foldingFunc x acc) NoError <| Dict.values mac.delta
+    List.foldr (\x acc -> foldingFunc x acc) NoError <| Dict.toList mac.delta
