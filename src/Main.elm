@@ -35,8 +35,6 @@ type Msg
     | UrlChange Url
     | UrlRequest UrlRequest
     | GoTo Module
-    | ShowModal
-    | HideModal
 
 
 type Module
@@ -52,7 +50,6 @@ type ApplicationState
 type alias Model =
     { appModel : BetterUndoList ApplicationModel
     , environment : Environment
-    , alertModalOpen : Bool
     }
 
 
@@ -81,7 +78,6 @@ main =
             \flags url key ->
                 ( { appModel = initAppModel
                   , environment = Environment.init
-                  , alertModalOpen = False
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
                 )
@@ -201,7 +197,7 @@ update msg model =
 
         KeyPressed k ->
             if k == 16 then
-                ( { model | environment = { oldEnvironment | holdingShift = True } }, Helpers.sendMsg <| HideModal )
+                ( { model | environment = { oldEnvironment | holdingShift = True } }, Cmd.none )
 
             else if k == 89 {- y -} || k == 90 {- z -} then
                 let
@@ -223,16 +219,16 @@ update msg model =
                         else
                             model.appModel
                   }
-                , Helpers.sendMsg <| HideModal
+                , Cmd.none
                 )
 
             else if k == 91 then
                 --pressed meta key
-                ( { model | environment = { oldEnvironment | holdingMeta = True } }, Helpers.sendMsg <| HideModal )
+                ( { model | environment = { oldEnvironment | holdingMeta = True } }, Cmd.none )
 
             else if k == 17 then
                 --pressed control
-                ( { model | environment = { oldEnvironment | holdingControl = True } }, Helpers.sendMsg <| HideModal )
+                ( { model | environment = { oldEnvironment | holdingControl = True } }, Cmd.none )
                 {- else if k == 66 then
                        ( model, sendMsg <| GoTo BuildingModule )
 
@@ -241,7 +237,7 @@ update msg model =
                 -}
 
             else
-                ( model, Helpers.sendMsg <| HideModal )
+                ( model, Cmd.none )
 
         GoTo mod ->
             let
@@ -300,34 +296,16 @@ update msg model =
 
                                 newAppState =
                                     { currentAppState | appState = Simulating simModel, simulatingData = pModel, sharedModel = sModel }
-
-                                hasTransitionMistakes =
-                                    case sModel.machine.transitionMistakes of
-                                        Nothing ->
-                                            False
-
-                                        _ ->
-                                            True
                             in
-                            if hasTransitionMistakes then
-                                ( model.appModel, Helpers.sendMsg <| ShowModal )
+                            ( if checkpoint then
+                                new newAppState model.appModel
 
-                            else
-                                ( if checkpoint then
-                                    new newAppState model.appModel
-
-                                  else
-                                    replace newAppState model.appModel
-                                , Cmd.map SMsg sCmd
-                                )
+                              else
+                                replace newAppState model.appModel
+                            , Cmd.map SMsg sCmd
+                            )
             in
             ( { model | appModel = enter }, cmd )
-
-        ShowModal ->
-            ( { model | alertModalOpen = True }, Cmd.none )
-
-        HideModal ->
-            ( { model | alertModalOpen = False }, Cmd.none )
 
 
 textHtml : String -> Html msg
@@ -368,11 +346,6 @@ view model =
         , icon False (text "?" |> size 30 |> fixedwidth |> centered |> filled (rgb 220 220 220) |> move ( 0, -9 ))
             |> addHyperlink "https://github.com/CSchank/finsm/wiki"
             |> move ( winX / 2 - 25, -winY / 2 + 25 )
-        , if model.alertModalOpen then
-            errorEpsTrans model
-
-          else
-            group []
         ]
 
 

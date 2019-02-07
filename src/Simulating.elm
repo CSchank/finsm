@@ -1,4 +1,4 @@
-module Simulating exposing (InputTape, Model(..), Msg(..), PersistentModel, delta, deltaHat, initPModel, isAccept, latexKeyboard, onEnter, onExit, renderTape, subscriptions, update, validDFA, view)
+module Simulating exposing (InputTape, Model(..), Msg(..), PersistentModel, delta, deltaHat, initPModel, isAccept, latexKeyboard, machineCheck, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
 import Browser.Events
@@ -24,9 +24,10 @@ type MachineType
     | NFA
 
 
-type DFAError
+type Error
     = NoError
     | DFAError DFAErrorType StateID
+    | EpsTransError
 
 
 type DFAErrorType
@@ -556,8 +557,8 @@ view env ( model, pModel, sModel ) =
         tapes =
             pModel.tapes
 
-        dfaCheck =
-            validDFA sModel
+        validCheck =
+            machineCheck sModel
     in
     group
         [ case model of
@@ -565,11 +566,20 @@ view env ( model, pModel, sModel ) =
                 group
                     [ rect winX (winY / 3)
                         |> filled lightGray
-                    , if pModel.machineType == DFA && dfaCheck /= NoError then
-                        errorMenu dfaCheck oldMachine winX winY
+                    , case pModel.machineType of
+                        DFA ->
+                            if validCheck == NoError then
+                                menu
 
-                      else
-                        menu
+                            else
+                                errorMenu validCheck oldMachine winX winY
+
+                        NFA ->
+                            if validCheck == EpsTransError then
+                                errorMenu validCheck oldMachine winX winY
+
+                            else
+                                menu
                     , machineDefn sModel pModel.machineType winX winY
                     ]
                     |> move ( 0, -winY / 3 )
@@ -608,14 +618,11 @@ view env ( model, pModel, sModel ) =
         ]
 
 
-errorMenu : DFAError -> Machine -> Float -> Float -> Shape Msg
+errorMenu : Error -> Machine -> Float -> Float -> Shape Msg
 errorMenu err mac winX winY =
     let
         errStId =
             case err of
-                NoError ->
-                    ""
-
                 DFAError _ stId ->
                     case Dict.get stId mac.stateNames of
                         Just name ->
@@ -624,12 +631,15 @@ errorMenu err mac winX winY =
                         Nothing ->
                             ""
 
-        errorHeader =
+                _ ->
+                    ""
+
+        errorHeader txt =
             group
                 [ triangle 20 |> filled red |> rotate 22.5
                 , roundedRect 7.5 10 5 |> filled white |> move ( 0, 7.5 )
                 , circle 3 |> filled white |> move ( 0, -2.5 )
-                , text "DFA error: Your machine has a problem!"
+                , text txt
                     |> size 20
                     |> fixedwidth
                     |> filled darkRed
@@ -651,6 +661,9 @@ errorMenu err mac winX winY =
 
                         DFAError Nondeterministic _ ->
                             "Possible cause: There are extraneous transitions"
+
+                        EpsTransError ->
+                            "Cause: Epsilon transitions are mixed with normal transitions"
 
                         _ ->
                             "You might have missed something somewhere?"
@@ -675,6 +688,9 @@ errorMenu err mac winX winY =
 
                         DFAError Nondeterministic _ ->
                             "Hint: Find and remove extra transitions"
+
+                        EpsTransError ->
+                            "Hint: Switch to Build mode and fix transitions in red"
 
                         _ ->
                             ""
@@ -709,7 +725,15 @@ errorMenu err mac winX winY =
                 ]
                 |> move ( -winX / 2 + 20, winY / 6 - 100 )
     in
-    group [ errorHeader, errorReason, errorHint, errorState, actionHint ]
+    case err of
+        DFAError _ _ ->
+            group [ errorHeader "DFA error: Your machine has a problem!", errorReason, errorHint, errorState, actionHint ]
+
+        EpsTransError ->
+            group [ errorHeader "Error: You have invalid state transitions!", errorReason, errorHint ]
+
+        NoError ->
+            group []
 
 
 machineDefn : SharedModel -> MachineType -> Float -> Float -> Shape Msg
@@ -991,11 +1015,14 @@ machineModeButtons mtype winX winY =
         ]
 
 
-validDFA : SharedModel -> DFAError
-validDFA sModel =
+machineCheck : SharedModel -> Error
+machineCheck sModel =
     let
         mac =
             sModel.machine
+
+        tMistakes =
+            sModel.machine.transitionMistakes
 
         allTransitionLabels =
             List.sort <| Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values mac.transitionNames
@@ -1013,7 +1040,7 @@ validDFA sModel =
         getTrans d =
             (List.concatMap (\e -> Dict.get e mac.transitionNames |> catch) <| Dict.keys d) |> List.sort
 
-        foldingFunc : ( StateID, Dict TransitionID StateID ) -> DFAError -> DFAError
+        foldingFunc : ( StateID, Dict TransitionID StateID ) -> Error -> Error
         foldingFunc sTuple err =
             case err of
                 DFAError errType x ->
@@ -1044,5 +1071,12 @@ validDFA sModel =
                             -- e.g. compare [1,1,2] [1,2,3], can be Nondeterministic too
                             GT ->
                                 DFAError Nondeterministic stId
+
+                EpsTransError ->
+                    EpsTransError
     in
-    List.foldr (\x acc -> foldingFunc x acc) NoError <| Dict.toList mac.delta
+    if tMistakes /= Nothing then
+        EpsTransError
+
+    else
+        List.foldr (\x acc -> foldingFunc x acc) NoError <| Dict.toList mac.delta
