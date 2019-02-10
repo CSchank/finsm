@@ -38,7 +38,7 @@ type DFAErrorType
 
 
 type alias PersistentModel =
-    { tapes : Dict Int (Array Character)
+    { tapes : Dict Int ( InputTape, TapeStatus )
     , currentStates : Set StateID
     , machineType : MachineType
     }
@@ -46,6 +46,11 @@ type alias PersistentModel =
 
 type alias InputTape =
     Array Character
+
+
+type TapeStatus
+    = Fresh
+    | Stale (Set String)
 
 
 type Model
@@ -67,7 +72,20 @@ type Msg
 
 onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 onEnter env ( pModel, sModel ) =
-    ( ( Default 0 -1, { pModel | currentStates = epsTrans sModel.machine.transitionNames sModel.machine.delta sModel.machine.start }, sModel ), False, Cmd.none )
+    ( ( Default 0 -1
+      , { pModel
+            | currentStates =
+                epsTrans
+                    sModel.machine.transitionNames
+                    sModel.machine.delta
+                    sModel.machine.start
+            , tapes = checkTapes sModel pModel.tapes
+        }
+      , sModel
+      )
+    , False
+    , Cmd.none
+    )
 
 
 onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
@@ -79,19 +97,47 @@ initPModel : PersistentModel
 initPModel =
     { tapes =
         Dict.fromList
-            [ ( 0, Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ] )
-            , ( 1, Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0", "1", "1", "1", "1", "0" ] )
+            [ ( 0, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ], Fresh ) )
+            , ( 1, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0", "1", "1", "1", "1", "0" ], Fresh ) )
             ]
     , currentStates = test.start
     , machineType = DFA
     }
 
 
-renderTape : Array String -> Int -> Int -> Int -> Bool -> Shape Msg
-renderTape input tapeId selectedId inputAt showButtons =
+checkTapes : SharedModel -> Dict Int ( InputTape, TapeStatus ) -> Dict Int ( InputTape, TapeStatus )
+checkTapes sModel tapes =
+    Dict.map (\k ( tape, _ ) -> ( tape, checkTape sModel tape )) tapes
+
+
+checkTape : SharedModel -> InputTape -> TapeStatus
+checkTape sModel inp =
+    let
+        tNames =
+            sModel.machine.transitionNames
+
+        allTransitionLabels =
+            List.foldr Set.union Set.empty <| Dict.values tNames
+
+        arrFilter =
+            Array.filter (\v -> not <| Set.member v allTransitionLabels) inp
+    in
+    case Array.isEmpty arrFilter of
+        True ->
+            Fresh
+
+        False ->
+            Stale <| Set.fromList <| Array.toList arrFilter
+
+
+renderTape : Array String -> TapeStatus -> Int -> Int -> Int -> Bool -> Shape Msg
+renderTape input tapeSt tapeId selectedId inputAt showButtons =
     let
         xpad =
             20
+
+        errWindow =
+            roundedRect 15 15 2 |> filled white |> addOutline (solid 1) grey
     in
     group <|
         Array.toList
@@ -102,7 +148,12 @@ renderTape input tapeId selectedId inputAt showButtons =
                             |> filled white
                             |> addOutline
                                 (solid 1)
-                                black
+                                (if tapeSt == Fresh then
+                                    black
+
+                                 else
+                                    red
+                                )
                             |> move ( 0, 3 )
                         , latex (xpad * 0.9) (xpad * 0.7) "white" st AlignCentre
                             |> move ( 0, 10.25 )
@@ -152,6 +203,17 @@ renderTape input tapeId selectedId inputAt showButtons =
                         ]
                         |> move ( toFloat <| (Array.length input + 1) * xpad, 3 )
                         |> notifyTap (DeleteTape tapeId)
+                    , if not (tapeSt == Fresh) then
+                        group
+                            [ triangle 20 |> filled red |> rotate 22.5
+                            , roundedRect 7.5 10 5 |> filled white |> move ( 0, 7.5 )
+                            , circle 3 |> filled white |> move ( 0, -2.5 )
+                            ]
+                            |> scale 0.5
+                            |> move ( toFloat <| (Array.length input + 2) * xpad, 1 )
+
+                      else
+                        group []
                     ]
 
                 else
@@ -175,10 +237,14 @@ update env msg ( model, pModel, sModel ) =
                     let
                         nextCh =
                             case Dict.get tapeId pModel.tapes of
-                                Just ar ->
+                                Just ( ar, tapeStatus ) ->
                                     case Array.get (charId + 1) ar of
                                         Just ch ->
-                                            ch
+                                            if tapeStatus == Fresh then
+                                                ch
+
+                                            else
+                                                ""
 
                                         _ ->
                                             ""
@@ -236,7 +302,7 @@ update env msg ( model, pModel, sModel ) =
                     )
                         + 1
             in
-            ( ( model, { pModel | tapes = Dict.insert newId Array.empty pModel.tapes }, sModel ), True, Cmd.none )
+            ( ( model, { pModel | tapes = Dict.insert newId ( Array.empty, Fresh ) pModel.tapes }, sModel ), True, Cmd.none )
 
         ChangeTape tId ->
             ( ( Default tId -1, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
@@ -262,8 +328,15 @@ update env msg ( model, pModel, sModel ) =
                                         Dict.update tapeId
                                             (\m ->
                                                 case m of
-                                                    Just ar ->
-                                                        Just <| Array.slice 0 -1 ar
+                                                    Just ( ar, tapeSt ) ->
+                                                        let
+                                                            newTape =
+                                                                Array.slice 0 -1 ar
+
+                                                            freshSt =
+                                                                checkTape sModel newTape
+                                                        in
+                                                        Just ( Array.slice 0 -1 ar, freshSt )
 
                                                     _ ->
                                                         m
@@ -384,11 +457,11 @@ update env msg ( model, pModel, sModel ) =
                                         Dict.update tapeId
                                             (\m ->
                                                 case ( m, newChar ) of
-                                                    ( Just ar, Just ch ) ->
-                                                        Just <| Array.push ch ar
+                                                    ( Just ( ar, tapeSt ), Just ch ) ->
+                                                        Just ( Array.push ch ar, tapeSt )
 
                                                     ( Nothing, Just ch ) ->
-                                                        Just <| Array.fromList [ ch ]
+                                                        Just ( Array.fromList [ ch ], Fresh )
 
                                                     _ ->
                                                         m
@@ -547,7 +620,7 @@ view env ( model, pModel, sModel ) =
                     |> move ( -winX / 2 + 20, winY / 6 - 35 - 25 * (toFloat <| Dict.size pModel.tapes) )
                 , case model of
                     Default tapeId charId ->
-                        group (List.indexedMap (\x ( chId, ch ) -> renderTape ch chId tapeId charId True |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList tapes)
+                        group (List.indexedMap (\x ( chId, ( ch, tapeSt ) ) -> renderTape ch tapeSt chId tapeId charId True |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList tapes)
                             |> move ( -winX / 2 + 20, winY / 6 - 40 )
 
                     _ ->
@@ -586,13 +659,13 @@ view env ( model, pModel, sModel ) =
 
             Editing tapeId ->
                 let
-                    tape =
+                    ( tape, tapeSt ) =
                         case Dict.get tapeId pModel.tapes of
-                            Just t ->
-                                t
+                            Just ( t, st ) ->
+                                ( t, st )
 
                             Nothing ->
-                                Array.empty
+                                ( Array.empty, Fresh )
                 in
                 group
                     [ rect winX (winY / 3)
@@ -609,7 +682,7 @@ view env ( model, pModel, sModel ) =
                         |> move ( -winX / 2 + 95, winY / 6 - 15 )
                     , latexKeyboard winX winY chars
                         |> move ( 0, 0 )
-                    , renderTape tape tapeId -1 -1 False
+                    , renderTape tape tapeSt tapeId -1 -1 False
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
