@@ -5,7 +5,6 @@ import BetterUndoList exposing (..)
 import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events
-import Building
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
@@ -20,15 +19,19 @@ import Machine exposing (..)
 import Random
 import Set exposing (Set)
 import SharedModel exposing (SharedModel)
-import Simulating
 import Task
 import Tuple exposing (first, second)
 import Url exposing (Url)
+
+import Building
+import Simulating
+import Exporting
 
 
 type Msg
     = BMsg Building.Msg
     | SMsg Simulating.Msg
+    | EMsg Exporting.Msg
     | KeyPressed Int
     | KeyReleased Int
     | WindowSize ( Int, Int )
@@ -40,11 +43,13 @@ type Msg
 type Module
     = BuildingModule
     | SimulatingModule
+    | ExportingModule
 
 
 type ApplicationState
     = Building Building.Model
     | Simulating Simulating.Model
+    | Exporting Exporting.Model
 
 
 type alias Model =
@@ -57,6 +62,7 @@ type alias ApplicationModel =
     { appState : ApplicationState
     , simulatingData : Simulating.PersistentModel
     , buildingData : Building.PersistentModel
+    , exportingData: Exporting.PersistentModel
     , sharedModel : SharedModel
     }
 
@@ -68,6 +74,7 @@ initAppModel =
         , sharedModel = SharedModel.init
         , simulatingData = Simulating.initPModel
         , buildingData = Building.initPModel
+        , exportingData = Exporting.initPModel
         }
 
 
@@ -95,6 +102,9 @@ main =
 
                         Simulating m ->
                             Sub.map SMsg (Simulating.subscriptions m)
+                        
+                        Exporting m ->
+                            Sub.map EMsg (Exporting.subscriptions m)
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
@@ -189,6 +199,23 @@ update msg model =
 
                 _ ->
                     ( model, Cmd.none )
+        
+        EMsg emsg ->
+            case currentAppState.appState of
+                Exporting m ->
+                    moduleUpdate
+                        oldEnvironment
+                        emsg
+                        m
+                        currentAppState.exportingData
+                        model
+                        EMsg
+                        Exporting
+                        (\pm am -> { am | exportingData = pm })
+                        Exporting.update
+
+                _ ->
+                    ( model, Cmd.none )
 
         WindowSize ( w, h ) ->
             ( { model | environment = { oldEnvironment | windowSize = ( w, h ) } }, Cmd.none )
@@ -278,6 +305,15 @@ update msg model =
                                 (\pm am -> { am | simulatingData = pm })
                                 Simulating.onExit
 
+                        Exporting m ->
+                            processExit
+                                oldEnvironment
+                                m
+                                currentAppState.exportingData
+                                model
+                                (\pm am -> { am | exportingData = pm })
+                                Exporting.onExit
+
                 ( enter, cmd ) =
                     case mod of
                         BuildingModule ->
@@ -299,6 +335,16 @@ update msg model =
                                 Simulating
                                 (\pm am -> { am | simulatingData = pm })
                                 Simulating.onEnter
+
+                        ExportingModule ->
+                            processEnter
+                                oldEnvironment
+                                currentAppState.exportingData
+                                exit
+                                EMsg
+                                Exporting
+                                (\pm am -> { am | exportingData = pm })
+                                Exporting.onEnter
             in
             ( { model | appModel = enter }, cmd )
 
@@ -394,6 +440,9 @@ view model =
 
             Simulating m ->
                 GraphicSVG.map SMsg <| Simulating.view model.environment ( m, appState.simulatingData, appState.sharedModel )
+            
+            Exporting m ->
+                GraphicSVG.map EMsg <| Exporting.view model.environment ( m, appState.exportingData, appState.sharedModel )
         , modeButtons model
         , icon False (text "?" |> size 30 |> fixedwidth |> centered |> filled (rgb 220 220 220) |> move ( 0, -9 ))
             |> addHyperlink "https://github.com/CSchank/finsm/wiki"
@@ -420,6 +469,13 @@ modeButtons model =
         simulating =
             case model.appModel.present.appState of
                 Simulating _ ->
+                    True
+
+                _ ->
+                    False
+        exporting =
+            case model.appModel.present.appState of
+                Exporting _ ->
                     True
 
                 _ ->
@@ -474,6 +530,30 @@ modeButtons model =
             ]
             |> move ( -winX / 2 + 77, winY / 2 - 15 )
             |> notifyTap (GoTo SimulatingModule)
+            , group
+            [ roundedRect 50 15 1
+                |> filled
+                    (if exporting then
+                        finsmBlue
+
+                     else
+                        blank
+                    )
+                |> addOutline (solid 1) darkGray
+            , text "Export"
+                |> centered
+                |> fixedwidth
+                |> filled
+                    (if exporting then
+                        white
+
+                     else
+                        darkGray
+                    )
+                |> move ( 0, -4 )
+            ]
+            |> move ( -winX / 2 + 134, winY / 2 - 15 )
+            |> notifyTap (GoTo ExportingModule)
         ]
 
 
