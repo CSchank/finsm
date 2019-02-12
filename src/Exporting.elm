@@ -136,7 +136,7 @@ exportTikz selected =
     [
         roundedRect 250 75 5
             |> outlined (solid 2) darkGray
-    ,   text "Tikz"
+    ,   text "TikZ"
             |> size 20
             |> fixedwidth
             |> filled black
@@ -298,7 +298,7 @@ generateTikz time machine =
         ,   "%% include in preamble:"
         ,   "%% \\usepackage{tikz}"
         ,   "%% \\usetikzlibrary{automata,positioning,arrows}"
-        ,   "\\begin{tikzpicture}[shorten >=1pt]"
+        ,   "\\begin{tikzpicture}[]"
         ,   states
         ,   "    \\path[->, thick, >=stealth]"
         ,   transitions
