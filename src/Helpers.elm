@@ -1,4 +1,4 @@
-module Helpers exposing (LabelPosition(..), LatexAlign(..), add, dot, editIcon, finsmBlue, finsmLightBlue, focusInput, icon, labelPosition, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, specialSymbols, sub, trashIcon, uncurry, vertex)
+module Helpers exposing (LabelPosition(..), LatexAlign(..), add, dot, editIcon, finsmBlue, finsmLightBlue, focusInput, icon, labelPosition, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, roundPrec, roundTo, sendMsg, setMax, specialSymbols, sub, trashIcon, uncurry, vertex)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)
@@ -308,3 +308,13 @@ labelPosition y1 theta =
 
     else
         Above
+
+
+roundTo : Float -> Float -> Float
+roundTo n m =
+    Basics.toFloat (round (m + n / 2) // round n * round n)
+
+
+roundPrec : Int -> Float -> Float
+roundPrec n m =
+    Basics.toFloat (round (m * Basics.toFloat (10 ^ n))) / Basics.toFloat (10 ^ n)

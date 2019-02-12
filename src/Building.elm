@@ -670,11 +670,6 @@ view env ( model, pModel, sModel ) =
         ]
 
 
-roundTo : Float -> Float -> Float
-roundTo n m =
-    toFloat (round (m + n / 2) // round n * round n)
-
-
 updateStatePos : StateID -> ( Float, Float ) -> StatePositions -> StatePositions
 updateStatePos st ( x, y ) pos =
     Dict.update st

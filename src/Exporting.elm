@@ -14,7 +14,7 @@ import Set exposing (Set)
 import Sha256 exposing (sha256)
 import SharedModel exposing (SharedModel)
 import Task
-import Time
+import Time exposing (Month(..), customZone, millisToPosix, toDay, toHour, toMinute, toMonth, toSecond, toYear)
 import Tuple exposing (first, second)
 
 
@@ -52,7 +52,7 @@ type Msg
 
 onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 onEnter env ( pModel, sModel ) =
-    ( ( Default, pModel, sModel ), False, Task.perform (GetTime << Time.posixToMillis) Time.now )
+    ( ( Default, pModel, sModel ), False, Cmd.none )
 
 
 onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
@@ -78,7 +78,7 @@ update env msg ( model, pModel, sModel ) =
             ( ( model, { pModel | outputType = outputType }, sModel ), False, Cmd.none )
 
         GenerateOutput ->
-            ( ( ShowingOutput, pModel, sModel ), False, Cmd.none )
+            ( ( ShowingOutput, pModel, sModel ), False, Task.perform (GetTime << Time.posixToMillis) Time.now )
 
         CloseOutput ->
             ( ( Default, pModel, sModel ), False, Cmd.none )
@@ -248,15 +248,33 @@ generateTikz time machine =
                 _ ->
                     ( 0, 0 )
 
+        dateStr =
+            timeToString time
+
         hashCode =
-            String.dropRight 56 << sha256 << String.append (String.fromInt time)
+            String.dropRight 56 << sha256 << String.append dateStr
 
         oneState ( sId, ( x, y ) ) =
             let
                 ( tx, ty ) =
                     ( String.fromFloat <| x / scale, String.fromFloat <| y / scale )
+
+                start =
+                    if Set.member sId machine.start then
+                        "line width = 0.55mm,"
+
+                    else
+                        "thick,"
+
+                --"initial,thick," else "thick," --
+                final =
+                    if Set.member sId machine.final then
+                        "accepting,"
+
+                    else
+                        ""
             in
-            String.concat [ "\\node[state,thick] at (", tx, ",", ty, ") (", hashCode <| stateName sId, ") {$", stateName sId, "$};" ]
+            String.concat [ "\\node[", start, final, "state] at (", tx, ",", ty, ") (", hashCode <| stateName sId, ") {$", stateName sId, "$};" ]
 
         transitions =
             indtBy 4 <|
@@ -286,17 +304,37 @@ generateTikz time machine =
                     --tangent between to and from states
                     ( x2 - x0, y2 - y0 )
 
+                r =
+                    20
+
+                -- radius of states
                 theta =
                     atan2 ty tx
 
                 ( rx, ry ) =
                     ( x1 * cos theta - y1 * sin theta, y1 * cos theta + x1 * sin theta )
 
-                inTheta =
-                    round <| atan2 (my - y2) (mx - x2) * 180 / pi
+                ( inTheta, outTheta ) =
+                    if s0 == s1 then
+                        let
+                            mr =
+                                sqrt ((mx - x0) ^ 2 + (my - y0) ^ 2)
 
-                outTheta =
-                    round <| atan2 (my - y0) (mx - x0) * 180 / pi
+                            mpl =
+                                mr - r
+
+                            beta =
+                                atan2 ry rx
+
+                            gamma =
+                                atan2 mpl mr
+                        in
+                        ( round <| (beta + gamma) * 180 / pi, round <| (beta - gamma) * 180 / pi )
+
+                    else
+                        ( round <| atan2 (my - y2) (mx - x2) * 180 / pi
+                        , round <| atan2 (my - y0) (mx - x0) * 180 / pi
+                        )
 
                 position =
                     case labelPosition y1 theta of
@@ -311,21 +349,125 @@ generateTikz time machine =
 
                         Right ->
                             "right"
+
+                loop =
+                    if s0 == s1 then
+                        let
+                            loopDistance =
+                                String.fromFloat <| roundPrec 2 <| sqrt (x1 ^ 2 + y1 ^ 2) / 40
+                        in
+                        String.concat [ "loop,min distance = ", loopDistance, "cm," ]
+
+                    else
+                        ""
             in
-            String.concat [ "(", hashCode <| stateName s0, ") edge [", position, ",in = ", String.fromInt inTheta, ", out = ", String.fromInt outTheta, "] node {$", transitionName, "$} (", hashCode <| stateName s1, ")" ]
+            String.concat [ "(", hashCode <| stateName s0, ") edge [", loop, position, ",in = ", String.fromInt inTheta, ", out = ", String.fromInt outTheta, "] node {$", transitionName, "$} (", hashCode <| stateName s1, ")" ]
     in
     unlines
         [ "%% Machine generated by https://finsm.io"
+        , String.concat [ "%% ", dateStr ]
         , "%% include in preamble:"
         , "%% \\usepackage{tikz}"
         , "%% \\usetikzlibrary{automata,positioning,arrows}"
+        , "\\begin{center}"
         , "\\begin{tikzpicture}[]"
         , states
         , "    \\path[->, thick, >=stealth]"
         , transitions
         , "    ;"
         , "\\end{tikzpicture}"
+        , "\\end{center}"
         ]
+
+
+est =
+    customZone (-5 * 60) []
+
+
+monthToInt : Month -> Int
+monthToInt month =
+    case month of
+        Jan ->
+            1
+
+        Feb ->
+            2
+
+        Mar ->
+            3
+
+        Apr ->
+            4
+
+        May ->
+            5
+
+        Jun ->
+            6
+
+        Jul ->
+            7
+
+        Aug ->
+            8
+
+        Sep ->
+            9
+
+        Oct ->
+            10
+
+        Nov ->
+            11
+
+        Dec ->
+            12
+
+
+timeToString : Int -> String
+timeToString timestamp =
+    let
+        year =
+            toYear est (millisToPosix timestamp)
+
+        month =
+            toMonth est (millisToPosix timestamp)
+
+        day =
+            toDay est (millisToPosix timestamp)
+
+        hour =
+            toHour est (millisToPosix timestamp)
+
+        minute =
+            toMinute est (millisToPosix timestamp)
+
+        second =
+            toSecond est (millisToPosix timestamp)
+    in
+    String.fromInt year
+        ++ "-"
+        ++ String.fromInt (monthToInt month)
+        ++ "-"
+        ++ String.fromInt day
+        ++ "-"
+        ++ String.fromInt hour
+        ++ ":"
+        ++ (if minute < 10 then
+                "0"
+
+            else
+                ""
+           )
+        ++ String.fromInt minute
+        ++ ":"
+        ++ (if minute < 10 then
+                "0"
+
+            else
+                ""
+           )
+        ++ String.fromInt second
 
 
 unlines : List String -> String

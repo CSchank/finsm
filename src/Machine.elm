@@ -418,15 +418,15 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                         atan2 mpl mr
 
                     ( x0s, y0s ) =
-                        ( x0 + r0 * cos (beta + gamma), y0 + r0 * sin (beta + gamma) )
+                        ( x0 + r0 * cos (beta - gamma), y0 + r0 * sin (beta - gamma) )
 
                     ( x1s, y1s ) =
-                        ( x0 + r0 * cos (beta - gamma), y0 + r0 * sin (beta - gamma) )
+                        ( x0 + r0 * cos (beta + gamma), y0 + r0 * sin (beta + gamma) )
                 in
                 group
-                    [ curve ( x0s, y0s ) [ Pull ( x0 + ppr * cos (beta + gamma), y0 + ppr * sin (beta + gamma) ) ( mx, my ) ]
+                    [ curve ( x0s, y0s ) [ Pull ( x0 + ppr * cos (beta - gamma), y0 + ppr * sin (beta - gamma) ) ( mx, my ) ]
                         |> outlined (solid 1) black
-                    , arrow ( mx, my ) ( x0 + ppr * cos (beta - gamma), y0 + ppr * sin (beta - gamma) ) ( x1s, y1s )
+                    , arrow ( mx, my ) ( x0 + ppr * cos (beta + gamma), y0 + ppr * sin (beta + gamma) ) ( x1s, y1s )
                     ]
                     |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
 
