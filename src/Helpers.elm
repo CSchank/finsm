@@ -1,4 +1,4 @@
-module Helpers exposing (LatexAlign(..), add, dot, editIcon, finsmBlue, finsmLightBlue, focusInput, icon, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, specialSymbols, sub, trashIcon, uncurry, vertex)
+module Helpers exposing (LabelPosition(..), LatexAlign(..), add, dot, editIcon, finsmBlue, finsmLightBlue, focusInput, icon, labelPosition, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, sendMsg, setMax, specialSymbols, sub, trashIcon, uncurry, vertex)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)
@@ -103,6 +103,8 @@ latex w h backclr txt align =
             , style "-moz-user-select" "none"
             , style "-webkit-user-select" "none"
             , style "-user-select" "none"
+
+            --   , style "background-color" "red"
             ]
             [ H.img
                 ([ style "background-color" backclr
@@ -133,7 +135,18 @@ latex w h backclr txt align =
                 []
             ]
     )
-        |> move ( -w / 2, 0 )
+        |> move
+            ( case align of
+                AlignLeft ->
+                    0
+
+                AlignRight ->
+                    -w
+
+                AlignCentre ->
+                    -w / 2
+            , 0
+            )
 
 
 latexurl : String -> String
@@ -239,3 +252,59 @@ renderSet2String =
 uncurry : (a -> b -> c) -> ( a, b ) -> c
 uncurry f ( a, b ) =
     f a b
+
+
+type LabelPosition
+    = Above
+    | Below
+    | Left
+    | Right
+
+
+labelPosition : Float -> Float -> LabelPosition
+labelPosition y1 theta =
+    let
+        thetaF =
+            if theta < 0 then
+                2 * pi - abs theta
+
+            else
+                theta
+    in
+    if 0 <= thetaF && thetaF <= pi / 32 then
+        if y1 > 0 then
+            Above
+
+        else
+            Below
+
+    else if pi / 32 < thetaF && thetaF <= 31 * pi / 32 then
+        if y1 > 0 then
+            Left
+
+        else
+            Right
+
+    else if 31 * pi / 32 < thetaF && thetaF <= 33 * pi / 32 then
+        if y1 > 0 then
+            Below
+
+        else
+            Above
+
+    else if 33 * pi / 32 < thetaF && thetaF <= 63 * pi / 32 then
+        if y1 > 0 then
+            Right
+
+        else
+            Left
+
+    else if 63 * pi / 32 < thetaF then
+        if y1 > 0 then
+            Above
+
+        else
+            Below
+
+    else
+        Above

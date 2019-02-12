@@ -369,12 +369,34 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
             else
                 ( x2 + r1 * cos (atan2 dy1 dx1), y2 + r1 * sin (atan2 dy1 dx1) )
 
-        offset =
+        tLblW =
+            200
+
+        off =
             if y1 > 0 then
                 8
 
             else
                 -8
+
+        offset =
+            ( -off * sin theta
+            , off * cos theta
+            )
+
+        alignment =
+            case labelPosition y1 theta of
+                Above ->
+                    AlignCentre
+
+                Below ->
+                    AlignCentre
+
+                Left ->
+                    AlignRight
+
+                Right ->
+                    AlignLeft
     in
     group
         [ group
@@ -427,7 +449,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                                 (EditLabel tId)
 
                         else
-                            latex 50
+                            latex tLblW
                                 12
                                 (if mistake then
                                     "LightSalmon"
@@ -436,10 +458,10 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                                     "none"
                                 )
                                 char
-                                AlignCentre
+                                alignment
 
                     _ ->
-                        latex 50
+                        latex tLblW
                             12
                             (if mistake then
                                 "LightSalmon"
@@ -448,7 +470,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                                 "none"
                             )
                             char
-                            AlignCentre
+                            alignment
                 , case model of
                     EditingTransitionLabel tId str ->
                         group []
@@ -461,10 +483,7 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                 |> (if s1 /= s2 then
                         move ( 0, 7 )
                             >> move (p ( xx0, yy0 ) ( mx, my ) ( xx1, yy1 ) 0.5)
-                            >> move
-                                ( -offset * sin theta
-                                , offset * cos theta
-                                )
+                            >> move offset
 
                     else
                         move ( mx, my + 12 )

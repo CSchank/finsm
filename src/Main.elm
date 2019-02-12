@@ -5,8 +5,10 @@ import BetterUndoList exposing (..)
 import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events
+import Building
 import Dict exposing (Dict)
 import Environment exposing (Environment)
+import Exporting
 import GraphicSVG exposing (..)
 import Helpers exposing (finsmBlue, icon, sendMsg)
 import Html as H exposing (Html, input, node)
@@ -19,13 +21,10 @@ import Machine exposing (..)
 import Random
 import Set exposing (Set)
 import SharedModel exposing (SharedModel)
+import Simulating
 import Task
 import Tuple exposing (first, second)
 import Url exposing (Url)
-
-import Building
-import Simulating
-import Exporting
 
 
 type Msg
@@ -62,7 +61,7 @@ type alias ApplicationModel =
     { appState : ApplicationState
     , simulatingData : Simulating.PersistentModel
     , buildingData : Building.PersistentModel
-    , exportingData: Exporting.PersistentModel
+    , exportingData : Exporting.PersistentModel
     , sharedModel : SharedModel
     }
 
@@ -102,7 +101,7 @@ main =
 
                         Simulating m ->
                             Sub.map SMsg (Simulating.subscriptions m)
-                        
+
                         Exporting m ->
                             Sub.map EMsg (Exporting.subscriptions m)
                     ]
@@ -199,7 +198,7 @@ update msg model =
 
                 _ ->
                     ( model, Cmd.none )
-        
+
         EMsg emsg ->
             case currentAppState.appState of
                 Exporting m ->
@@ -440,7 +439,7 @@ view model =
 
             Simulating m ->
                 GraphicSVG.map SMsg <| Simulating.view model.environment ( m, appState.simulatingData, appState.sharedModel )
-            
+
             Exporting m ->
                 GraphicSVG.map EMsg <| Exporting.view model.environment ( m, appState.exportingData, appState.sharedModel )
         , modeButtons model
@@ -473,6 +472,7 @@ modeButtons model =
 
                 _ ->
                     False
+
         exporting =
             case model.appModel.present.appState of
                 Exporting _ ->
@@ -530,7 +530,7 @@ modeButtons model =
             ]
             |> move ( -winX / 2 + 77, winY / 2 - 15 )
             |> notifyTap (GoTo SimulatingModule)
-            , group
+        , group
             [ roundedRect 50 15 1
                 |> filled
                     (if exporting then
