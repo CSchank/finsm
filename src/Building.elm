@@ -414,6 +414,7 @@ update env msg ( model, pModel, sModel ) =
                         newMachine =
                             { oldMachine
                                 | q = Set.insert newId oldMachine.q
+                                , delta = Dict.insert newId Dict.empty oldMachine.delta
                                 , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
                                 , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames
                             }

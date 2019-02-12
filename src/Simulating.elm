@@ -835,7 +835,7 @@ errorMenu err mac winX winY =
                     |> fixedwidth
                     |> filled darkRed
                     |> move ( 15, -5 )
-                , latex 50 12 "blank" errStId AlignLeft |> move ( 170, 3 )
+                , latex 50 12 "blank" errStId AlignLeft |> move ( 150, 3 )
                 ]
                 |> move ( -winX / 2 + 20, winY / 6 - 80 )
 
