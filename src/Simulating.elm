@@ -887,34 +887,34 @@ machineDefn sModel mtype winX winY =
             group
                 [ machineHeader
                 , latex 500 18 "blank" "let\\ N = (Q,\\Sigma,\\Delta,S,F)" AlignLeft
-                    |> move ( -winX / 2 + 750, winY / 6 - 25 )
+                    |> move ( -winX / 2 + 500, winY / 6 - 25 )
                 , latex 500 14 "blank" "where" AlignLeft
-                    |> move ( -winX / 2 + 750, winY / 6 - 45 )
+                    |> move ( -winX / 2 + 500, winY / 6 - 45 )
                 , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 65 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 65 )
                 , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl Set.union Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 90 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 90 )
                 , latex 500 18 "blank" "\\Delta = (above)" AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 115 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 115 )
                 , latex 500 18 "blank" ("S = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.start) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 140 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 140 )
                 , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 165 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 165 )
                 ]
 
         DFA ->
             group
                 [ machineHeader
                 , latex 500 18 "blank" "let\\ M = (Q,\\Sigma,\\delta,s,F)" AlignLeft
-                    |> move ( -winX / 2 + 750, winY / 6 - 25 )
+                    |> move ( -winX / 2 + 500, winY / 6 - 25 )
                 , latex 500 14 "blank" "where" AlignLeft
-                    |> move ( -winX / 2 + 750, winY / 6 - 45 )
+                    |> move ( -winX / 2 + 500, winY / 6 - 45 )
                 , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 65 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 65 )
                 , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl Set.union Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 90 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 90 )
                 , latex 500 18 "blank" "\\delta = (above)" AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 115 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 115 )
                 , latex 500
                     14
                     "blank"
@@ -931,9 +931,9 @@ machineDefn sModel mtype winX winY =
                            )
                     )
                     AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 140 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 140 )
                 , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 760, winY / 6 - 160 )
+                    |> move ( -winX / 2 + 510, winY / 6 - 160 )
                 ]
 
 
