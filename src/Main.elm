@@ -4,7 +4,7 @@ import Array exposing (Array)
 import BetterUndoList exposing (..)
 import Browser exposing (UrlRequest)
 import Browser.Dom
-import Browser.Events
+import Browser.Events exposing (Visibility)
 import Building
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -37,6 +37,7 @@ type Msg
     | UrlChange Url
     | UrlRequest UrlRequest
     | GoTo Module
+    | VisibilityChanged Visibility
 
 
 type Module
@@ -95,6 +96,7 @@ main =
                     [ Browser.Events.onResize (\w h -> WindowSize ( w, h ))
                     , Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
                     , Browser.Events.onKeyUp (D.map KeyReleased (D.field "keyCode" D.int))
+                    , Browser.Events.onVisibilityChange VisibilityChanged
                     , case model.appModel.present.appState of
                         Building m ->
                             Sub.map BMsg (Building.subscriptions m)
@@ -346,6 +348,18 @@ update msg model =
                                 Exporting.onEnter
             in
             ( { model | appModel = enter }, cmd )
+
+        VisibilityChanged vis ->
+            ( { model
+                | environment =
+                    { oldEnvironment
+                        | holdingShift = False
+                        , holdingControl = False
+                        , holdingMeta = False
+                    }
+              }
+            , Cmd.none
+            )
 
 
 processExit :
