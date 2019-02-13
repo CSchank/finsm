@@ -1,9 +1,10 @@
-module Simulating exposing (InputTape, Model(..), Msg(..), PersistentModel, delta, deltaHat, initPModel, isAccept, latexKeyboard, machineCheck, onEnter, onExit, renderTape, subscriptions, update, view)
+module Simulating exposing (HoverError, InputTape, MachineType(..), Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
 import Browser.Events
 import Dict exposing (Dict)
 import Environment exposing (Environment)
+import Error exposing (..)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
@@ -22,19 +23,6 @@ subscriptions model =
 type MachineType
     = DFA
     | NFA
-
-
-type Error
-    = NoError
-    | DFAError DFAErrorType StateID
-    | EpsTransError
-
-
-type DFAErrorType
-    = HasEpsilon
-    | Incomplete
-    | Nondeterministic
-    | Unsure -- Good for debugging?
 
 
 type alias PersistentModel =
@@ -698,11 +686,11 @@ view env ( model, pModel, sModel ) =
                                 menu
 
                             else
-                                errorMenu validCheck oldMachine winX winY
+                                errorMenu validCheck oldMachine winX winY |> move ( -winX / 2 + 20, winY / 6 )
 
                         NFA ->
                             if validCheck == EpsTransError then
-                                errorMenu validCheck oldMachine winX winY
+                                errorMenu validCheck oldMachine winX winY |> move ( -winX / 2 + 20, winY / 6 )
 
                             else
                                 menu
@@ -741,124 +729,6 @@ view env ( model, pModel, sModel ) =
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
         , machineModeButtons pModel.machineType winX winY
         ]
-
-
-errorMenu : Error -> Machine -> Float -> Float -> Shape Msg
-errorMenu err mac winX winY =
-    let
-        errStId =
-            case err of
-                DFAError _ stId ->
-                    case Dict.get stId mac.stateNames of
-                        Just name ->
-                            name
-
-                        Nothing ->
-                            ""
-
-                _ ->
-                    ""
-
-        errorHeader txt =
-            group
-                [ triangle 20 |> filled red |> rotate 22.5
-                , roundedRect 7.5 10 5 |> filled white |> move ( 0, 7.5 )
-                , circle 3 |> filled white |> move ( 0, -2.5 )
-                , text txt
-                    |> size 20
-                    |> fixedwidth
-                    |> filled darkRed
-                    |> move ( 20, 0 )
-                ]
-                |> scale 0.75
-                |> move ( -winX / 2 + 20, winY / 6 - 20 )
-
-        errorReason =
-            group
-                [ circle 3 |> filled red
-                , (text <|
-                    case err of
-                        DFAError HasEpsilon _ ->
-                            "Possible cause: There are epsilon transitions"
-
-                        DFAError Incomplete _ ->
-                            "Possible cause: There are missing transitions"
-
-                        DFAError Nondeterministic _ ->
-                            "Possible cause: There are extraneous transitions"
-
-                        EpsTransError ->
-                            "Cause: Epsilon transitions are mixed with normal transitions"
-
-                        _ ->
-                            "You might have missed something somewhere?"
-                  )
-                    |> size 12
-                    |> fixedwidth
-                    |> filled darkRed
-                    |> move ( 15, -5 )
-                ]
-                |> move ( -winX / 2 + 20, winY / 6 - 40 )
-
-        errorHint =
-            group
-                [ circle 3 |> filled red
-                , (text <|
-                    case err of
-                        DFAError HasEpsilon _ ->
-                            "Hint: Try removing all your epsilon transitions"
-
-                        DFAError Incomplete _ ->
-                            "Hint: Check states for missing transitions"
-
-                        DFAError Nondeterministic _ ->
-                            "Hint: Find and remove extra transitions"
-
-                        EpsTransError ->
-                            "Hint: Switch to Build mode and fix transitions in red"
-
-                        _ ->
-                            ""
-                  )
-                    |> size 12
-                    |> fixedwidth
-                    |> filled darkRed
-                    |> move ( 15, -5 )
-                ]
-                |> move ( -winX / 2 + 20, winY / 6 - 60 )
-
-        errorState =
-            group
-                [ circle 3 |> filled red
-                , text "Hint: Check state "
-                    |> size 12
-                    |> fixedwidth
-                    |> filled darkRed
-                    |> move ( 15, -5 )
-                , latex 50 12 "blank" errStId AlignLeft |> move ( 150, 3 )
-                ]
-                |> move ( -winX / 2 + 20, winY / 6 - 80 )
-
-        actionHint =
-            group
-                [ circle 3 |> filled red
-                , text "Go to Build mode to fix your machine, or use a NFA"
-                    |> size 12
-                    |> fixedwidth
-                    |> filled darkRed
-                    |> move ( 15, -5 )
-                ]
-                |> move ( -winX / 2 + 20, winY / 6 - 100 )
-    in
-    case err of
-        DFAError _ _ ->
-            group [ errorHeader "DFA error: Your machine has a problem!", errorReason, errorHint, errorState, actionHint ]
-
-        EpsTransError ->
-            group [ errorHeader "Error: You have invalid state transitions!", errorReason, errorHint ]
-
-        NoError ->
-            group []
 
 
 machineDefn : SharedModel -> MachineType -> Float -> Float -> Shape Msg
@@ -1138,70 +1008,3 @@ machineModeButtons mtype winX winY =
             |> move ( -winX / 2 + 52, winY / 2 - 32 )
             |> notifyTap (ChangeMachine NFA)
         ]
-
-
-machineCheck : SharedModel -> Error
-machineCheck sModel =
-    let
-        mac =
-            sModel.machine
-
-        tMistakes =
-            sModel.machine.transitionMistakes
-
-        allTransitionLabels =
-            List.sort <| Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values mac.transitionNames
-
-        catch : Maybe (Set String) -> List String
-        catch ms =
-            case ms of
-                Nothing ->
-                    []
-
-                Just s ->
-                    Set.toList s
-
-        getTrans : Dict TransitionID StateID -> List String
-        getTrans d =
-            (List.concatMap (\e -> Dict.get e mac.transitionNames |> catch) <| Dict.keys d) |> List.sort
-
-        foldingFunc : ( StateID, Dict TransitionID StateID ) -> Error -> Error
-        foldingFunc sTuple err =
-            case err of
-                DFAError errType x ->
-                    DFAError errType x
-
-                NoError ->
-                    let
-                        transitions =
-                            getTrans <| second sTuple
-
-                        stId =
-                            first sTuple
-                    in
-                    if transitions == allTransitionLabels then
-                        NoError
-
-                    else if List.member "\\epsilon" transitions then
-                        DFAError HasEpsilon stId
-
-                    else
-                        case compare (List.length transitions) (List.length allTransitionLabels) of
-                            LT ->
-                                DFAError Incomplete stId
-
-                            EQ ->
-                                DFAError Incomplete stId
-
-                            -- e.g. compare [1,1,2] [1,2,3], can be Nondeterministic too
-                            GT ->
-                                DFAError Nondeterministic stId
-
-                EpsTransError ->
-                    EpsTransError
-    in
-    if tMistakes /= Nothing then
-        EpsTransError
-
-    else
-        List.foldr (\x acc -> foldingFunc x acc) NoError <| Dict.toList mac.delta
