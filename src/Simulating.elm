@@ -1,4 +1,4 @@
-module Simulating exposing (HoverError, InputTape, MachineType(..), Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
+module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
 import Browser.Events
@@ -10,7 +10,7 @@ import Helpers exposing (..)
 import Json.Decode as D
 import Machine exposing (..)
 import Set exposing (Set)
-import SharedModel exposing (SharedModel)
+import SharedModel exposing (..)
 import Task
 import Tuple exposing (first, second)
 
@@ -20,15 +20,9 @@ subscriptions model =
     Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
 
 
-type MachineType
-    = DFA
-    | NFA
-
-
 type alias PersistentModel =
     { tapes : Dict Int ( InputTape, TapeStatus )
     , currentStates : Set StateID
-    , machineType : MachineType
     }
 
 
@@ -95,7 +89,6 @@ initPModel =
             , ( 1, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0", "1", "1", "1", "1", "0" ], Fresh ) )
             ]
     , currentStates = test.start
-    , machineType = DFA
     }
 
 
@@ -252,7 +245,7 @@ update env msg ( model, pModel, sModel ) =
             sModel.machine
 
         machineType =
-            pModel.machineType
+            sModel.machineType
     in
     case msg of
         Step ->
@@ -501,20 +494,20 @@ update env msg ( model, pModel, sModel ) =
         ChangeMachine mtype ->
             case mtype of
                 NFA ->
-                    case pModel.machineType of
+                    case sModel.machineType of
                         NFA ->
                             ( ( model, pModel, sModel ), False, Cmd.none )
 
                         DFA ->
                             case model of
                                 Editing tId ->
-                                    ( ( Default tId -1 Nothing, { pModel | machineType = NFA }, sModel ), False, Cmd.none )
+                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
 
                                 _ ->
-                                    ( ( model, { pModel | machineType = NFA }, sModel ), False, Cmd.none )
+                                    ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
 
                 DFA ->
-                    case pModel.machineType of
+                    case sModel.machineType of
                         DFA ->
                             ( ( model, pModel, sModel ), False, Cmd.none )
 
@@ -539,10 +532,10 @@ update env msg ( model, pModel, sModel ) =
                                         oldMachine.start
 
                                 newPModel =
-                                    { pModel | machineType = DFA, currentStates = startState }
+                                    { pModel | currentStates = startState }
 
                                 newSModel =
-                                    { sModel | machine = { oldMachine | start = startState } }
+                                    { sModel | machine = { oldMachine | start = startState }, machineType = DFA }
                             in
                             case model of
                                 Editing tId ->
@@ -679,21 +672,12 @@ view env ( model, pModel, sModel ) =
                 group
                     [ rect winX (winY / 3)
                         |> filled lightGray
-                    , machineDefn sModel pModel.machineType winX winY
-                    , case pModel.machineType of
-                        DFA ->
-                            if validCheck == NoError then
-                                menu
+                    , machineDefn sModel sModel.machineType winX winY
+                    , if contextHasError validCheck sModel.machineType then
+                        errorMenu validCheck oldMachine winX winY |> move ( -winX / 2 + 20, winY / 6 )
 
-                            else
-                                errorMenu validCheck oldMachine winX winY |> move ( -winX / 2 + 20, winY / 6 )
-
-                        NFA ->
-                            if validCheck == EpsTransError then
-                                errorMenu validCheck oldMachine winX winY |> move ( -winX / 2 + 20, winY / 6 )
-
-                            else
-                                menu
+                      else
+                        menu
                     ]
                     |> move ( 0, -winY / 3 )
 
@@ -727,7 +711,7 @@ view env ( model, pModel, sModel ) =
                     ]
                     |> move ( 0, -winY / 3 )
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
-        , machineModeButtons pModel.machineType winX winY
+        , machineModeButtons sModel.machineType winX winY
         ]
 
 

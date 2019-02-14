@@ -1,19 +1,16 @@
-module Error exposing (DFAErrorType(..), Error(..), errorMenu, machineCheck)
+module Error exposing (DFAErrorType(..), Error(..), contextHasError, errorIcon, errorMenu, machineCheck)
 
 -- This module serves to export checks and exception handling of finite state machines.
 -- When we add support for other machine types, we can extend this module as well.
 
 import Array exposing (Array)
-import Browser.Events
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
-import Json.Decode as D
 import Machine exposing (Machine, StateID, TransitionID)
 import Set exposing (Set)
-import SharedModel exposing (SharedModel)
-import Task
+import SharedModel exposing (..)
 import Tuple exposing (first, second)
 
 
@@ -29,6 +26,28 @@ type DFAErrorType
     | Incomplete
     | Nondeterministic
     | Unsure -- Good for debugging?
+
+
+contextHasError : Error -> MachineType -> Bool
+contextHasError err mtype =
+    case mtype of
+        DFA ->
+            if err == NoError then
+                False
+
+            else
+                True
+
+        NFA ->
+            case err of
+                EpsTransError ->
+                    True
+
+                DuplicateStates _ ->
+                    True
+
+                _ ->
+                    False
 
 
 machineCheck : SharedModel -> Error
@@ -98,6 +117,15 @@ machineCheck sModel =
         List.foldr (\x acc -> foldingFunc x acc) NoError <| Dict.toList mac.delta
 
 
+errorIcon : Color -> Color -> Shape msg
+errorIcon backclr shapeclrs =
+    group
+        [ triangle 20 |> filled backclr |> rotate 22.5
+        , roundedRect 7.5 10 5 |> filled shapeclrs |> move ( 0, 7.5 )
+        , circle 3 |> filled shapeclrs |> move ( 0, -2.5 )
+        ]
+
+
 errorMenu : Error -> Machine -> Float -> Float -> Shape msg
 errorMenu err mac winX winY =
     let
@@ -116,9 +144,7 @@ errorMenu err mac winX winY =
 
         errorHeader txt =
             group
-                [ triangle 20 |> filled red |> rotate 22.5
-                , roundedRect 7.5 10 5 |> filled white |> move ( 0, 7.5 )
-                , circle 3 |> filled white |> move ( 0, -2.5 )
+                [ errorIcon red white
                 , text txt
                     |> size 20
                     |> fixedwidth

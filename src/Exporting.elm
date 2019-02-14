@@ -4,6 +4,7 @@ import Array exposing (Array)
 import Browser.Events
 import Dict exposing (Dict)
 import Environment exposing (Environment)
+import Error exposing (..)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Html as H
@@ -12,7 +13,7 @@ import Json.Decode as D
 import Machine exposing (..)
 import Set exposing (Set)
 import Sha256 exposing (sha256)
-import SharedModel exposing (SharedModel)
+import SharedModel exposing (..)
 import Task
 import Time exposing (Month(..), customZone, millisToPosix, toDay, toHour, toMinute, toMonth, toSecond, toYear)
 import Tuple exposing (first, second)
@@ -35,6 +36,7 @@ type alias InputTape =
 
 type Model
     = Default
+    | HoverError
     | ShowingOutput
 
 
@@ -48,6 +50,8 @@ type Msg
     | CloseOutput
     | MachineMsg Machine.Msg
     | GetTime Int
+    | HoverErrorEnter
+    | HoverErrorExit
 
 
 onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
@@ -89,6 +93,12 @@ update env msg ( model, pModel, sModel ) =
         GetTime t ->
             ( ( model, { pModel | time = t }, sModel ), False, Cmd.none )
 
+        HoverErrorEnter ->
+            ( ( HoverError, pModel, sModel ), False, Cmd.none )
+
+        HoverErrorExit ->
+            ( ( Default, pModel, sModel ), False, Cmd.none )
+
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
 view env ( model, pModel, sModel ) =
@@ -105,18 +115,49 @@ view env ( model, pModel, sModel ) =
         menu =
             group <|
                 []
+
+        errCheck =
+            machineCheck sModel
+
+        hasErr =
+            contextHasError errCheck sModel.machineType
+
+        -- TODO: Adjust popup box size to fix custom error messages
+        errHover =
+            group
+                [ errorIcon red white
+                , if model == HoverError then
+                    group [ roundedRect 465 110 5 |> filled darkGrey |> move ( 215, -55 ), errorMenu errCheck sModel.machine winX winY ]
+
+                  else
+                    group []
+                ]
+                |> notifyEnter HoverErrorEnter
+                |> notifyLeave HoverErrorExit
+                |> move ( winX / 6 - 100, -105 )
     in
     group
         [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start) |> move ( -winX / 6, 0 )
+        , machineSelected sModel.machineType winX winY
         , text "Choose format:"
             |> size 20
             |> fixedwidth
             |> filled black
             |> move ( winX / 6 - 125, 80 )
         , exportTikz (pModel.outputType == Tikz) |> move ( winX / 6, 0 )
-        , exportButton
+        , exportButton (not hasErr)
             |> move ( winX / 6, -100 )
-            |> notifyTap GenerateOutput
+            |> (if hasErr then
+                    identity
+
+                else
+                    notifyTap GenerateOutput
+               )
+        , if hasErr then
+            errHover
+
+          else
+            group []
         , case ( model, pModel.outputType ) of
             ( ShowingOutput, Tikz ) ->
                 output (winX / 2) (winY / 2) (generateTikz pModel.time sModel.machine)
@@ -124,6 +165,24 @@ view env ( model, pModel, sModel ) =
             _ ->
                 group []
         ]
+
+
+machineSelected : MachineType -> Float -> Float -> Shape Msg
+machineSelected mtype winX winY =
+    let
+        mtypeStr =
+            case mtype of
+                DFA ->
+                    "DFA"
+
+                NFA ->
+                    "NFA"
+    in
+    text ("Your exported machine type: " ++ mtypeStr)
+        |> centered
+        |> fixedwidth
+        |> filled darkGray
+        |> move ( -winX / 2 + 117, winY / 2 - 32 )
 
 
 exportTikz : Bool -> Shape Msg
@@ -164,15 +223,27 @@ exportTikz selected =
         ]
 
 
-exportButton =
+exportButton clickable =
     group
         [ roundedRect 130 40 5
-            |> filled finsmBlue
+            |> filled
+                (if clickable then
+                    finsmBlue
+
+                 else
+                    gray
+                )
         , text "Export"
             |> fixedwidth
             |> size 24
             |> centered
-            |> filled white
+            |> filled
+                (if clickable then
+                    white
+
+                 else
+                    darkGray
+                )
             |> move ( 0, -7 )
         ]
 
