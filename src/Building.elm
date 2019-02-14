@@ -414,6 +414,7 @@ update env msg ( model, pModel, sModel ) =
                         newMachine =
                             { oldMachine
                                 | q = Set.insert newId oldMachine.q
+                                , delta = Dict.insert newId Dict.empty oldMachine.delta
                                 , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
                                 , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames
                             }
@@ -668,11 +669,6 @@ view env ( model, pModel, sModel ) =
         , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
         , editingButtons model |> move ( winX / 2 - 30, -winY / 2 + 25 )
         ]
-
-
-roundTo : Float -> Float -> Float
-roundTo n m =
-    toFloat (round (m + n / 2) // round n * round n)
 
 
 updateStatePos : StateID -> ( Float, Float ) -> StatePositions -> StatePositions

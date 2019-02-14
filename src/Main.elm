@@ -4,10 +4,11 @@ import Array exposing (Array)
 import BetterUndoList exposing (..)
 import Browser exposing (UrlRequest)
 import Browser.Dom
-import Browser.Events
+import Browser.Events exposing (Visibility)
 import Building
 import Dict exposing (Dict)
 import Environment exposing (Environment)
+import Exporting
 import GraphicSVG exposing (..)
 import Helpers exposing (finsmBlue, icon, sendMsg)
 import Html as H exposing (Html, input, node)
@@ -29,22 +30,26 @@ import Url exposing (Url)
 type Msg
     = BMsg Building.Msg
     | SMsg Simulating.Msg
+    | EMsg Exporting.Msg
     | KeyPressed Int
     | KeyReleased Int
     | WindowSize ( Int, Int )
     | UrlChange Url
     | UrlRequest UrlRequest
     | GoTo Module
+    | VisibilityChanged Visibility
 
 
 type Module
     = BuildingModule
     | SimulatingModule
+    | ExportingModule
 
 
 type ApplicationState
     = Building Building.Model
     | Simulating Simulating.Model
+    | Exporting Exporting.Model
 
 
 type alias Model =
@@ -57,6 +62,7 @@ type alias ApplicationModel =
     { appState : ApplicationState
     , simulatingData : Simulating.PersistentModel
     , buildingData : Building.PersistentModel
+    , exportingData : Exporting.PersistentModel
     , sharedModel : SharedModel
     }
 
@@ -68,6 +74,7 @@ initAppModel =
         , sharedModel = SharedModel.init
         , simulatingData = Simulating.initPModel
         , buildingData = Building.initPModel
+        , exportingData = Exporting.initPModel
         }
 
 
@@ -89,12 +96,16 @@ main =
                     [ Browser.Events.onResize (\w h -> WindowSize ( w, h ))
                     , Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
                     , Browser.Events.onKeyUp (D.map KeyReleased (D.field "keyCode" D.int))
+                    , Browser.Events.onVisibilityChange VisibilityChanged
                     , case model.appModel.present.appState of
                         Building m ->
                             Sub.map BMsg (Building.subscriptions m)
 
                         Simulating m ->
                             Sub.map SMsg (Simulating.subscriptions m)
+
+                        Exporting m ->
+                            Sub.map EMsg (Exporting.subscriptions m)
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
@@ -108,6 +119,45 @@ main =
 -}
 
 
+moduleUpdate :
+    Environment
+    -> mMsg
+    -> mModel
+    -> pModel
+    -> Model
+    -> (mMsg -> Msg)
+    -> (mModel -> ApplicationState)
+    -> (pModel -> ApplicationModel -> ApplicationModel)
+    -> (Environment -> mMsg -> ( mModel, pModel, SharedModel ) -> ( ( mModel, pModel, SharedModel ), Bool, Cmd mMsg ))
+    -> ( Model, Cmd Msg )
+moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel mUpdate =
+    let
+        currentAppState =
+            model.appModel.present
+
+        ( ( newM, newPModel, newSModel ), checkpoint, cmd ) =
+            mUpdate env mMsg ( mModel, pModel, currentAppState.sharedModel )
+
+        newAppState =
+            { currentAppState
+                | appState = appStateWrapper newM
+                , sharedModel = newSModel
+            }
+                |> setpModel newPModel
+    in
+    ( { model
+        | appModel =
+            if checkpoint then
+                new newAppState model.appModel
+
+            else
+                replace newAppState model.appModel
+      }
+    , Cmd.map msgWrapper cmd
+    )
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
         oldEnvironment =
@@ -120,27 +170,16 @@ update msg model =
         BMsg bmsg ->
             case currentAppState.appState of
                 Building m ->
-                    let
-                        ( ( newM, newPModel, newSModel ), checkpoint, cmd ) =
-                            Building.update oldEnvironment bmsg ( m, currentAppState.buildingData, currentAppState.sharedModel )
-
-                        newAppState =
-                            { currentAppState
-                                | appState = Building newM
-                                , buildingData = newPModel
-                                , sharedModel = newSModel
-                            }
-                    in
-                    ( { model
-                        | appModel =
-                            if checkpoint then
-                                new newAppState model.appModel
-
-                            else
-                                replace newAppState model.appModel
-                      }
-                    , Cmd.map BMsg cmd
-                    )
+                    moduleUpdate
+                        oldEnvironment
+                        bmsg
+                        m
+                        currentAppState.buildingData
+                        model
+                        BMsg
+                        Building
+                        (\pm am -> { am | buildingData = pm })
+                        Building.update
 
                 _ ->
                     ( model, Cmd.none )
@@ -148,27 +187,33 @@ update msg model =
         SMsg smsg ->
             case currentAppState.appState of
                 Simulating m ->
-                    let
-                        ( ( newM, newPModel, newSModel ), checkpoint, cmd ) =
-                            Simulating.update oldEnvironment smsg ( m, currentAppState.simulatingData, currentAppState.sharedModel )
+                    moduleUpdate
+                        oldEnvironment
+                        smsg
+                        m
+                        currentAppState.simulatingData
+                        model
+                        SMsg
+                        Simulating
+                        (\pm am -> { am | simulatingData = pm })
+                        Simulating.update
 
-                        newAppState =
-                            { currentAppState
-                                | appState = Simulating newM
-                                , simulatingData = newPModel
-                                , sharedModel = newSModel
-                            }
-                    in
-                    ( { model
-                        | appModel =
-                            if checkpoint then
-                                new newAppState model.appModel
+                _ ->
+                    ( model, Cmd.none )
 
-                            else
-                                replace newAppState model.appModel
-                      }
-                    , Cmd.map SMsg cmd
-                    )
+        EMsg emsg ->
+            case currentAppState.appState of
+                Exporting m ->
+                    moduleUpdate
+                        oldEnvironment
+                        emsg
+                        m
+                        currentAppState.exportingData
+                        model
+                        EMsg
+                        Exporting
+                        (\pm am -> { am | exportingData = pm })
+                        Exporting.update
 
                 _ ->
                     ( model, Cmd.none )
@@ -244,68 +289,134 @@ update msg model =
                 exit =
                     case currentAppState.appState of
                         Building m ->
-                            let
-                                ( ( pModel, sModel ), checkpoint ) =
-                                    Building.onExit oldEnvironment ( m, currentAppState.buildingData, currentAppState.sharedModel )
-
-                                newAppState =
-                                    { currentAppState | buildingData = pModel, sharedModel = sModel }
-                            in
-                            if checkpoint then
-                                new newAppState model.appModel
-
-                            else
-                                replace newAppState model.appModel
+                            processExit
+                                oldEnvironment
+                                m
+                                currentAppState.buildingData
+                                model
+                                (\pm am -> { am | buildingData = pm })
+                                Building.onExit
 
                         Simulating m ->
-                            let
-                                ( ( pModel, sModel ), checkpoint ) =
-                                    Simulating.onExit oldEnvironment ( m, currentAppState.simulatingData, currentAppState.sharedModel )
+                            processExit
+                                oldEnvironment
+                                m
+                                currentAppState.simulatingData
+                                model
+                                (\pm am -> { am | simulatingData = pm })
+                                Simulating.onExit
 
-                                newAppState =
-                                    { currentAppState | simulatingData = pModel, sharedModel = sModel }
-                            in
-                            if checkpoint then
-                                new newAppState model.appModel
-
-                            else
-                                replace newAppState model.appModel
+                        Exporting m ->
+                            processExit
+                                oldEnvironment
+                                m
+                                currentAppState.exportingData
+                                model
+                                (\pm am -> { am | exportingData = pm })
+                                Exporting.onExit
 
                 ( enter, cmd ) =
                     case mod of
                         BuildingModule ->
-                            let
-                                ( ( bModel, pModel, sModel ), checkpoint, bCmd ) =
-                                    Building.onEnter oldEnvironment ( exit.present.buildingData, exit.present.sharedModel )
-
-                                newAppState =
-                                    { currentAppState | appState = Building bModel, buildingData = pModel, sharedModel = sModel }
-                            in
-                            ( if checkpoint then
-                                new newAppState model.appModel
-
-                              else
-                                replace newAppState model.appModel
-                            , Cmd.map BMsg bCmd
-                            )
+                            processEnter
+                                oldEnvironment
+                                currentAppState.buildingData
+                                exit
+                                BMsg
+                                Building
+                                (\pm am -> { am | buildingData = pm })
+                                Building.onEnter
 
                         SimulatingModule ->
-                            let
-                                ( ( simModel, pModel, sModel ), checkpoint, sCmd ) =
-                                    Simulating.onEnter oldEnvironment ( exit.present.simulatingData, exit.present.sharedModel )
+                            processEnter
+                                oldEnvironment
+                                currentAppState.simulatingData
+                                exit
+                                SMsg
+                                Simulating
+                                (\pm am -> { am | simulatingData = pm })
+                                Simulating.onEnter
 
-                                newAppState =
-                                    { currentAppState | appState = Simulating simModel, simulatingData = pModel, sharedModel = sModel }
-                            in
-                            ( if checkpoint then
-                                new newAppState model.appModel
-
-                              else
-                                replace newAppState model.appModel
-                            , Cmd.map SMsg sCmd
-                            )
+                        ExportingModule ->
+                            processEnter
+                                oldEnvironment
+                                currentAppState.exportingData
+                                exit
+                                EMsg
+                                Exporting
+                                (\pm am -> { am | exportingData = pm })
+                                Exporting.onEnter
             in
             ( { model | appModel = enter }, cmd )
+
+        VisibilityChanged vis ->
+            ( { model
+                | environment =
+                    { oldEnvironment
+                        | holdingShift = False
+                        , holdingControl = False
+                        , holdingMeta = False
+                    }
+              }
+            , Cmd.none
+            )
+
+
+processExit :
+    Environment
+    -> mModel
+    -> pModel
+    -> Model
+    -> (pModel -> ApplicationModel -> ApplicationModel)
+    -> (Environment -> ( mModel, pModel, SharedModel ) -> ( ( pModel, SharedModel ), Bool ))
+    -> BetterUndoList ApplicationModel
+processExit env m pModel model setpModel onExit =
+    let
+        currentAppState =
+            model.appModel.present
+
+        ( ( newPModel, newSModel ), checkpoint ) =
+            onExit env ( m, pModel, currentAppState.sharedModel )
+
+        newAppState =
+            { currentAppState | sharedModel = newSModel }
+                |> setpModel newPModel
+    in
+    if checkpoint then
+        new newAppState model.appModel
+
+    else
+        replace newAppState model.appModel
+
+
+processEnter :
+    Environment
+    -> pModel
+    -> BetterUndoList ApplicationModel
+    -> (mMsg -> Msg)
+    -> (mModel -> ApplicationState)
+    -> (pModel -> ApplicationModel -> ApplicationModel)
+    -> (Environment -> ( pModel, SharedModel ) -> ( ( mModel, pModel, SharedModel ), Bool, Cmd mMsg ))
+    -> ( BetterUndoList ApplicationModel, Cmd Msg )
+processEnter env pModel exitModel msgWrapper appStateWrapper setpModel onEnter =
+    let
+        exitAppState =
+            exitModel.present
+
+        ( ( newM, newPModel, newSModel ), checkpoint, mCmd ) =
+            onEnter env ( pModel, exitAppState.sharedModel )
+
+        newAppState =
+            { exitAppState | appState = appStateWrapper newM, sharedModel = newSModel }
+                |> setpModel newPModel
+    in
+    ( if checkpoint then
+        new newAppState exitModel
+
+      else
+        replace newAppState exitModel
+    , Cmd.map msgWrapper mCmd
+    )
 
 
 textHtml : String -> Html msg
@@ -342,6 +453,9 @@ view model =
 
             Simulating m ->
                 GraphicSVG.map SMsg <| Simulating.view model.environment ( m, appState.simulatingData, appState.sharedModel )
+
+            Exporting m ->
+                GraphicSVG.map EMsg <| Exporting.view model.environment ( m, appState.exportingData, appState.sharedModel )
         , modeButtons model
         , icon False (text "?" |> size 30 |> fixedwidth |> centered |> filled (rgb 220 220 220) |> move ( 0, -9 ))
             |> addHyperlink "https://github.com/CSchank/finsm/wiki"
@@ -368,6 +482,14 @@ modeButtons model =
         simulating =
             case model.appModel.present.appState of
                 Simulating _ ->
+                    True
+
+                _ ->
+                    False
+
+        exporting =
+            case model.appModel.present.appState of
+                Exporting _ ->
                     True
 
                 _ ->
@@ -422,6 +544,30 @@ modeButtons model =
             ]
             |> move ( -winX / 2 + 77, winY / 2 - 15 )
             |> notifyTap (GoTo SimulatingModule)
+        , group
+            [ roundedRect 50 15 1
+                |> filled
+                    (if exporting then
+                        finsmBlue
+
+                     else
+                        blank
+                    )
+                |> addOutline (solid 1) darkGray
+            , text "Export"
+                |> centered
+                |> fixedwidth
+                |> filled
+                    (if exporting then
+                        white
+
+                     else
+                        darkGray
+                    )
+                |> move ( 0, -4 )
+            ]
+            |> move ( -winX / 2 + 134, winY / 2 - 15 )
+            |> notifyTap (GoTo ExportingModule)
         ]
 
 
