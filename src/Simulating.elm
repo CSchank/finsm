@@ -329,7 +329,7 @@ update env msg ( model, pModel, sModel ) =
                 --pressed enter
                 case model of
                     Editing tId ->
-                        ( ( Default tId -1 Nothing, pModel, sModel ), True, Cmd.none )
+                        ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
