@@ -1,5 +1,6 @@
-module Example exposing (suite)
+module Examples exposing (suite)
 
+import Convert exposing (..)
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, list, string)
 import Test exposing (..)

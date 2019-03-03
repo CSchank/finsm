@@ -1,52 +1,114 @@
+module Kleene exposing (Kleene(..), eval, fmap, mkundefined, sanitize, special, well_typed_example)
+
 {-
-Here, we develop an implementation of the Kleene Algebra, which is the
-underlying generalized structure of regular expressions.
+   Here, we develop an implementation of the Kleene Algebra, which is the
+   underlying generalized structure of regular expressions.
 -}
 
-module Kleene exposing (..)
+import Set exposing (fromList, member)
+import String exposing (cons, foldr)
 
-import Regex exposing (Regex, Match, fromString, never, find, replace)
-import Maybe 
 
-type alias Algebra a = Kleene a -> a
-
-type Fix = Fix (Kleene Fix)
-
-unFix : Fix -> Kleene Fix
-unFix (Fix x) = x
-
-type Kleene a =
-    Empty
+type Kleene a
+    = Empty
     | Id
-    | Member a
+    | Alpha a
     | Plus (Kleene a) (Kleene a)
     | Mul (Kleene a) (Kleene a)
     | Star (Kleene a)
 
+
 fmap : (a -> b) -> Kleene a -> Kleene b
 fmap f expr =
     case expr of
-        Empty -> Empty
-        Id -> Id
-        Member a -> Member (f a)
-        Plus a b -> Plus (fmap f a) (fmap f a)
-        Mul a b  -> Mul (fmap f a) (fmap f b)
-        Star a -> Star (fmap f a)
+        Empty ->
+            Empty
 
-eval : Algebra String
-eval alg =
-    case alg of
-        Empty    -> mkundefined "" -- Bottom
-        Id       -> ""
-        Member a -> a
-        Plus a b -> (eval a) ++ "+" ++ (eval b)
-        Mul a b  -> (eval a) ++ (eval b)
-        Star a   -> (eval a) ++ "*"
+        Id ->
+            Id
 
-cata : Algebra a -> Fix -> a
-cata alg = alg << fmap (cata alg) << unFix
+        Alpha a ->
+            Alpha (f a)
 
-well_typed_example = Star (Member "a")
+        Plus a b ->
+            Plus (fmap f a) (fmap f a)
+
+        Mul a b ->
+            Mul (fmap f a) (fmap f b)
+
+        Star a ->
+            Star (fmap f a)
+
+
+eval : Kleene String -> String
+eval expr =
+    case expr of
+        Empty ->
+            mkundefined ""
+
+        -- Bottom
+        Id ->
+            "ε"
+
+        Alpha a ->
+            sanitize a
+
+        Plus a b ->
+            eval a ++ "|" ++ eval b
+
+        Mul a b ->
+            eval a ++ eval b
+
+        Star a ->
+            "(" ++ eval a ++ ")*"
+
+
+well_typed_example =
+    Plus Id (Alpha ":")
+
 
 mkundefined : a -> whatever
-mkundefined x = mkundefined x
+mkundefined x =
+    mkundefined x
+
+
+
+-- Special characters: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions
+
+
+special =
+    fromList
+        [ '\\'
+        , '^'
+        , '$'
+        , '*'
+        , '+'
+        , '?'
+        , '.'
+        , '('
+        , ')'
+        , ':'
+        , '='
+        , '!'
+        , '<'
+        , '{'
+        , '}'
+        , '['
+        , ']'
+        , ','
+        , '|'
+        ]
+
+
+sanitize : String -> String
+sanitize s =
+    foldr
+        (\c str ->
+            if member c special then
+                cons '\\' (cons c str)
+
+            else
+                cons c str
+        )
+        ""
+        s
