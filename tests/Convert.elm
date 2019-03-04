@@ -83,9 +83,6 @@ topParser =
         [ backtrackable <| lazy (\_ -> kleeneOp topParser)
         , ident
         , chars
-
-        -- , escape
-        -- , paren (\_ -> topParser)
         ]
 
 
@@ -144,9 +141,9 @@ char =
 
 escape : Parser String
 escape =
-    getChompedString <|
-        chompIf (\c -> c == '\\')
-            |. chompIf (\c -> Set.member c special)
+    succeed identity
+      |. chompIf (\c -> c == '\\')
+      |= getChompedString (chompIf (\c -> Set.member c special))
 
 
 ident : Parser (Kleene String)
@@ -382,7 +379,7 @@ decomposeLevels visited unvisited pre post =
 
                             Just lvl0 ->
                                 if lvl0 < level then
-                                    ( ( stId, tID0, stID0 ), ( 0, toFloat <| (level - lvl0) * 10 ) )
+                                    ( ( stId, tID0, stID0 ), ( 0, toFloat <| (level - lvl0) * (-20) ) )
 
                                 else
                                     ( ( stId, tID0, stID0 ), ( 0, 0 ) )
