@@ -174,7 +174,7 @@ defaultCap =
 convertNFA : Kleene String -> Machine
 convertNFA ks =
     convertNFA0 ks 0
-        |> Maybe.withDefault (identityMachine 0)
+        |> Maybe.withDefault (emptyMachine 0)
         |> Tuple.first
         |> convertFromSimple
 
