@@ -167,7 +167,16 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                         , latex (xpad * 0.9) (xpad * 0.7) "white" st AlignCentre
                             |> move ( 0, 10.25 )
                         ]
-                        |> move ( toFloat n * xpad, 0 )
+                        |> move
+                            ( toFloat n * xpad
+                                + (if not showButtons then
+                                    xpad / 2
+
+                                   else
+                                    0
+                                  )
+                            , 0
+                            )
                         |> notifyTap (ChangeTape tapeId)
                 )
                 input
