@@ -77,7 +77,7 @@ update env msg ( model, pModel, sModel ) =
     in
     case msg of
         MachineMsg mmsg ->
-            case Debug.log "mmsg" mmsg of
+            case mmsg of
                 StartDragging st ( x, y ) ->
                     let
                         ( sx, sy ) =
