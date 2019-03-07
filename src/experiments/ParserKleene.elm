@@ -1,4 +1,4 @@
-module ParserKleene exposing (char, chars, charsHelper, empty, endInput, escape, flip, ident, initLast, initLastHelper, kleeneOp, oldParser, paren, parseKleene, reserved, topParser)
+module ParserKleene exposing (branch, char, chars, charsHelper, empty, endInput, escape, flip, ident, initLast, initLastHelper, kleeneOp, oldParser, paren, parseKleene, reserved, topParser)
 
 import Debug exposing (todo)
 import Kleene exposing (..)
@@ -16,18 +16,27 @@ parseKleene =
 topParser : Parser (Kleene String)
 topParser =
     succeed (|>)
-        |= oneOf [ ident, paren, chars ]
-        |= oneOf
-            [ succeed (\expr -> flip Plus expr)
-                |. token "|"
-                |= lazy (\_ -> topParser)
-            , succeed (\expr -> flip mul expr)
-                |. token "^"
-                |= lazy (\_ -> topParser)
-            , succeed (\expr -> flip mul expr)
-                |= lazy (\_ -> topParser)
-            , succeed identity
-            ]
+        |= oneOf [ paren, ident, chars ]
+        |= branch
+
+
+branch : Parser (Kleene String -> Kleene String)
+branch =
+    oneOf
+        [ succeed (\expr -> flip Plus expr)
+            |. token "|"
+            |= lazy (\_ -> topParser)
+        , succeed (\expr -> flip Mul expr)
+            |. token "^("
+            |= lazy (\_ -> topParser)
+            |. token ")"
+        , succeed (\expr -> flip mul expr)
+            |. token "^"
+            |= lazy (\_ -> topParser)
+        , succeed (\expr -> flip mul expr)
+            |= lazy (\_ -> topParser)
+        , succeed identity
+        ]
 
 
 paren : Parser (Kleene String)
