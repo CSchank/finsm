@@ -379,8 +379,9 @@ update env msg ( model, pModel, sModel ) =
                 --left arrow key
                 case model of
                     Default tId _ hErr ->
-                        ( (Default tId -1 hErr, { pModel | currentStates = sModel.machine.start }, sModel), False, Cmd.none)
-                    _ -> 
+                        ( ( Default tId -1 hErr, { pModel | currentStates = sModel.machine.start }, sModel ), False, Cmd.none )
+
+                    _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
             else
