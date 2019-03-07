@@ -1,4 +1,4 @@
-module Convert exposing (Intermediate, Level, Queue, char, chars, charsHelper, convertFromSimple, convertListCharRegex0, convertNFA, convertNFA0, convertRegex, convertRegexToNFA, convertStringRegex, convertTransitions, decomposeLevels, defaultCap, escape, flattenPattern, ident, kleeneOp, mapCharWithTID, parseKleene, placeStates, reserved, topParser)
+module Convert exposing (Intermediate, Level, Queue, convertFromSimple, convertListCharRegex0, convertNFA, convertNFA0, convertRegex, convertRegexToNFA, convertStringRegex, convertTransitions, decomposeLevels, defaultCap, flattenPattern, mapCharWithTID, placeStates)
 
 {-
    This module performs conversion on representations of
@@ -15,6 +15,7 @@ import Kleene exposing (..)
 import Machine exposing (..)
 import Maybe exposing (..)
 import Parser exposing (..)
+import ParserKleene exposing (..)
 import Regex exposing (Match, Regex, find, fromString, never, replace)
 import Set exposing (..)
 import Simple exposing (..)
@@ -70,89 +71,6 @@ convertListCharRegex0 cs s =
 -----------------------------
 -- String to Kleene        --
 -----------------------------
-
-
-parseKleene : String -> Kleene String
-parseKleene =
-    run topParser >> Result.withDefault Empty
-
-
-topParser : Parser (Kleene String)
-topParser =
-    oneOf
-        [ backtrackable <| lazy (\_ -> kleeneOp topParser)
-        , ident
-        , chars
-        ]
-
-
-kleeneOp : Parser (Kleene String) -> Parser (Kleene String)
-kleeneOp rec =
-    succeed
-        (\a ( op, b ) ->
-            case op of
-                "|" ->
-                    Plus a b
-
-                "^" ->
-                    Mul a b
-
-                "*" ->
-                    Star a
-
-                _ ->
-                    Empty
-        )
-        |. symbol "("
-        |= lazy (\_ -> rec)
-        |= oneOf
-            [ succeed (\op -> ( op, Empty ))
-                |. symbol ")"
-                |= (getChompedString <| symbol "*")
-            , succeed (\op b -> ( op, b ))
-                |= (getChompedString <| oneOf [ symbol "|", symbol "^" ])
-                |= lazy (\_ -> rec)
-                |. symbol ")"
-            ]
-
-
-reserved =
-    [ '|', '*', 'ε', '(', ')', '\\' ]
-
-
-chars : Parser (Kleene String)
-chars =
-    loop "" charsHelper
-
-
-charsHelper : String -> Parser (Step String (Kleene String))
-charsHelper str =
-    oneOf
-        [ succeed (\c -> Loop (str ++ c))
-            |= oneOf [ char, escape ]
-        , succeed <| Done (Alpha str)
-        ]
-
-
-char : Parser String
-char =
-    getChompedString <| chompIf Char.isAlphaNum
-
-
-escape : Parser String
-escape =
-    succeed identity
-      |. chompIf (\c -> c == '\\')
-      |= getChompedString (chompIf (\c -> Set.member c special))
-
-
-ident : Parser (Kleene String)
-ident =
-    succeed Id
-        |. (getChompedString <| chompIf (\c -> c == 'ε'))
-
-
-
 {-
    paren : Parser a -> Parser a
    paren parser =
@@ -379,7 +297,7 @@ decomposeLevels visited unvisited pre post =
 
                             Just lvl0 ->
                                 if lvl0 < level then
-                                    ( ( stId, tID0, stID0 ), ( 0, toFloat <| (level - lvl0) * (-20) ) )
+                                    ( ( stId, tID0, stID0 ), ( 0, toFloat <| (level - lvl0) * (level - lvl0) * -10 ) )
 
                                 else
                                     ( ( stId, tID0, stID0 ), ( 0, 0 ) )

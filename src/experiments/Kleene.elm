@@ -1,4 +1,4 @@
-module Kleene exposing (Kleene(..), eval, fmap, mkundefined, sanitize, special, well_typed_example)
+module Kleene exposing (..)
 
 {-
    Here, we develop an implementation of the Kleene Algebra, which is the
@@ -112,3 +112,41 @@ sanitize s =
         )
         ""
         s
+
+
+
+-- Smart constructor of Mul. Eliminates unneccessary empty strings.
+
+
+mul : Kleene String -> Kleene String -> Kleene String
+mul a b =
+    case b of
+        Empty ->
+            Empty
+
+        Id ->
+            a
+
+        Alpha str ->
+            if a == Alpha "" then
+                b
+
+            else
+                Mul a b
+
+        Plus c d ->
+            Plus (mul a c) d
+
+        Mul c d ->
+            if a == Alpha "" then
+                b
+
+            else
+                Mul a b
+
+        Star c ->
+            if a == Alpha "" then
+                b
+
+            else
+                Mul a b
