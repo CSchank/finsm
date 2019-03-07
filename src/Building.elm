@@ -1,6 +1,7 @@
 module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
 import Browser.Events
+import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
@@ -76,7 +77,7 @@ update env msg ( model, pModel, sModel ) =
     in
     case msg of
         MachineMsg mmsg ->
-            case mmsg of
+            case Debug.log "mmsg" mmsg of
                 StartDragging st ( x, y ) ->
                     let
                         ( sx, sy ) =
