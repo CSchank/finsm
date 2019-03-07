@@ -375,6 +375,14 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
+            else if k == 37 then
+                --left arrow key
+                case model of
+                    Default tId _ hErr ->
+                        ( (Default tId -1 hErr, { pModel | currentStates = sModel.machine.start }, sModel), False, Cmd.none)
+                    _ -> 
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
             else
                 case model of
                     Editing tapeId ->
