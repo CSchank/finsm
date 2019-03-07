@@ -1,4 +1,9 @@
-module Environment exposing (Environment, init)
+module Environment exposing (DevMode(..), Environment, init, initDev)
+
+
+type DevMode
+    = Deploy
+    | Development
 
 
 init : Environment
@@ -7,6 +12,17 @@ init =
     , holdingShift = False
     , holdingControl = False
     , holdingMeta = False
+    , devMode = Deploy
+    }
+
+
+initDev : Environment
+initDev =
+    { windowSize = ( 0, 0 )
+    , holdingShift = False
+    , holdingControl = False
+    , holdingMeta = False
+    , devMode = Development
     }
 
 
@@ -15,4 +31,5 @@ type alias Environment =
     , holdingShift : Bool
     , holdingControl : Bool
     , holdingMeta : Bool
+    , devMode : DevMode
     }

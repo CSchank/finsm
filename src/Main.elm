@@ -6,8 +6,9 @@ import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events exposing (Visibility)
 import Building
+import Creating
 import Dict exposing (Dict)
-import Environment exposing (Environment)
+import Environment exposing (..)
 import Exporting
 import GraphicSVG exposing (..)
 import Helpers exposing (finsmBlue, icon, sendMsg)
@@ -31,6 +32,7 @@ type Msg
     = BMsg Building.Msg
     | SMsg Simulating.Msg
     | EMsg Exporting.Msg
+    | CMsg Creating.Msg
     | KeyPressed Int
     | KeyReleased Int
     | WindowSize ( Int, Int )
@@ -44,12 +46,14 @@ type Module
     = BuildingModule
     | SimulatingModule
     | ExportingModule
+    | CreatingModule
 
 
 type ApplicationState
     = Building Building.Model
     | Simulating Simulating.Model
     | Exporting Exporting.Model
+    | Creating Creating.Model
 
 
 type alias Model =
@@ -63,6 +67,7 @@ type alias ApplicationModel =
     , simulatingData : Simulating.PersistentModel
     , buildingData : Building.PersistentModel
     , exportingData : Exporting.PersistentModel
+    , creatingData : Creating.PersistentModel
     , sharedModel : SharedModel
     }
 
@@ -75,6 +80,7 @@ initAppModel =
         , simulatingData = Simulating.initPModel
         , buildingData = Building.initPModel
         , exportingData = Exporting.initPModel
+        , creatingData = Creating.initPModel
         }
 
 
@@ -84,7 +90,7 @@ main =
         { init =
             \flags url key ->
                 ( { appModel = initAppModel
-                  , environment = Environment.init
+                  , environment = Environment.initDev
                   }
                 , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
                 )
@@ -106,6 +112,9 @@ main =
 
                         Exporting m ->
                             Sub.map EMsg (Exporting.subscriptions m)
+
+                        Creating m ->
+                            Sub.map CMsg (Creating.subscriptions m)
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
@@ -218,6 +227,27 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        CMsg cmsg ->
+            if oldEnvironment.devMode == Deploy then
+                ( model, Cmd.none )
+
+            else
+                case currentAppState.appState of
+                    Creating m ->
+                        moduleUpdate
+                            oldEnvironment
+                            cmsg
+                            m
+                            currentAppState.creatingData
+                            model
+                            CMsg
+                            Creating
+                            (\pm am -> { am | creatingData = pm })
+                            Creating.update
+
+                    _ ->
+                        ( model, Cmd.none )
+
         WindowSize ( w, h ) ->
             ( { model | environment = { oldEnvironment | windowSize = ( w, h ) } }, Cmd.none )
 
@@ -315,6 +345,15 @@ update msg model =
                                 (\pm am -> { am | exportingData = pm })
                                 Exporting.onExit
 
+                        Creating m ->
+                            processExit
+                                oldEnvironment
+                                m
+                                currentAppState.creatingData
+                                model
+                                (\pm am -> { am | creatingData = pm })
+                                Creating.onExit
+
                 ( enter, cmd ) =
                     case mod of
                         BuildingModule ->
@@ -346,6 +385,16 @@ update msg model =
                                 Exporting
                                 (\pm am -> { am | exportingData = pm })
                                 Exporting.onEnter
+
+                        CreatingModule ->
+                            processEnter
+                                oldEnvironment
+                                currentAppState.creatingData
+                                exit
+                                CMsg
+                                Creating
+                                (\pm am -> { am | creatingData = pm })
+                                Creating.onEnter
             in
             ( { model | appModel = enter }, cmd )
 
@@ -456,6 +505,9 @@ view model =
 
             Exporting m ->
                 GraphicSVG.map EMsg <| Exporting.view model.environment ( m, appState.exportingData, appState.sharedModel )
+
+            Creating m ->
+                GraphicSVG.map CMsg <| Creating.view model.environment ( m, appState.creatingData, appState.sharedModel )
         , modeButtons model
         , icon False (text "?" |> size 30 |> fixedwidth |> centered |> filled (rgb 220 220 220) |> move ( 0, -9 ))
             |> addHyperlink "https://github.com/CSchank/finsm/wiki"
@@ -470,6 +522,9 @@ modeButtons model =
 
         winY =
             toFloat <| second model.environment.windowSize
+
+        devMode =
+            model.environment.devMode
 
         building =
             case model.appModel.present.appState of
@@ -490,6 +545,14 @@ modeButtons model =
         exporting =
             case model.appModel.present.appState of
                 Exporting _ ->
+                    True
+
+                _ ->
+                    False
+
+        creating =
+            case model.appModel.present.appState of
+                Creating _ ->
                     True
 
                 _ ->
@@ -568,6 +631,35 @@ modeButtons model =
             ]
             |> move ( -winX / 2 + 134, winY / 2 - 15 )
             |> notifyTap (GoTo ExportingModule)
+        , case devMode of
+            Deploy ->
+                group []
+
+            Development ->
+                group
+                    [ roundedRect 50 15 1
+                        |> filled
+                            (if creating then
+                                darkRed
+
+                             else
+                                blank
+                            )
+                        |> addOutline (solid 1) darkGray
+                    , text "Create"
+                        |> centered
+                        |> fixedwidth
+                        |> filled
+                            (if creating then
+                                white
+
+                             else
+                                darkGray
+                            )
+                        |> move ( 0, -4 )
+                    ]
+                    |> move ( -winX / 2 + 186, winY / 2 - 15 )
+                    |> notifyTap (GoTo CreatingModule)
         ]
 
 
