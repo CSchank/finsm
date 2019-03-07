@@ -278,7 +278,7 @@ tMistakeAdd tId tMistake =
 --These two functions will eventually become part of GraphicSVG in some form
 
 
-textBox : String -> Float -> Float -> String -> (String -> Msg) -> Shape Msg
+textBox : String -> Float -> Float -> String -> (String -> msg) -> Shape msg
 textBox txt w h place msg =
     move ( -w / 2, h / 2 ) <|
         html (w * 1.5) (h * 1.5) <|
