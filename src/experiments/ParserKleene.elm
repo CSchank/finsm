@@ -26,7 +26,7 @@ branch =
         [ succeed (\expr -> flip Plus expr)
             |. token "|"
             |= lazy (\_ -> topParser)
-        , backtrackable <| succeed (\expr -> flip Mul expr)
+        , backtrackable <| succeed (\expr -> flip mul expr)
             |. oneOf [ token "^", token "" ]
             |= paren
         , succeed (\expr -> flip mul expr)
@@ -45,9 +45,9 @@ paren =
         |= lazy (\_ -> topParser)
         |. token ")"
         |= oneOf
-            [ succeed (\expr prev -> flip mul expr (Star prev))
+            [ succeed (\op prev -> op (Star prev))
                 |. token "*"
-                |= oneOf [lazy (\_ -> topParser), endInput]
+                |= lazy (\_ -> branch)
             , succeed (\expr -> flip Mul expr)
                 |= lazy (\_ -> topParser)
             , succeed identity
