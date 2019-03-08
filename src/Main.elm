@@ -31,8 +31,8 @@ type Msg
     = BMsg Building.Msg
     | SMsg Simulating.Msg
     | EMsg Exporting.Msg
-    | KeyPressed Int
-    | KeyReleased Int
+    | KeyPressed String
+    | KeyReleased String
     | WindowSize ( Int, Int )
     | UrlChange Url
     | UrlRequest UrlRequest
@@ -94,8 +94,8 @@ main =
             \model ->
                 Sub.batch
                     [ Browser.Events.onResize (\w h -> WindowSize ( w, h ))
-                    , Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-                    , Browser.Events.onKeyUp (D.map KeyReleased (D.field "keyCode" D.int))
+                    , Browser.Events.onKeyDown (D.map KeyPressed (D.field "key" D.string))
+                    , Browser.Events.onKeyUp (D.map KeyReleased (D.field "key" D.string))
                     , Browser.Events.onVisibilityChange VisibilityChanged
                     , case model.appModel.present.appState of
                         Building m ->
@@ -228,30 +228,30 @@ update msg model =
             ( model, Cmd.none )
 
         KeyReleased k ->
-            if k == 16 then
+            if k == "Shift" then
                 ( { model | environment = { oldEnvironment | holdingShift = False } }, Cmd.none )
 
-            else if k == 91 then
+            else if k == "Meta" then
                 ( { model | environment = { oldEnvironment | holdingMeta = False } }, Cmd.none )
 
-            else if k == 17 then
+            else if k == "Control" then
                 ( { model | environment = { oldEnvironment | holdingControl = False } }, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
         KeyPressed k ->
-            if k == 16 then
+            if k == "Shift" then
                 ( { model | environment = { oldEnvironment | holdingShift = True } }, Cmd.none )
 
-            else if k == 89 {- y -} || k == 90 {- z -} then
+            else if k == "y" || k == "z" then
                 let
                     doUndo =
-                        (oldEnvironment.holdingControl || oldEnvironment.holdingMeta) && k == 90
+                        (oldEnvironment.holdingControl || oldEnvironment.holdingMeta) && k == "z"
 
                     doRedo =
-                        (oldEnvironment.holdingControl && k == 89)
-                            || (oldEnvironment.holdingMeta && oldEnvironment.holdingShift && k == 90)
+                        (oldEnvironment.holdingControl && k == "y")
+                            || (oldEnvironment.holdingMeta && oldEnvironment.holdingShift && k == "z")
                 in
                 ( { model
                     | appModel =
@@ -267,11 +267,11 @@ update msg model =
                 , Cmd.none
                 )
 
-            else if k == 91 then
+            else if k == "Meta" then
                 --pressed meta key
                 ( { model | environment = { oldEnvironment | holdingMeta = True } }, Cmd.none )
 
-            else if k == 17 then
+            else if k == "Control" then
                 --pressed control
                 ( { model | environment = { oldEnvironment | holdingControl = True } }, Cmd.none )
                 {- else if k == 66 then
