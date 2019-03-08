@@ -15,6 +15,13 @@ parseKleene =
 
 topParser : Parser (Kleene String)
 topParser =
+    succeed identity
+        |= expr
+        |. end
+
+
+expr : Parser (Kleene String)
+expr =
     succeed (|>)
         |= oneOf [ paren, ident, chars ]
         |= branch
@@ -23,14 +30,14 @@ topParser =
 branch : Parser (Kleene String -> Kleene String)
 branch =
     oneOf
-        [ succeed (\expr -> flip Plus expr)
+        [ succeed (\e -> flip Plus e)
             |. token "|"
-            |= lazy (\_ -> topParser)
-        , succeed (\expr -> flip mul expr)
+            |= lazy (\_ -> expr)
+        , succeed (\e -> flip mul e)
             |. token "^"
-            |= lazy (\_ -> topParser)
-        , succeed (\expr -> flip mul expr)
-            |= lazy (\_ -> topParser)
+            |= lazy (\_ -> expr)
+        , succeed (\e -> flip mul e)
+            |= lazy (\_ -> expr)
         , succeed identity
         ]
 
@@ -39,7 +46,7 @@ paren : Parser (Kleene String)
 paren =
     succeed (|>)
         |. token "("
-        |= lazy (\_ -> topParser)
+        |= lazy (\_ -> expr)
         |. token ")"
         |= oneOf
             [ succeed (\op prev -> op (Star prev))
@@ -47,7 +54,6 @@ paren =
                 |= lazy (\_ -> branch)
             , succeed (\op prev -> op prev)
                 |= lazy (\_ -> branch)
-            , succeed identity
             ]
 
 
