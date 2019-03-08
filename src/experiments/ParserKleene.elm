@@ -45,8 +45,11 @@ paren =
         |= lazy (\_ -> topParser)
         |. token ")"
         |= oneOf
-            [ succeed Star
+            [ succeed (\expr prev -> flip mul expr (Star prev))
                 |. token "*"
+                |= oneOf [lazy (\_ -> topParser), endInput]
+            , succeed (\expr -> flip Mul expr)
+                |= lazy (\_ -> topParser)
             , succeed identity
             ]
 
