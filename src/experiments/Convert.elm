@@ -96,17 +96,6 @@ convertListCharRegex0 cs s =
 
 
 -----------------------------
--- String to Kleene        --
------------------------------
-{-
-   paren : Parser a -> Parser a
-   paren parser =
-       succeed ()
-         |= symbol '('
-         |= parser
-         |= symbol ')'
--}
------------------------------
 -- Kleene to Machines      --
 -----------------------------
 
