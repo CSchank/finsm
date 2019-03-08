@@ -26,11 +26,9 @@ branch =
         [ succeed (\expr -> flip Plus expr)
             |. token "|"
             |= lazy (\_ -> topParser)
-        , succeed (\expr -> flip Mul expr)
+        , backtrackable <| succeed (\expr -> flip Mul expr)
             |. oneOf [ token "^", token "" ]
-            |. token "("
-            |= lazy (\_ -> topParser)
-            |. token ")"
+            |= paren
         , succeed (\expr -> flip mul expr)
             |. token "^"
             |= lazy (\_ -> topParser)
