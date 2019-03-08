@@ -27,7 +27,8 @@ branch =
             |. token "|"
             |= lazy (\_ -> topParser)
         , succeed (\expr -> flip Mul expr)
-            |. token "^("
+            |. oneOf [ token "^", token "" ]
+            |. token "("
             |= lazy (\_ -> topParser)
             |. token ")"
         , succeed (\expr -> flip mul expr)
