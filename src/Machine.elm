@@ -752,15 +752,18 @@ renderStates currentStates machine model env =
 
                         _ ->
                             group []
-                    , rect 25 18
-                        |> filled blank
                     ]
                     |> move (getPos sId)
-                    |> (if not env.holdingShift then
-                            notifyMouseDownAt (StartDragging sId)
+                    |> (case model of
+                            EditingStateLabel _ _ ->
+                                identity
 
-                        else
-                            notifyTap (TapState sId)
+                            _ ->
+                                if not env.holdingShift then
+                                    notifyMouseDownAt (StartDragging sId)
+
+                                else
+                                    notifyTap (TapState sId)
                        )
             )
             stateList

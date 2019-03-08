@@ -1,6 +1,7 @@
 module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
 import Browser.Events
+import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
@@ -33,7 +34,7 @@ type Msg
     | SaveStateName StateID String
     | SaveTransitionName TransitionID String
     | AddState ( Float, Float )
-    | KeyPressed Int
+    | KeyPressed String
     | ToggleSnap
     | ChangeSnap Int
     | NoOp
@@ -42,7 +43,7 @@ type Msg
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+        [ Browser.Events.onKeyDown (D.map KeyPressed (D.field "key" D.string))
         ]
 
 
@@ -425,7 +426,7 @@ update env msg ( model, pModel, sModel ) =
                     ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
         KeyPressed k ->
-            if k == 13 then
+            if k == "Enter" then
                 --pressed enter
                 case model.machineState of
                     EditingStateLabel sId newLbl ->
@@ -463,8 +464,7 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == 68 then
-                --pressed delete
+            else if k == "d" then
                 case model.machineState of
                     SelectedState stId ->
                         let
@@ -526,14 +526,13 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == 71 then
-                --pressed G
+            else if k == "g" then
                 ( ( model, pModel, sModel ), False, sendMsg ToggleSnap )
 
             else
                 case model.machineState of
                     SelectedState sId ->
-                        if k == 70 then
+                        if k == "f" then
                             let
                                 newMachine =
                                     { oldMachine

@@ -2,6 +2,7 @@ module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), Persisten
 
 import Array exposing (Array)
 import Browser.Events
+import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import Error exposing (..)
@@ -17,7 +18,7 @@ import Tuple exposing (first, second)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+    Browser.Events.onKeyDown (D.map KeyPressed (D.field "key" D.string))
 
 
 type alias PersistentModel =
@@ -51,7 +52,7 @@ type Msg
     | AddNewTape
     | ChangeTape Int
     | ToggleStart StateID
-    | KeyPressed Int
+    | KeyPressed String
     | ChangeMachine MachineType
     | MachineMsg Machine.Msg
     | HoverErrorEnter Int
@@ -166,7 +167,17 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                         , latex (xpad * 0.9) (xpad * 0.7) "white" st AlignCentre
                             |> move ( 0, 10.25 )
                         ]
-                        |> move ( toFloat n * xpad, 0 )
+                        |> move
+                            ( toFloat n
+                                * xpad
+                                + (if not showButtons then
+                                    xpad / 2
+
+                                   else
+                                    0
+                                  )
+                            , 0
+                            )
                         |> notifyTap (ChangeTape tapeId)
                 )
                 input
@@ -325,8 +336,7 @@ update env msg ( model, pModel, sModel ) =
             ( ( Default tId -1 Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
 
         KeyPressed k ->
-            if k == 13 then
-                --pressed enter
+            if k == "Enter" then
                 case model of
                     Editing tId ->
                         ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
@@ -334,8 +344,7 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == 8 then
-                --pressed delete
+            else if k == "Backspace" || k == "ArrowLeft" then
                 case model of
                     Editing tapeId ->
                         let
@@ -366,8 +375,7 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == 39 then
-                --right arrow key
+            else if k == "ArrowRight" then
                 case model of
                     Default _ _ _ ->
                         ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
@@ -375,8 +383,7 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == 37 then
-                --left arrow key
+            else if k == "ArrowLeft" then
                 case model of
                     Default tId _ hErr ->
                         ( ( Default tId -1 hErr, { pModel | currentStates = sModel.machine.start }, sModel ), False, Cmd.none )
@@ -390,82 +397,82 @@ update env msg ( model, pModel, sModel ) =
                         let
                             charCode =
                                 case k of
-                                    65 ->
+                                    "a" ->
                                         0
 
-                                    83 ->
+                                    "s" ->
                                         1
 
-                                    68 ->
+                                    "d" ->
                                         2
 
-                                    70 ->
+                                    "f" ->
                                         3
 
-                                    71 ->
+                                    "g" ->
                                         4
 
-                                    72 ->
+                                    "h" ->
                                         5
 
-                                    74 ->
+                                    "j" ->
                                         6
 
-                                    75 ->
+                                    "k" ->
                                         7
 
-                                    76 ->
+                                    "l" ->
                                         8
 
-                                    81 ->
+                                    "q" ->
                                         9
 
-                                    87 ->
+                                    "w" ->
                                         10
 
-                                    69 ->
+                                    "e" ->
                                         11
 
-                                    82 ->
+                                    "r" ->
                                         12
 
-                                    84 ->
+                                    "t" ->
                                         13
 
-                                    89 ->
+                                    "y" ->
                                         14
 
-                                    85 ->
+                                    "u" ->
                                         15
 
-                                    73 ->
+                                    "i" ->
                                         16
 
-                                    79 ->
+                                    "o" ->
                                         17
 
-                                    80 ->
+                                    "p" ->
                                         18
 
-                                    90 ->
+                                    "z" ->
                                         19
 
-                                    88 ->
+                                    "x" ->
                                         20
 
-                                    67 ->
+                                    "c" ->
                                         21
 
-                                    86 ->
+                                    "v" ->
                                         22
 
-                                    66 ->
+                                    "b" ->
                                         23
 
-                                    78 ->
+                                    "n" ->
                                         24
 
-                                    77 ->
+                                    "m" ->
                                         25
 
                                     _ ->
