@@ -1,4 +1,4 @@
-module Convert exposing (Intermediate, Level, Queue, convertFromSimple, convertListCharRegex0, convertNFA, convertNFA0, convertRegex, convertRegexToNFA, convertStringRegex, convertTransitions, decomposeLevels, defaultCap, flattenPattern, mapCharWithTID, placeStates)
+module Convert exposing (Intermediate, Level, Queue, convertFromSimple, convertListCharRegex0, convertNFA, convertNFA0, convertRegex, convertRegexToNFA, convertStringRegex, convertTransitions, decomposeLevels, defaultCap, flattenPattern, jsRegexAccept, mapCharWithTID, matchJSRegex, placeStates)
 
 {-
    This module performs conversion on representations of
@@ -23,7 +23,29 @@ import String exposing (cons)
 
 
 
--- EXPOSED FUNCTIONS
+-- These should probably be in a test module, but is here for now so I won't forget!
+
+
+jsRegexAccept : Regex -> String -> Bool
+jsRegexAccept regex str =
+    let
+        found =
+            find regex str
+    in
+    case found of
+        [] ->
+            False
+
+        matched :: [] ->
+            matched.match == str
+
+        _ ->
+            False
+
+
+matchJSRegex : Kleene String -> (String -> Bool)
+matchJSRegex =
+    convertRegex >> jsRegexAccept
 
 
 convertRegex : Kleene String -> Regex
@@ -31,13 +53,18 @@ convertRegex =
     eval >> convertStringRegex
 
 
+convertStringRegex : String -> Regex
+convertStringRegex inp =
+    convertListCharRegex0 (String.toList inp) ""
+
+
+
+-- EXPOSED FUNCTIONS
+
+
 convertRegexToNFA : String -> Machine
 convertRegexToNFA =
     parseKleene >> convertNFA
-
-
-convertStringRegex inp =
-    convertListCharRegex0 (String.toList inp) ""
 
 
 

@@ -23,12 +23,14 @@ topParser =
 branch : Parser (Kleene String -> Kleene String)
 branch =
     oneOf
-        [ backtrackable <| succeed (\expr -> flip mul expr)
-            |. oneOf [ token "^", token "" ]
-            |= paren
-        , backtrackable <| succeed (\expr -> flip Plus expr)
-            |. oneOf [ token "|" ]
-            |= paren
+        [ backtrackable <|
+            succeed (\expr -> flip mul expr)
+                |. oneOf [ token "^", token "" ]
+                |= paren
+        , backtrackable <|
+            succeed (\expr -> flip Plus expr)
+                |. oneOf [ token "|" ]
+                |= paren
         , succeed (\expr -> flip Plus expr)
             |. token "|"
             |= lazy (\_ -> topParser)

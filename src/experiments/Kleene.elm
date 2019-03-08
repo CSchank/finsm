@@ -57,7 +57,7 @@ eval expr =
             eval a ++ "|" ++ eval b
 
         Mul a b ->
-            eval a ++ eval b
+            "(" ++ eval a ++ ")(" ++ eval b ++ ")"
 
         Star a ->
             "(" ++ eval a ++ ")*"
