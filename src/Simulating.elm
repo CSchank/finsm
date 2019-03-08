@@ -168,7 +168,8 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                             |> move ( 0, 10.25 )
                         ]
                         |> move
-                            ( toFloat n * xpad
+                            ( toFloat n
+                                * xpad
                                 + (if not showButtons then
                                     xpad / 2
 
