@@ -43,10 +43,10 @@ fmap f expr =
 eval : Kleene String -> String
 eval expr =
     case expr of
+        -- Bottom
         Empty ->
             mkundefined ""
 
-        -- Bottom
         Id ->
             "ε"
 
@@ -57,14 +57,64 @@ eval expr =
             eval a ++ "|" ++ eval b
 
         Mul a b ->
-            "(" ++ eval a ++ ")(" ++ eval b ++ ")"
+            let
+                sa =
+                    eval a
+
+                sb =
+                    eval b
+
+                strA =
+                    if unifiable a then
+                        sa
+
+                    else
+                        "(" ++ sa ++ ")"
+
+                strB =
+                    if unifiable b then
+                        sb
+
+                    else
+                        "(" ++ sb ++ ")"
+            in
+            strA ++ strB
 
         Star a ->
-            "(" ++ eval a ++ ")*"
+            if unifiable expr then
+                eval a ++ "*"
+
+            else
+                "(" ++ eval a ++ ")*"
 
 
 well_typed_example =
     Plus Id (Alpha ":")
+
+
+unifiable : Kleene String -> Bool
+unifiable a =
+    case a of
+        Empty ->
+            False
+
+        Id ->
+            True
+
+        Alpha x ->
+            True
+
+        Plus _ _ ->
+            False
+
+        Mul x y ->
+            unifiable x && unifiable y
+
+        Star (Alpha x) ->
+            String.length x == 1
+
+        _ ->
+            False
 
 
 mkundefined : a -> whatever
