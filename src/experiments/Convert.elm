@@ -1,5 +1,5 @@
-module Convert exposing (Intermediate, Level, Queue, convertFromSimple, convertListCharRegex0, convertNFA, convertNFA0, convertRegex, convertRegexToNFA, convertStringRegex, convertTransitions, decomposeLevels, defaultCap, flattenPattern, jsRegexAccept, mapCharWithTID, matchJSRegex, placeStates)
-
+module Convert exposing (..)
+ 
 {-
    This module performs conversion on representations of
    regular languages.
@@ -9,7 +9,7 @@ module Convert exposing (Intermediate, Level, Queue, convertFromSimple, convertL
    2. Kleene -> Machine.machine
 -}
 
-import Debug exposing (todo)
+import Debug exposing (todo, log)
 import Dict exposing (..)
 import Kleene exposing (..)
 import Machine exposing (..)
@@ -20,6 +20,7 @@ import Regex exposing (Match, Regex, find, fromString, never, replace)
 import Set exposing (..)
 import Simple exposing (..)
 import String exposing (cons)
+import Tuple exposing (first)
 
 
 
@@ -78,7 +79,7 @@ convertListCharRegex0 : List Char -> String -> Regex
 convertListCharRegex0 cs s =
     case cs of
         [] ->
-            withDefault never (fromString <| String.replace "ε" "\\B" <| String.reverse s)
+            withDefault Regex.never (fromString <| String.replace "ε" "\\B" <| String.reverse s)
 
         x :: y :: xs ->
             if x == '\\' then
@@ -93,6 +94,24 @@ convertListCharRegex0 cs s =
         x :: [] ->
             convertListCharRegex0 [] <| cons x s
 
+convertListCharRegex01 : List Char -> String -> String
+convertListCharRegex01 cs s =
+    case cs of
+        [] ->
+            String.replace "ε" "\\B" <| String.reverse s
+
+        x :: y :: xs ->
+            if x == '\\' then
+                convertListCharRegex01 xs <| cons y (cons x s)
+
+            else if x == '(' then
+                convertListCharRegex01 (y :: xs) <| cons ':' (cons '?' (cons '(' s))
+
+            else
+                convertListCharRegex01 (y :: xs) <| cons x s
+
+        x :: [] ->
+            convertListCharRegex01 [] <| cons x s
 
 
 -----------------------------
@@ -112,6 +131,8 @@ convertNFA ks =
         |> Tuple.first
         |> convertFromSimple
 
+
+convertKleeneSimple ks = convertNFA0 ks 0 |> Maybe.withDefault (emptyMachine 0) |> Tuple.first
 
 convertNFA0 : Kleene String -> Capacity -> Maybe ( SimpleMachine, Capacity )
 convertNFA0 expr tank =
@@ -406,3 +427,53 @@ mapCharWithTID start assocCharStId =
             unsafeZip idRange listStId
     in
     ( Dict.fromList deltaVal, Dict.fromList tNames, rangeEnd + 1 )
+
+
+----------------------------
+-- SimpleMachine to Kleene
+----------------------------
+
+
+kleeneFromSimple : SimpleMachine -> Kleene String
+kleeneFromSimple sm =
+    let
+        sigma = getAlphas sm
+        singletonStartEnd = Set.size sm.s == Set.size sm.f && Set.size sm.f == 1
+        safeHead s = Maybe.withDefault -1 (List.head <| Set.toList s)
+    in
+        kleeneFromSimple0 sm.transitions sm.q (safeHead sm.s) (safeHead sm.f)
+
+kleeneFromSimple0 : Transitions -> Set StateID -> StateID -> StateID -> Kleene String
+kleeneFromSimple0 t q s f =
+    case Set.size q of
+        0 -> 
+            let
+                src = reachable t s
+                kvs = Dict.toList src
+                subSigma = replace (Alpha "\\epsilon") Id <| List.map (Alpha << first) <| List.filter (\(c, tgts) -> Set.member f tgts) kvs
+                startFinalSame = s == f
+            in
+            if startFinalSame
+                then foldplus Id subSigma
+                else foldplus Empty subSigma
+        _ -> 
+            let
+                v = Maybe.withDefault -1 <| List.head <| Set.toList q
+                newq = Set.diff q <| Set.singleton v
+
+                rest = kleeneFromSimple0 t newq s f
+                enter = kleeneFromSimple0 t newq s v
+                loop = kleeneFromSimple0 t newq v v
+                end = kleeneFromSimple0 t newq v f
+            in
+                plus rest <| Mul (Mul enter (star loop)) end
+        
+replace : a -> a -> List a -> List a
+replace prev cur lst =
+    case lst of
+        [] -> []
+        (x :: xs) -> (if x == prev then cur else x) :: replace prev cur xs
+
+--- eNFA to NFA
+eNFAtoNFA : SimpleMachine -> SimpleMachine
+eNFAtoNFA sm = todo "todo"

@@ -1,4 +1,4 @@
-module Simple exposing (Capacity, Pattern, SimpleMachine, Transitions, addEpsTrans, addEpsTransSet, addInEps, addOutEps, addOutPat, asteriskConstruct, catConstruct, createEpsTransTo, emptyMachine, identityMachine, mulConstruct, plusConstruct, unsafeZip)
+module Simple exposing (..)
 
 import Debug exposing (..)
 import Dict exposing (..)
@@ -217,3 +217,62 @@ unsafeZip xs ys =
 
                 y :: resty ->
                     ( x, y ) :: unsafeZip restx resty
+
+-----------------
+
+getAlphas : SimpleMachine -> Set Character
+getAlphas sm = sm.transitions |> Dict.values |> List.map Dict.keys |> List.concat |> Set.fromList
+
+-- Inserts a new transition between two existing states, without overwriting or
+-- creation of new states
+insertTransitionNoMod : Character -> StateID -> StateID -> SimpleMachine -> SimpleMachine
+insertTransitionNoMod char src tgt mac =
+    let
+        isExistSrc = Dict.member src mac.transitions
+        isExistTgt = Dict.member tgt mac.transitions
+    in
+    if not (isExistSrc && isExistTgt)
+        then mac
+        else
+            let
+                innerUpdate mv =
+                    case mv of
+                        Nothing -> Just <| Set.singleton tgt
+                        Just set -> Just <| Set.insert tgt set
+                updateFunc mv =
+                    case mv of
+                        Nothing -> Just (Dict.singleton char <| Set.singleton tgt)
+                        Just pat -> Just <| Dict.update char innerUpdate pat
+            in { mac | transitions = Dict.update src updateFunc mac.transitions }
+
+-- Delete all outgoing transitions containing the specified character of a state
+deleteOutgoingTrans : Character -> StateID -> SimpleMachine -> SimpleMachine
+deleteOutgoingTrans char state mac =
+    let
+        updateFunc mv =
+            case mv of
+                Nothing -> Nothing
+                Just pat -> Just <| Dict.remove char pat
+    in
+        { mac | transitions = Dict.update state updateFunc mac.transitions }
+
+extendStartStates : Set StateID -> SimpleMachine -> SimpleMachine
+extendStartStates setStates mac =
+    { mac | s = Set.union mac.s setStates }
+
+-- Get all states reachable from epsilon transitions on start states
+epsTransReachable : SimpleMachine -> Set StateID
+epsTransReachable mac = todo "todo"
+
+
+
+reachable : Transitions -> StateID -> Dict Character (Set StateID)
+reachable t st =
+    let
+        src = Maybe.withDefault Dict.empty <| Dict.get st t
+        epsTrans = Maybe.withDefault Set.empty <| Dict.get "\\epsilon" src
+        rest = Set.toList epsTrans
+                    |> List.map (\trg -> reachable t trg) 
+                    |> List.foldr Dict.union Dict.empty
+    in
+        Dict.union src rest

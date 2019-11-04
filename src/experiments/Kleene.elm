@@ -1,11 +1,12 @@
-module Kleene exposing (Kleene(..), eval, fmap, mkundefined, mul, sanitize, special, well_typed_example)
+module Kleene exposing (..)
 
 {-
    Here, we develop an implementation of the Kleene Algebra, which is the
    underlying generalized structure of regular expressions.
 -}
 
-import Set exposing (fromList, member)
+import Debug exposing (todo)
+import Set exposing (Set,fromList, member)
 import String exposing (cons, foldr)
 
 
@@ -16,7 +17,6 @@ type Kleene a
     | Plus (Kleene a) (Kleene a)
     | Mul (Kleene a) (Kleene a)
     | Star (Kleene a)
-
 
 fmap : (a -> b) -> Kleene a -> Kleene b
 fmap f expr =
@@ -45,7 +45,7 @@ eval expr =
     case expr of
         -- Bottom
         Empty ->
-            mkundefined ""
+            "!"
 
         Id ->
             "ε"
@@ -229,3 +229,86 @@ mul a b =
 
                 _ ->
                     Mul a b
+
+plus : Kleene a -> Kleene a -> Kleene a
+plus a b =
+    case b of
+        Empty  -> a
+        _     -> plus_idempotent a b
+
+star : Kleene a -> Kleene a
+star a =
+    case a of
+        Empty -> Id
+        Id    -> Id
+        _     -> Star a
+
+foldplus : Kleene a -> List (Kleene a) -> Kleene a
+foldplus empty xs = 
+    if List.length xs == 0
+        then empty
+    else
+        List.foldr Plus (Maybe.withDefault empty (List.head xs)) 
+            <| Maybe.withDefault [] <| List.tail xs
+
+plus_idempotent : Kleene a -> Kleene a -> Kleene a
+plus_idempotent a b = 
+    if a == b
+        then a
+    else
+        Plus a b
+
+zero_elim : Kleene a -> Kleene a
+zero_elim a =
+    case a of
+        Empty -> Empty
+        Id    -> Id
+        Alpha x -> Alpha x
+        Plus x y ->
+            let
+                elim_x = zero_elim x
+                elim_y = zero_elim y
+            in
+                if elim_x == Empty
+                    then elim_y
+                else if elim_y == Empty
+                    then elim_x
+                else
+                    Plus elim_x elim_y
+        Mul x y ->
+            let
+                elim_x = zero_elim x
+                elim_y = zero_elim y
+            in
+                if elim_x == Empty || elim_y == Empty
+                    then Empty
+                else
+                    Mul elim_x elim_y
+        Star x ->
+            case x of
+                Empty -> Id
+                Id    -> Id
+                _     -> star <| zero_elim x
+
+one_elim : Kleene a -> Kleene a
+one_elim a =
+    case a of
+        Plus x y ->
+            let
+                elim_x = one_elim x
+                elim_y = one_elim y
+            in
+                plus_idempotent elim_x elim_y
+        Mul x y ->
+            let
+                elim_x = one_elim x
+                elim_y = one_elim y
+            in
+                if elim_x == Id
+                    then elim_y
+                else if elim_y == Id
+                    then elim_x
+                else Mul elim_x elim_y
+        Star x -> Star <| one_elim x
+        _ -> a
+
