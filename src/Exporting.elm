@@ -11,13 +11,14 @@ import Html as H
 import Html.Attributes as A
 import Json.Decode as D
 import Machine exposing (..)
+import Mistakes exposing (..)
 import Set exposing (Set)
 import Sha256 exposing (sha256)
 import SharedModel exposing (..)
 import Task
 import Time exposing (Month(..), customZone, millisToPosix, toDay, toHour, toMinute, toMonth, toSecond, toYear)
 import Tuple exposing (first, second)
-import Mistakes exposing (..)
+
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -124,7 +125,7 @@ view env ( model, pModel, sModel ) =
 
         transMistakes =
             getTransitionMistakes oldMachine
-                
+
         -- TODO: Adjust popup box size to fix custom error messages
         errHover =
             group

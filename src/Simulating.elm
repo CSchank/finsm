@@ -10,11 +10,12 @@ import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
 import Machine exposing (..)
+import Mistakes exposing (..)
 import Set exposing (Set)
 import SharedModel exposing (..)
 import Task
 import Tuple exposing (first, second)
-import Mistakes exposing (..)
+
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -641,7 +642,7 @@ view env ( model, pModel, sModel ) =
 
         transMistakes =
             getTransitionMistakes sModel.machine
-                
+
         chars =
             -- This is broken?
             Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values oldMachine.transitionNames

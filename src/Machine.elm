@@ -1,4 +1,4 @@
-module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID,TransitionNames, TransitionMistakes, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
+module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -8,6 +8,7 @@ import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, id, placeholder, style, value)
 import Html.Events exposing (onInput)
 import Set exposing (Set)
+
 
 type alias StateID =
     Int
@@ -130,7 +131,6 @@ test =
                 , ( ( 1, 3, 3 ), ( 0, 10 ) )
                 , ( ( 3, 7, 1 ), ( 0, 10 ) )
                 ]
-
     in
     Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
 
@@ -240,6 +240,8 @@ view env model machine currentStates tMistakes =
             _ ->
                 group []
         ]
+
+
 
 --These two functions will eventually become part of GraphicSVG in some form
 
@@ -523,7 +525,6 @@ renderArrows machine model tMistakes =
 
                 Nothing ->
                     ( 0, 0 )
-
     in
     group <|
         List.map
@@ -563,19 +564,18 @@ renderArrows machine model tMistakes =
                                                     _ ->
                                                         False
 
-                                        -- Transition mistake function
+                                            -- Transition mistake function
                                             getTransMistake : TransitionMistakes -> TransitionID -> Bool
                                             getTransMistake transMistakes tId =
                                                 case transMistakes of
                                                     Nothing ->
                                                         False
-                                         
+
                                                     Just setOfMistakes ->
                                                         Set.member tId setOfMistakes
-                                         
-                                         
-                                            mistake = getTransMistake tMistakes chId
 
+                                            mistake =
+                                                getTransMistake tMistakes chId
                                         in
                                         group
                                             [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel mistake s1 s2 model

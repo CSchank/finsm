@@ -9,10 +9,11 @@ import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Machine exposing (Machine, StateID, TransitionID)
+import Mistakes exposing (..)
 import Set exposing (Set)
 import SharedModel exposing (..)
 import Tuple exposing (first, second)
-import Mistakes exposing (..)
+
 
 type Error
     = NoError
@@ -56,9 +57,9 @@ machineCheck sModel =
         mac =
             sModel.machine
 
-        
-        tMistakes = getTransitionMistakes mac
-            
+        tMistakes =
+            getTransitionMistakes mac
+
         allTransitionLabels =
             List.sort <| Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values mac.transitionNames
 

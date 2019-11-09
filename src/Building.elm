@@ -1,19 +1,19 @@
 module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
 import Browser.Events
-import Debug
+import Debug exposing (todo)
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
 import Machine exposing (..)
+import Mistakes exposing (..)
 import Set
 import SharedModel exposing (SharedModel)
 import Task
 import Tuple exposing (first, second)
-import Mistakes exposing (..)
-import Debug exposing (todo)
+
 
 type alias Model =
     { machineState : Machine.Model
@@ -462,7 +462,6 @@ update env msg ( model, pModel, sModel ) =
                             newStateTransitions =
                                 Dict.filter (\( _, t, _ ) _ -> not <| Dict.member t removedTransitions) oldMachine.stateTransitions
 
-
                             removedTransitionsLst =
                                 List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) oldMachine.stateTransitions
 
@@ -485,7 +484,6 @@ update env msg ( model, pModel, sModel ) =
 
                             newStateTransitions =
                                 Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.stateTransitions
-
                         in
                         ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
