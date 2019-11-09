@@ -14,7 +14,7 @@ import Set exposing (Set)
 import SharedModel exposing (..)
 import Task
 import Tuple exposing (first, second)
-
+import Mistakes exposing (..)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -639,6 +639,9 @@ view env ( model, pModel, sModel ) =
         winY =
             toFloat <| second env.windowSize
 
+        transMistakes =
+            getTransitionMistakes sModel.machine
+                
         chars =
             -- This is broken?
             Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values oldMachine.transitionNames
@@ -726,7 +729,7 @@ view env ( model, pModel, sModel ) =
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
-        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
+        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
         , machineModeButtons sModel.machineType winX winY
         ]
 

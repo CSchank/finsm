@@ -1,4 +1,4 @@
-module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, renderArrow, renderArrows, renderStates, tMistakeAdd, tMistakeRemove, test, textBox, view)
+module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID,TransitionNames, TransitionMistakes, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -8,7 +8,6 @@ import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, id, placeholder, style, value)
 import Html.Events exposing (onInput)
 import Set exposing (Set)
-
 
 type alias StateID =
     Int
@@ -55,7 +54,6 @@ type alias Machine =
     , stateTransitions : StateTransitions
     , stateNames : StateNames
     , transitionNames : TransitionNames
-    , transitionMistakes : TransitionMistakes
     }
 
 
@@ -133,14 +131,12 @@ test =
                 , ( ( 3, 7, 1 ), ( 0, 10 ) )
                 ]
 
-        transitionMistakes =
-            Nothing
     in
-    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames transitionMistakes
+    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
 
 
-view : Environment -> Model -> Machine -> Set StateID -> Shape Msg
-view env model machine currentStates =
+view : Environment -> Model -> Machine -> Set StateID -> TransitionMistakes -> Shape Msg
+view env model machine currentStates tMistakes =
     let
         ( winX, winY ) =
             env.windowSize
@@ -152,7 +148,7 @@ view env model machine currentStates =
                 |> notifyMouseUp StopDragging
     in
     group
-        [ renderArrows machine model
+        [ renderArrows machine model tMistakes
         , renderStates currentStates machine model env
         , case model of
             AddingArrow s ( x, y ) ->
@@ -244,36 +240,6 @@ view env model machine currentStates =
             _ ->
                 group []
         ]
-
-
-tMistakeRemove : TransitionID -> TransitionMistakes -> TransitionMistakes
-tMistakeRemove tId tMistake =
-    case tMistake of
-        Just setOfMistakes ->
-            let
-                newSetOfMistakes =
-                    Set.remove tId setOfMistakes
-            in
-            if Set.isEmpty newSetOfMistakes then
-                Nothing
-
-            else
-                Just newSetOfMistakes
-
-        Nothing ->
-            Nothing
-
-
-tMistakeAdd : TransitionID -> TransitionMistakes -> TransitionMistakes
-tMistakeAdd tId tMistake =
-    case tMistake of
-        Nothing ->
-            Just <| Set.singleton tId
-
-        Just setOfMistakes ->
-            Just <| Set.insert tId setOfMistakes
-
-
 
 --These two functions will eventually become part of GraphicSVG in some form
 
@@ -514,8 +480,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
         ]
 
 
-renderArrows : Machine -> Model -> Shape Msg
-renderArrows machine model =
+renderArrows : Machine -> Model -> TransitionMistakes -> Shape Msg
+renderArrows machine model tMistakes =
     let
         states =
             machine.q
@@ -528,9 +494,6 @@ renderArrows machine model =
 
         transPos =
             machine.stateTransitions
-
-        transMistakes =
-            machine.transitionMistakes
 
         stateList =
             Set.toList states
@@ -561,13 +524,6 @@ renderArrows machine model =
                 Nothing ->
                     ( 0, 0 )
 
-        getTransMistake tId =
-            case transMistakes of
-                Nothing ->
-                    False
-
-                Just setOfMistakes ->
-                    Set.member tId setOfMistakes
     in
     group <|
         List.map
@@ -607,8 +563,19 @@ renderArrows machine model =
                                                     _ ->
                                                         False
 
-                                            mistake =
-                                                getTransMistake chId
+                                        -- Transition mistake function
+                                            getTransMistake : TransitionMistakes -> TransitionID -> Bool
+                                            getTransMistake transMistakes tId =
+                                                case transMistakes of
+                                                    Nothing ->
+                                                        False
+                                         
+                                                    Just setOfMistakes ->
+                                                        Set.member tId setOfMistakes
+                                         
+                                         
+                                            mistake = getTransMistake tMistakes chId
+
                                         in
                                         group
                                             [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel mistake s1 s2 model

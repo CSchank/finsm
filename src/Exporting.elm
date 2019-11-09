@@ -17,7 +17,7 @@ import SharedModel exposing (..)
 import Task
 import Time exposing (Month(..), customZone, millisToPosix, toDay, toHour, toMinute, toMonth, toSecond, toYear)
 import Tuple exposing (first, second)
-
+import Mistakes exposing (..)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -122,6 +122,9 @@ view env ( model, pModel, sModel ) =
         hasErr =
             contextHasError errCheck sModel.machineType
 
+        transMistakes =
+            getTransitionMistakes oldMachine
+                
         -- TODO: Adjust popup box size to fix custom error messages
         errHover =
             group
@@ -137,7 +140,7 @@ view env ( model, pModel, sModel ) =
                 |> move ( winX / 6 - 100, -105 )
     in
     group
-        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start) |> move ( -winX / 6, 0 )
+        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start transMistakes) |> move ( -winX / 6, 0 )
         , machineSelected sModel.machineType winX winY
         , text "Choose format:"
             |> size 20
