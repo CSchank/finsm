@@ -1,4 +1,4 @@
-module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
+module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, machineDecoderV1, machineEncoderV1, renderArrow, renderArrows, renderStates, test, textBox, view)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -7,6 +7,8 @@ import Helpers exposing (..)
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, id, placeholder, style, value)
 import Html.Events exposing (onInput)
+import Json.Decode as D
+import Json.Encode as E
 import Set exposing (Set)
 
 
@@ -44,6 +46,153 @@ type alias Character =
 
 type alias TransitionMistakes =
     Maybe (Set TransitionID)
+
+
+decodeDict : D.Decoder comparable -> D.Decoder value -> D.Decoder (Dict comparable value)
+decodeDict decComp decValu =
+    D.map Dict.fromList <| D.list <| D.map2 Tuple.pair (D.field "k" decComp) (D.field "v" decValu)
+
+
+decodeSet : D.Decoder comparable -> D.Decoder (Set comparable)
+decodeSet decComp =
+    D.map Set.fromList <| D.list decComp
+
+
+decodePair : D.Decoder x -> D.Decoder y -> D.Decoder ( x, y )
+decodePair decX decY =
+    D.map2 Tuple.pair (D.field "f" decX) (D.field "s" decY)
+
+
+decodeTriple : D.Decoder x -> D.Decoder y -> D.Decoder z -> D.Decoder ( x, y, z )
+decodeTriple decX decY decZ =
+    D.map3 (\x y z -> ( x, y, z )) (D.field "f" decX) (D.field "s" decY) (D.field "t" decZ)
+
+
+encodeSet : (comparable -> E.Value) -> Set comparable -> E.Value
+encodeSet valFn =
+    E.list valFn << Set.toList
+
+
+encodeDict : (comparable -> E.Value) -> (value -> E.Value) -> Dict comparable value -> E.Value
+encodeDict compFn valFn dict =
+    E.list
+        (\( k, v ) ->
+            E.object
+                [ ( "k", compFn k )
+                , ( "v", valFn v )
+                ]
+        )
+    <|
+        Dict.toList dict
+
+
+encodePair : (a -> E.Value) -> (b -> E.Value) -> ( a, b ) -> E.Value
+encodePair encA encB ( a, b ) =
+    E.object [ ( "f", encA a ), ( "s", encB b ) ]
+
+
+encodeTriple : (a -> E.Value) -> (b -> E.Value) -> (c -> E.Value) -> ( a, b, c ) -> E.Value
+encodeTriple encA encB encC ( a, b, c ) =
+    E.object [ ( "f", encA a ), ( "s", encB b ), ( "t", encC c ) ]
+
+
+machineEncoderV1 : Machine -> E.Value
+machineEncoderV1 machine =
+    let
+        transTriple =
+            decodeTriple D.int D.int D.int
+
+        qEncoder : Set StateID -> E.Value
+        qEncoder =
+            encodeSet E.int
+
+        deltaEncoder : Delta -> E.Value
+        deltaEncoder =
+            encodeDict E.int (encodeDict E.int E.int)
+
+        startEncoder : Set StateID -> E.Value
+        startEncoder =
+            encodeSet E.int
+
+        finalEncoder : Set StateID -> E.Value
+        finalEncoder =
+            encodeSet E.int
+
+        statePosEncoder : StatePositions -> E.Value
+        statePosEncoder =
+            encodeDict E.int (encodePair E.float E.float)
+
+        transPosEncoder : StateTransitions -> E.Value
+        transPosEncoder =
+            encodeDict (encodeTriple E.int E.int E.int) (encodePair E.float E.float)
+
+        stateNamesEncoder : StateNames -> E.Value
+        stateNamesEncoder =
+            encodeDict E.int E.string
+
+        transNamesEncoder : TransitionNames -> E.Value
+        transNamesEncoder =
+            encodeDict E.int (encodeSet E.string)
+    in
+    E.object
+        [ ( "q", qEncoder machine.q )
+        , ( "delta", deltaEncoder machine.delta )
+        , ( "start", startEncoder machine.start )
+        , ( "final", finalEncoder machine.final )
+        , ( "statePositions", statePosEncoder machine.statePositions )
+        , ( "transPositions", transPosEncoder machine.stateTransitions )
+        , ( "stateNames", stateNamesEncoder machine.stateNames )
+        , ( "transNames", transNamesEncoder machine.transitionNames )
+        ]
+
+
+machineDecoderV1 : D.Decoder Machine
+machineDecoderV1 =
+    let
+        transTriple =
+            decodeTriple D.int D.int D.int
+
+        qDecoder : D.Decoder (Set StateID)
+        qDecoder =
+            D.field "q" <| decodeSet D.int
+
+        deltaDecoder : D.Decoder Delta
+        deltaDecoder =
+            D.field "delta" <| decodeDict D.int (decodeDict D.int D.int)
+
+        startDecoder : D.Decoder (Set StateID)
+        startDecoder =
+            D.field "start" <| decodeSet D.int
+
+        finalDecoder : D.Decoder (Set StateID)
+        finalDecoder =
+            D.field "final" <| decodeSet D.int
+
+        statePosDecoder : D.Decoder StatePositions
+        statePosDecoder =
+            D.field "statePositions" <| decodeDict D.int (decodePair D.float D.float)
+
+        transPosDecoder : D.Decoder StateTransitions
+        transPosDecoder =
+            D.field "transPositions" <| decodeDict transTriple (decodePair D.float D.float)
+
+        stateNamesDecoder : D.Decoder StateNames
+        stateNamesDecoder =
+            D.field "stateNames" <| decodeDict D.int D.string
+
+        transNamesDecoder : D.Decoder TransitionNames
+        transNamesDecoder =
+            D.field "transNames" <| decodeDict D.int (decodeSet D.string)
+    in
+    D.map8 Machine
+        qDecoder
+        deltaDecoder
+        startDecoder
+        finalDecoder
+        statePosDecoder
+        transPosDecoder
+        stateNamesDecoder
+        transNamesDecoder
 
 
 type alias Machine =
