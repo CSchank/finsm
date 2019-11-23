@@ -1,4 +1,4 @@
-module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, machineDecoderV1, machineEncoderV1, renderArrow, renderArrows, renderStates, test, textBox, view)
+module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, machineDecoder, machineEncoder, renderArrow, renderArrows, renderStates, test, textBox, view)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -96,6 +96,11 @@ encodeTriple encA encB encC ( a, b, c ) =
     E.object [ ( "f", encA a ), ( "s", encB b ), ( "t", encC c ) ]
 
 
+machineEncoder : Machine -> E.Value
+machineEncoder =
+    machineEncoderV1
+
+
 machineEncoderV1 : Machine -> E.Value
 machineEncoderV1 machine =
     let
@@ -143,7 +148,22 @@ machineEncoderV1 machine =
         , ( "transPositions", transPosEncoder machine.stateTransitions )
         , ( "stateNames", stateNamesEncoder machine.stateNames )
         , ( "transNames", transNamesEncoder machine.transitionNames )
+        , ( "v", E.int 1 )
         ]
+
+
+machineDecoder : D.Decoder Machine
+machineDecoder =
+    D.field "v" D.int
+        |> D.andThen
+            (\v ->
+                case v of
+                    1 ->
+                        machineDecoderV1
+
+                    _ ->
+                        D.fail <| "Invalid save metadata version " ++ String.fromInt v
+            )
 
 
 machineDecoderV1 : D.Decoder Machine
