@@ -12,5 +12,9 @@ suite : Test
 suite =
     describe "Machine encoder-decoder"
         [ Test.test "Self-cancellation of encoding and decoding for V1" <|
-            \_ -> Expect.equal (Ok Machine.test) (D.decodeString Machine.machineDecoderV1 <| E.encode 0 (Machine.machineEncoderV1 Machine.test))
+            \_ ->
+                Expect.equal (Ok Machine.test)
+                    (D.decodeString Machine.machineDecoder <|
+                        E.encode 0 (Machine.machineEncoder Machine.test)
+                    )
         ]
