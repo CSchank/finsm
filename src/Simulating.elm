@@ -1,4 +1,4 @@
-module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
+module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, inputTapeDecoder, inputTapeEncoder, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
 import Browser.Events
@@ -9,6 +9,7 @@ import Error exposing (..)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
+import Json.Encode as E
 import Machine exposing (..)
 import Mistakes exposing (..)
 import Set exposing (Set)
@@ -26,6 +27,17 @@ type alias PersistentModel =
     { tapes : Dict Int ( InputTape, TapeStatus )
     , currentStates : Set StateID
     }
+
+
+inputTapeEncoder : InputTape -> E.Value
+inputTapeEncoder =
+    E.list E.string << Array.toList
+
+
+inputTapeDecoder : D.Decoder InputTape
+inputTapeDecoder =
+    D.map Array.fromList
+        (D.list D.string)
 
 
 type alias InputTape =

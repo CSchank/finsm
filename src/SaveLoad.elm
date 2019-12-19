@@ -4,27 +4,28 @@ import Http
 import Json.Decode as D
 import Json.Encode as E
 import Machine exposing (Machine)
+import Simulating exposing (InputTape)
 import Time exposing (Posix)
 
 
-type alias SaveMetadata =
-    { id : Int
+type alias LoadMetadata =
+    { id : String
     , name : String
     , date : Posix
     , description : String
     }
 
 
-decodeMetadataV1 : D.Decoder SaveMetadata
+decodeMetadataV1 : D.Decoder LoadMetadata
 decodeMetadataV1 =
-    D.map4 SaveMetadata
-        (D.field "id" D.int)
+    D.map4 LoadMetadata
+        (D.field "id" D.string)
         (D.field "name" D.string)
         (D.field "date" <| D.map Time.millisToPosix D.int)
         (D.field "desc" D.string)
 
 
-decodeMetadata : D.Decoder SaveMetadata
+decodeMetadata : D.Decoder LoadMetadata
 decodeMetadata =
     D.field "v" D.int
         |> D.andThen
@@ -38,7 +39,7 @@ decodeMetadata =
             )
 
 
-decodeMachineList : D.Decoder (List SaveMetadata)
+decodeMachineList : D.Decoder (List LoadMetadata)
 decodeMachineList =
     D.list decodeMetadata
 
@@ -47,23 +48,43 @@ encodeMachinePayload =
     encodeMachinePayloadV1
 
 
-encodeMachinePayloadV1 : String -> String -> Posix -> Machine -> E.Value
-encodeMachinePayloadV1 name desc time machine =
+
+-- encode the payload when saving a machine to the server
+-- note: id is empty if the machine is a new one instead of one already saved to the server
+-- sending an existing id will overwrite the machine saved with that id
+
+
+encodeMachinePayloadV1 : String -> String -> Posix -> Machine -> String -> InputTape -> E.Value
+encodeMachinePayloadV1 name desc time machine uuid inputTape =
     E.object
         [ ( "name", E.string name )
         , ( "desc", E.string desc )
-        , ( "time", E.int <| Time.posixToMillis time )
         , ( "machine", Machine.machineEncoder machine )
         , ( "v", E.int 1 )
+        , ( "uuid", E.string uuid )
+        , ( "tape", Simulating.inputTapeEncoder inputTape )
         ]
 
 
-saveMachine : String -> String -> Posix -> Machine -> (Result Http.Error Bool -> msg) -> Cmd msg
-saveMachine name desc time machine toMsg =
+type alias SaveResponse =
+    { success : Bool
+    , uuid : String
+    }
+
+
+decodeSaveResponse : D.Decoder SaveResponse
+decodeSaveResponse =
+    D.map2 SaveResponse
+        (D.field "success" D.bool)
+        (D.field "uuid" D.string)
+
+
+saveMachine : String -> String -> Posix -> Machine -> String -> InputTape -> (Result Http.Error Bool -> msg) -> Cmd msg
+saveMachine name desc time machine uuid inputTape toMsg =
     Http.send toMsg <|
         Http.post
-            "https://finsm.io/api/machine/save"
-            (Http.jsonBody <| encodeMachinePayload name desc time machine)
+            "api/machine/save"
+            (Http.jsonBody <| encodeMachinePayload name desc time machine uuid inputTape)
             D.bool
 
 
@@ -71,24 +92,37 @@ archiveMachine : Int -> (Result Http.Error Bool -> msg) -> Cmd msg
 archiveMachine id toMsg =
     Http.send toMsg <|
         Http.post
-            "https://finsm.io/api/machine/archive"
+            "api/machine/archive"
             (Http.jsonBody <| E.int id)
             D.bool
 
 
-loadMachine : String -> String -> Posix -> Int -> (Result Http.Error Machine -> msg) -> Cmd msg
-loadMachine name desc time id toMsg =
+type alias LoadPayload =
+    { machine : Machine
+    , tape : InputTape
+    }
+
+
+decodeLoadPayload : D.Decoder LoadPayload
+decodeLoadPayload =
+    D.map2 LoadPayload
+        (D.field "machine" Machine.machineDecoder)
+        (D.field "tape" Simulating.inputTapeDecoder)
+
+
+loadMachine : String -> String -> Posix -> String -> (Result Http.Error Machine -> msg) -> Cmd msg
+loadMachine name desc time uuid toMsg =
     Http.send toMsg <|
         Http.post
-            "https://finsm.io/api/machine/load"
-            (Http.jsonBody <| E.int id)
+            "api/machine/load"
+            (Http.jsonBody <| E.string uuid)
             Machine.machineDecoder
 
 
-loadList : (Result Http.Error (List SaveMetadata) -> msg) -> Cmd msg
+loadList : (Result Http.Error (List LoadMetadata) -> msg) -> Cmd msg
 loadList toMsg =
     Http.send toMsg <|
         Http.post
-            "https://finsm.io/api/machine/list"
+            "api/machine/list"
             Http.emptyBody
             decodeMachineList
