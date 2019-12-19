@@ -1,7 +1,5 @@
-module Error exposing (..)
+module Error exposing (DFAErrorType(..), Error(..), contextHasError, errorIcon, errorMenu, machineCheck)
 
-nothing = Nothing
-{-
 -- This module serves to export checks and exception handling of finite state machines.
 -- When we add support for other machine types, we can extend this module as well.
 
@@ -247,4 +245,3 @@ errorMenu err mac winX winY =
         -- TODO: Add error handling for duplicate state names
         DuplicateStates _ ->
             group []
--}

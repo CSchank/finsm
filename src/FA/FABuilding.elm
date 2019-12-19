@@ -32,7 +32,7 @@ type PersistentModel
 type Msg
     = MachineMsg Machine.Msg
     | SaveStateName StateID String
-    | SaveTransitionName TransitionID (Character, StackChar, StackChar)
+    | SaveTransitionName TransitionID String
     | AddState ( Float, Float )
     | KeyPressed String
     | ToggleSnap
@@ -131,11 +131,11 @@ update env msg ( model, pModel, sModel ) =
                             let
                                 newTrans =
                                     case List.head <| Dict.values oldMachine.transitionNames of
-                                        Just transTuple ->
-                                            transTuple
+                                        Just setchar ->
+                                            setchar
 
                                         Nothing ->
-                                            ("?", "?", "?")
+                                            Set.singleton "x"
 
                                 newTransID =
                                     case List.maximum <| Dict.keys oldMachine.transitionNames of
@@ -145,10 +145,9 @@ update env msg ( model, pModel, sModel ) =
                                         Nothing ->
                                             0
 
-                                {-
                                 isValidTransition =
                                     checkTransitionValid newTrans
--}
+
                                 newDelta : Delta
                                 newDelta =
                                     Dict.update st
@@ -200,10 +199,10 @@ update env msg ( model, pModel, sModel ) =
                         oldTransName =
                             case Dict.get tId sModel.machine.transitionNames of
                                 Just n ->
-                                    n
+                                    renderSet2String n
 
                                 Nothing ->
-                                    ("?", "?", "?")
+                                    ""
                     in
                     if env.holdingShift then
                         ( ( { model | machineState = EditingTransitionLabel tId oldTransName }, pModel, sModel ), False, focusInput NoOp )
@@ -349,10 +348,10 @@ update env msg ( model, pModel, sModel ) =
                             case model.machineState of
                                 EditingStateLabel st _ ->
                                     EditingStateLabel st lbl
-                                {-
+
                                 EditingTransitionLabel tr _ ->
                                     EditingTransitionLabel tr lbl
-                                -}
+
                                 _ ->
                                     model.machineState
                     in
@@ -421,13 +420,13 @@ update env msg ( model, pModel, sModel ) =
                         let
                             oldTransitionName =
                                 case Dict.get tId oldMachine.transitionNames of
-                                    Just tup ->
-                                        tup
+                                    Just n ->
+                                        renderSet2String n
 
                                     _ ->
-                                        ("?", "?", "?")
+                                        ""
                         in
-                        if newLbl == oldTransitionName || newLbl == ("", "", "") then
+                        if newLbl == oldTransitionName || newLbl == "" then
                             ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
                         else
@@ -526,14 +525,15 @@ update env msg ( model, pModel, sModel ) =
 
         SaveTransitionName tId newLbl ->
             let
-                {-
+                newTransitions =
+                    parseString2Set newLbl
+
                 isValidTransition =
                     checkTransitionValid newTransitions
-                -}
-                    
+
                 newMachine =
                     { oldMachine
-                        | transitionNames = Dict.insert tId newLbl oldMachine.transitionNames
+                        | transitionNames = Dict.insert tId newTransitions oldMachine.transitionNames
                     }
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
@@ -584,8 +584,8 @@ view env ( model, pModel, sModel ) =
         winY =
             toFloat <| second env.windowSize
 
-        transMistakes = Nothing
-            -- getTransitionMistakes sModel.machine
+        transMistakes =
+            getTransitionMistakes sModel.machine
     in
     group
         [ rect winX winY
@@ -620,7 +620,7 @@ view env ( model, pModel, sModel ) =
 
             _ ->
                 group []
-        , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
+        , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty transMistakes
         , editingButtons model |> move ( winX / 2 - 30, -winY / 2 + 25 )
         ]
 

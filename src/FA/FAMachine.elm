@@ -1,4 +1,4 @@
-module Machine exposing (..)
+module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, renderArrow, renderArrows, renderStates, test, textBox, view)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -9,7 +9,6 @@ import Html.Attributes exposing (attribute, id, placeholder, style, value)
 import Html.Events exposing (onInput)
 import Set exposing (Set)
 
-import Debug exposing (log)
 
 type alias StateID =
     Int
@@ -28,7 +27,7 @@ type alias StateNames =
 
 
 type alias TransitionNames =
-    Dict TransitionID (Character, StackChar, StackChar)
+    Dict TransitionID (Set String)
 
 
 type alias StateTransitions =
@@ -42,19 +41,16 @@ type alias Delta =
 type alias Character =
     String
 
-type alias StackChar = String -- Stack alphabet
 
 type alias TransitionMistakes =
     Maybe (Set TransitionID)
 
--- type alias Stack = List Character
 
 type alias Machine =
     { q : Set StateID
     , delta : Delta
     , start : Set StateID
-    , stackStart : StackChar
-    , final : {- Maybe -} Set StateID
+    , final : Set StateID
     , statePositions : StatePositions
     , stateTransitions : StateTransitions
     , stateNames : StateNames
@@ -72,7 +68,7 @@ type Model
     | MousingOverStateLabel StateID
     | MousingOverTransitionLabel TransitionID
     | EditingStateLabel StateID String
-    | EditingTransitionLabel TransitionID ( Character, StackChar, StackChar)
+    | EditingTransitionLabel TransitionID String
     | SelectedArrow ( StateID, TransitionID, StateID )
     | DraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
     | CreatingNewArrow StateID
@@ -99,41 +95,48 @@ test : Machine
 test =
     let
         q =
-            Set.fromList [ 0 ]
+            Set.fromList [ 0, 1, 2, 3 ]
 
         delta0 =
             Dict.fromList
-                [ ( 0, Dict.fromList [ ( 0, 0 ), (1, 0), (2, 0), (3, 0) ] ) ]
+                [ ( 0, Dict.fromList [ ( 0, 1 ), ( 1, 2 ) ] )
+                , ( 1, Dict.fromList [ ( 2, 0 ), ( 3, 3 ) ] )
+                , ( 2, Dict.fromList [ ( 4, 3 ), ( 5, 0 ) ] )
+                , ( 3, Dict.fromList [ ( 6, 2 ), ( 7, 1 ) ] )
+                ]
 
         start =
             Set.fromList [ 0 ]
 
-        stackStart = "\\epsilon"
-                
         final =
-            Set.empty
+            Set.fromList [ 0 ]
 
         statePositions =
-            Dict.fromList [ ( 0, ( 0, 0 ) ) ]
+            Dict.fromList [ ( 0, ( -50, 50 ) ), ( 1, ( 50, 50 ) ), ( 2, ( -50, -50 ) ), ( 3, ( 50, -50 ) ) ]
 
         stateNames =
-            Dict.fromList [ ( 0, "q_0" ) ]
+            Dict.fromList [ ( 0, "q_0" ), ( 1, "q_1" ), ( 2, "q_2" ), ( 3, "q_3" ) ]
 
         transitionNames =
-            Dict.fromList <| [ ( 0, ("[", "⊥", "[⊥" )), ( 1, ("[", "[", "[[") ), ( 2, ("]", "[", "\\epsilon")), (3, ("\\epsilon", "⊥", "\\epsilon"))]
+            Dict.fromList <| List.map (\( k, str ) -> ( k, Set.singleton str )) [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ) ]
 
-        stateTransitions = 
+        stateTransitions =
             Dict.fromList
-                [ ( ( 0, 0, 0 ), ( 0, 100 ) )
-                , ( ( 0, 1, 0 ), ( 100, 0 ) )
-                , ( ( 0, 2, 0 ), ( 0, -100 ) )
-                , ( ( 0, 3, 0 ), ( -100, 0 ) )
+                [ ( ( 0, 0, 1 ), ( 0, 10 ) )
+                , ( ( 1, 2, 0 ), ( 0, 10 ) )
+                , ( ( 0, 1, 2 ), ( 0, 10 ) )
+                , ( ( 2, 5, 0 ), ( 0, 10 ) )
+                , ( ( 2, 4, 3 ), ( 0, 10 ) )
+                , ( ( 3, 6, 2 ), ( 0, 10 ) )
+                , ( ( 1, 3, 3 ), ( 0, 10 ) )
+                , ( ( 3, 7, 1 ), ( 0, 10 ) )
                 ]
     in
-    Machine q delta0 start stackStart final statePositions stateTransitions stateNames transitionNames
+    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
 
-view : Environment -> Model -> Machine -> Set StateID -> Shape Msg
-view env model machine currentStates =
+
+view : Environment -> Model -> Machine -> Set StateID -> TransitionMistakes -> Shape Msg
+view env model machine currentStates tMistakes =
     let
         ( winX, winY ) =
             env.windowSize
@@ -145,7 +148,7 @@ view env model machine currentStates =
                 |> notifyMouseUp StopDragging
     in
     group
-        [ renderArrows machine model
+        [ renderArrows machine model tMistakes
         , renderStates currentStates machine model env
         , case model of
             AddingArrow s ( x, y ) ->
@@ -159,7 +162,12 @@ view env model machine currentStates =
                                 ( 0, 0 )
 
                     newTrans =
-                        ("", "", "")
+                        case List.head <| Dict.values machine.transitionNames of
+                            Just schar ->
+                                Set.toList schar |> renderString
+
+                            Nothing ->
+                                " "
 
                     newTransID =
                         case List.head <| Dict.keys machine.transitionNames of
@@ -169,7 +177,7 @@ view env model machine currentStates =
                             Nothing ->
                                 0
                 in
-                renderArrow s0Pos ( 0, 0 ) ( x, y ) 20 0 newTrans newTransID False s -1 model
+                renderArrow s0Pos ( 0, 0 ) ( x, y ) 20 0 newTrans newTransID False False s -1 model
 
             AddingArrowOverOtherState s ( x, y ) s1 ->
                 let
@@ -190,7 +198,12 @@ view env model machine currentStates =
                                 ( 0, 0 )
 
                     newTrans =
-                        (" ", " ", " ")
+                        case List.head <| Dict.values machine.transitionNames of
+                            Just schar ->
+                                Set.toList schar |> renderString
+
+                            Nothing ->
+                                " "
 
                     newTransID =
                         case List.head <| Dict.keys machine.transitionNames of
@@ -207,7 +220,7 @@ view env model machine currentStates =
                         else
                             ( 0, 0 )
                 in
-                renderArrow s0Pos pullPos s1Pos 20 20 newTrans newTransID False s s1 model
+                renderArrow s0Pos pullPos s1Pos 20 20 newTrans newTransID False False s s1 model
 
             _ ->
                 group []
@@ -276,14 +289,15 @@ renderArrow :
     -> ( Float, Float )
     -> Float
     -> Float
-    -> (Character, StackChar, StackChar)
+    -> Character
     -> TransitionID
+    -> Bool
     -> Bool
     -> StateID
     -> StateID
     -> Model
     -> Shape Msg
-renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 transTuple charID sel s1 s2 model =
+renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2 model =
     let
         ( tx, ty ) =
             --tangent between to and from states
@@ -351,14 +365,6 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 transTuple charID sel s1 s2 m
 
                 Right ->
                     AlignLeft
-
-        renderTextbox mv char = -- note: retest!
-                                (latex tLblW
-                                12
-                                "none"
-                                char
-                                alignment
-                                ) |> move (toFloat mv * 10, 0)
     in
     group
         [ group
@@ -399,18 +405,40 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 transTuple charID sel s1 s2 m
                 [ case model of
                     EditingTransitionLabel tId str ->
                         if tId == charID then
-                            let (inp, curStack, pStack) = str
-                            in
-                            group
-                            [ textBox inp (if String.length inp == 0 then 34 else 6 * toFloat (String.length inp)) 20 "LaTeX" (EditLabel tId)
-                            , textBox curStack (if String.length curStack == 0 then 34 else 6 * toFloat (String.length curStack)) 20 "LaTeX" (EditLabel tId) |> move (10, 0)
-                            , textBox pStack (if String.length pStack == 0 then 34 else 6 * toFloat (String.length pStack)) 20 "LaTeX" (EditLabel tId) |> move (20, 0)
-                            ]
+                            textBox str
+                                (if String.length str == 0 then
+                                    34
+
+                                 else
+                                    6 * toFloat (String.length str)
+                                )
+                                20
+                                "LaTeX"
+                                (EditLabel tId)
+
                         else
-                            transTuple |> homTripleToList |> List.indexedMap renderTextbox |> group
+                            latex tLblW
+                                12
+                                (if mistake then
+                                    "LightSalmon"
+
+                                 else
+                                    "none"
+                                )
+                                char
+                                alignment
 
                     _ ->
-                        transTuple |> homTripleToList |> List.indexedMap renderTextbox |> group
+                        latex tLblW
+                            12
+                            (if mistake then
+                                "LightSalmon"
+
+                             else
+                                "none"
+                            )
+                            char
+                            alignment
                 , case model of
                     EditingTransitionLabel tId str ->
                         group []
@@ -454,8 +482,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 transTuple charID sel s1 s2 m
         ]
 
 
-renderArrows : Machine -> Model -> Shape Msg
-renderArrows machine model =
+renderArrows : Machine -> Model -> TransitionMistakes -> Shape Msg
+renderArrows machine model tMistakes =
     let
         states =
             machine.q
@@ -519,11 +547,11 @@ renderArrows machine model =
 
                                             ch =
                                                 case Dict.get chId machine.transitionNames of
-                                                    Just transTuple ->
-                                                        transTuple
+                                                    Just setc ->
+                                                        Set.toList setc |> renderString
 
                                                     _ ->
-                                                        ("", "", "")
+                                                        ""
 
                                             sel =
                                                 case model of
@@ -535,7 +563,7 @@ renderArrows machine model =
 
                                                     _ ->
                                                         False
-                                            {-
+
                                             -- Transition mistake function
                                             getTransMistake : TransitionMistakes -> TransitionID -> Bool
                                             getTransMistake transMistakes tId =
@@ -548,10 +576,9 @@ renderArrows machine model =
 
                                             mistake =
                                                 getTransMistake tMistakes chId
-                                             -}
                                         in
                                         group
-                                            [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel s1 s2 model
+                                            [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel mistake s1 s2 model
                                             ]
                                     )
                                     [ ss ]

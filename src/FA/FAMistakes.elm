@@ -1,14 +1,10 @@
-module Mistakes exposing (..)
+module Mistakes exposing (checkEpsilonTransLabel, checkTransitionValid, getTransitionMistakes)
 
 import Dict exposing (..)
 import Machine exposing (..)
 import Set exposing (..)
 
-import Debug exposing (todo)
 
-nothing = Nothing
-
-{-
 getTransitionMistakes : Machine -> TransitionMistakes
 getTransitionMistakes mac =
     let
@@ -23,7 +19,7 @@ getTransitionMistakes mac =
 
 
 checkEpsilonTransLabel : TransitionNames -> TransitionMistakes
-checkEpsilonTransLabel tNames = todo "checkEpsilonTrans"
+checkEpsilonTransLabel tNames =
     let
         tMistakes =
             Dict.foldl
@@ -43,6 +39,7 @@ checkEpsilonTransLabel tNames = todo "checkEpsilonTrans"
     else
         Just tMistakes
 
+
 checkTransitionValid : Set.Set String -> Bool
 checkTransitionValid set =
     case Set.member "\\epsilon" set of
@@ -55,4 +52,3 @@ checkTransitionValid set =
 
             else
                 False
--}

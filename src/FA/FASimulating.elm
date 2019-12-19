@@ -106,7 +106,7 @@ checkTape sModel inp =
             sModel.machine.transitionNames
 
         allTransitionLabels =
-            Set.fromList <| List.map tripFst <| Dict.values tNames
+            List.foldr Set.union Set.empty <| Dict.values tNames
 
         arrFilter =
             Array.filter (\v -> not <| Set.member v allTransitionLabels) inp
@@ -480,7 +480,7 @@ update env msg ( model, pModel, sModel ) =
                                         -1
 
                             chars =
-                                Array.fromList <| Set.toList <| Set.remove "\\epsilon" <| Set.fromList <| List.map tripFst <| Dict.values oldMachine.transitionNames
+                                Array.fromList <| Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values oldMachine.transitionNames
 
                             newChar =
                                 Array.get charCode chars
@@ -640,12 +640,12 @@ view env ( model, pModel, sModel ) =
         winY =
             toFloat <| second env.windowSize
 
-        transMistakes = Nothing
-            -- getTransitionMistakes sModel.machine
+        transMistakes =
+            getTransitionMistakes sModel.machine
 
         chars =
             -- This is broken?
-            Set.toList <| Set.remove "\\epsilon" <| Set.fromList <| List.map tripFst <| Dict.values oldMachine.transitionNames
+            Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values oldMachine.transitionNames
 
         menu =
             group <|
@@ -683,10 +683,8 @@ view env ( model, pModel, sModel ) =
         tapes =
             pModel.tapes
 
-        {-
         validCheck =
             machineCheck sModel
-         -}
     in
     group
         [ case model of
@@ -695,7 +693,11 @@ view env ( model, pModel, sModel ) =
                     [ rect winX (winY / 3)
                         |> filled lightGray
                     , machineDefn sModel sModel.machineType winX winY
-                    , menu
+                    , if contextHasError validCheck sModel.machineType then
+                        errorMenu validCheck oldMachine winX winY |> move ( -winX / 2 + 20, winY / 6 )
+
+                      else
+                        menu
                     ]
                     |> move ( 0, -winY / 3 )
 
@@ -728,7 +730,7 @@ view env ( model, pModel, sModel ) =
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
-        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
+        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
         , machineModeButtons sModel.machineType winX winY
         ]
 
@@ -764,7 +766,7 @@ machineDefn sModel mtype winX winY =
                     |> move ( -winX / 2 + 500, winY / 6 - 45 )
                 , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
-                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| Set.fromList <| List.map tripFst <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl Set.union Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 90 )
                 , latex 500 18 "blank" "\\Delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 115 )
@@ -783,7 +785,7 @@ machineDefn sModel mtype winX winY =
                     |> move ( -winX / 2 + 500, winY / 6 - 45 )
                 , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
-                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| Set.fromList <| List.map tripFst <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl Set.union Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 90 )
                 , latex 500 18 "blank" "\\delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 115 )
@@ -818,8 +820,8 @@ epsTrans tNames d states =
         -- LMD: This was copy-pasted from delta
         getName trans =
             case Dict.get trans tNames of
-                Just (n, _, _) ->
-                    n
+                Just n ->
+                    renderSet2String n
 
                 _ ->
                     ""
@@ -863,11 +865,11 @@ delta tNames d ch state =
     let
         getName trans =
             case Dict.get trans tNames of
-                Just (tname, _, _) ->
-                    tname
+                Just n ->
+                    n
 
                 _ ->
-                    ""
+                    Set.empty
     in
     case Dict.get state d of
         Just transMap ->
@@ -876,8 +878,8 @@ delta tNames d ch state =
                     List.filterMap
                         (\( tId, sId ) ->
                             if
-                                (ch == getName tId)
-                                    || (getName tId == "\\epsilon" && sId == state)
+                                (Set.member ch <| getName tId)
+                                    || ((renderSet2String <| getName tId) == "\\epsilon" && sId == state)
                             then
                                 Just sId
 

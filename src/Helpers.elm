@@ -1,4 +1,4 @@
-module Helpers exposing (LabelPosition(..), LatexAlign(..), add, dot, editIcon, finsmBlue, finsmLightBlue, focusInput, icon, labelPosition, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, roundPrec, roundTo, sendMsg, setMax, specialSymbols, sub, trashIcon, uncurry, vertex)
+module Helpers exposing (..)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)
@@ -94,7 +94,12 @@ type LatexAlign
     | AlignRight
     | AlignCentre
 
-
+latex : Float
+      -> Float
+      -> String
+      -> String
+      -> LatexAlign
+      -> Shape msg
 latex w h backclr txt align =
     (html w h <|
         H.div
@@ -318,3 +323,18 @@ roundTo n m =
 roundPrec : Int -> Float -> Float
 roundPrec n m =
     Basics.toFloat (round (m * Basics.toFloat (10 ^ n))) / Basics.toFloat (10 ^ n)
+
+mapHomTriple : (a -> b) -> (a, a, a) -> (b, b, b)
+mapHomTriple f (a, b, c) = (f a, f b, f c)
+
+homTripleToList : (a, a, a) -> List a
+homTripleToList (a,b,c) = [a, b, c]
+
+tripFst : (a, b, c) -> a
+tripFst (a, _, _) = a
+
+tripSnd : (a, b, c) -> b
+tripSnd (_, b, _) = b
+
+tripThd : (a, b, c) -> c
+tripThd (_, _, c) = c
