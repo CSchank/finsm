@@ -1,5 +1,6 @@
 module SaveLoad exposing (..)
 
+import Dict exposing (Dict)
 import Http
 import Json.Decode as D
 import Json.Encode as E
@@ -54,8 +55,8 @@ encodeMachinePayload =
 -- sending an existing id will overwrite the machine saved with that id
 
 
-encodeMachinePayloadV1 : String -> String -> Posix -> Machine -> String -> InputTape -> E.Value
-encodeMachinePayloadV1 name desc time machine uuid inputTape =
+encodeMachinePayloadV1 : String -> String -> Machine -> String -> Dict Int ( InputTape, a ) -> E.Value
+encodeMachinePayloadV1 name desc machine uuid inputTape =
     E.object
         [ ( "name", E.string name )
         , ( "desc", E.string desc )
@@ -79,20 +80,20 @@ decodeSaveResponse =
         (D.field "uuid" D.string)
 
 
-saveMachine : String -> String -> Posix -> Machine -> String -> InputTape -> (Result Http.Error Bool -> msg) -> Cmd msg
-saveMachine name desc time machine uuid inputTape toMsg =
+saveMachine : String -> String -> Machine -> String -> Dict Int ( InputTape, a ) -> (Result Http.Error SaveResponse -> msg) -> Cmd msg
+saveMachine name desc machine uuid inputTape toMsg =
     Http.send toMsg <|
         Http.post
-            "api/machine/save"
-            (Http.jsonBody <| encodeMachinePayload name desc time machine uuid inputTape)
-            D.bool
+            "/api/machine/save"
+            (Http.jsonBody <| encodeMachinePayload name desc machine uuid inputTape)
+            decodeSaveResponse
 
 
 archiveMachine : Int -> (Result Http.Error Bool -> msg) -> Cmd msg
 archiveMachine id toMsg =
     Http.send toMsg <|
         Http.post
-            "api/machine/archive"
+            "/api/machine/archive"
             (Http.jsonBody <| E.int id)
             D.bool
 
@@ -114,7 +115,7 @@ loadMachine : String -> String -> Posix -> String -> (Result Http.Error Machine 
 loadMachine name desc time uuid toMsg =
     Http.send toMsg <|
         Http.post
-            "api/machine/load"
+            "/api/machine/load"
             (Http.jsonBody <| E.string uuid)
             Machine.machineDecoder
 
@@ -123,6 +124,6 @@ loadList : (Result Http.Error (List LoadMetadata) -> msg) -> Cmd msg
 loadList toMsg =
     Http.send toMsg <|
         Http.post
-            "api/machine/list"
+            "/api/machine/list"
             Http.emptyBody
             decodeMachineList

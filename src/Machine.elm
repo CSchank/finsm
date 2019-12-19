@@ -1,4 +1,4 @@
-module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, machineDecoder, machineEncoder, renderArrow, renderArrows, renderStates, test, textBox, view)
+module Machine exposing (..)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -10,7 +10,7 @@ import Html.Events exposing (onInput)
 import Json.Decode as D
 import Json.Encode as E
 import Set exposing (Set)
-import Utils exposing (decodeDict, decodePair, decodeSet, decodeTriple, encodeDict, encodePair, encodeSet, encodeTriple)
+import Utils exposing (decodeDict, decodePair, decodeSet, decodeTriple, encodeDict, encodePair, encodeSet, encodeTriple, textBox)
 
 
 type alias StateID =
@@ -366,23 +366,6 @@ view env model machine currentStates tMistakes =
 
 
 --These two functions will eventually become part of GraphicSVG in some form
-
-
-textBox : String -> Float -> Float -> String -> (String -> Msg) -> Shape Msg
-textBox txt w h place msg =
-    move ( -w / 2, h / 2 ) <|
-        html (w * 1.5) (h * 1.5) <|
-            input
-                [ id "input"
-                , placeholder place
-                , onInput msg
-                , value txt
-                , style "width" (String.fromFloat w ++ "px")
-                , style "height" (String.fromFloat h ++ "px")
-                , style "margin-top" "1px"
-                , style "font-family" "monospace"
-                ]
-                []
 
 
 arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =

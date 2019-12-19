@@ -1,6 +1,10 @@
 module Utils exposing (..)
 
 import Dict exposing (Dict)
+import GraphicSVG exposing (..)
+import Html exposing (input)
+import Html.Attributes exposing (..)
+import Html.Events exposing (..)
 import Json.Decode as D
 import Json.Encode as E
 import Set exposing (Set)
@@ -52,3 +56,20 @@ encodeDict compFn valFn dict =
         )
     <|
         Dict.toList dict
+
+
+textBox : String -> Float -> Float -> String -> (String -> msg) -> Shape msg
+textBox txt w h place msg =
+    move ( -w / 2, h / 2 ) <|
+        html (w * 1.5) (h * 1.5) <|
+            input
+                [ id "input"
+                , placeholder place
+                , onInput msg
+                , value txt
+                , style "width" (String.fromFloat w ++ "px")
+                , style "height" (String.fromFloat h ++ "px")
+                , style "margin-top" "1px"
+                , style "font-family" "monospace"
+                ]
+                []

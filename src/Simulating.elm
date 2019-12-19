@@ -16,6 +16,7 @@ import Set exposing (Set)
 import SharedModel exposing (..)
 import Task
 import Tuple exposing (first, second)
+import Utils exposing (encodeDict)
 
 
 subscriptions : Model -> Sub Msg
@@ -29,9 +30,9 @@ type alias PersistentModel =
     }
 
 
-inputTapeEncoder : InputTape -> E.Value
+inputTapeEncoder : Dict Int ( InputTape, a ) -> E.Value
 inputTapeEncoder =
-    E.list E.string << Array.toList
+    encodeDict E.int (E.list E.string << Array.toList << Tuple.first)
 
 
 inputTapeDecoder : D.Decoder InputTape

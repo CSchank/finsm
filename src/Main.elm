@@ -14,17 +14,22 @@ import Helpers exposing (finsmBlue, icon, sendMsg)
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, placeholder, style, value)
 import Html.Events exposing (onInput)
+import Http
 import Json.Decode as D
 import Json.Encode
 import List
 import Machine exposing (..)
+import Ports
 import Random
+import SaveLoad exposing (saveMachine)
 import Set exposing (Set)
 import SharedModel exposing (SharedModel)
 import Simulating
 import Task
+import Time
 import Tuple exposing (first, second)
 import Url exposing (Url)
+import Utils exposing (textBox)
 
 
 type Msg
@@ -38,6 +43,37 @@ type Msg
     | UrlRequest UrlRequest
     | GoTo Module
     | VisibilityChanged Visibility
+    | OpenLoginDialog
+    | OpenLogoutDialog
+    | GetLoginStatus
+    | LoginStatusChange (Result Http.Error LoginStatus)
+    | EditMachineName
+    | TypeName String
+    | SaveMachine
+    | MachineSaveResponse (Result Http.Error SaveLoad.SaveResponse)
+    | NoOp
+
+
+loginStatusDecoder : D.Decoder LoginStatus
+loginStatusDecoder =
+    D.field "loggedin" D.bool
+        |> D.andThen
+            (\loggedIn ->
+                if loggedIn then
+                    D.map LoggedIn (D.field "email" D.string)
+
+                else
+                    D.succeed NotLoggedIn
+            )
+
+
+getLoginStatus : Cmd Msg
+getLoginStatus =
+    Http.send LoginStatusChange <|
+        Http.post
+            "/accounts/loginstate/"
+            Http.emptyBody
+            loginStatusDecoder
 
 
 type Module
@@ -52,9 +88,19 @@ type ApplicationState
     | Exporting Exporting.Model
 
 
+type LoginStatus
+    = LoggedIn String
+    | NotLoggedIn
+    | LoggingIn
+
+
 type alias Model =
     { appModel : BetterUndoList ApplicationModel
     , environment : Environment
+    , loginState : LoginStatus
+    , loginDialog : Bool
+    , machineMetadata : SaveLoad.LoadMetadata
+    , editingName : Bool
     }
 
 
@@ -85,8 +131,15 @@ main =
             \flags url key ->
                 ( { appModel = initAppModel
                   , environment = Environment.init
+                  , loginState = NotLoggedIn
+                  , loginDialog = False
+                  , machineMetadata = { id = "", name = "Untitled", description = "", date = Time.millisToPosix 0 }
+                  , editingName = False
                   }
-                , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
+                , Cmd.batch
+                    [ Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
+                    , getLoginStatus
+                    ]
                 )
         , update = update
         , view = \m -> { body = view m, title = "finsm - create and simulate finite state machines" }
@@ -106,6 +159,9 @@ main =
 
                         Exporting m ->
                             Sub.map EMsg (Exporting.subscriptions m)
+                    , Browser.Events.onVisibilityChange (\_ -> GetLoginStatus)
+                    , Ports.loginComplete (\_ -> GetLoginStatus)
+                    , Ports.logoutComplete (\_ -> GetLoginStatus)
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
@@ -237,6 +293,9 @@ update msg model =
             else if k == "Control" then
                 ( { model | environment = { oldEnvironment | holdingControl = False } }, Cmd.none )
 
+            else if k == "Enter" then
+                ( { model | editingName = False }, Cmd.none )
+
             else
                 ( model, Cmd.none )
 
@@ -360,6 +419,59 @@ update msg model =
               }
             , Cmd.none
             )
+
+        OpenLoginDialog ->
+            ( { model | loginDialog = not model.loginDialog }, Ports.launchLogin () )
+
+        OpenLogoutDialog ->
+            ( { model | loginDialog = not model.loginDialog }, Ports.launchLogout () )
+
+        GetLoginStatus ->
+            ( model, getLoginStatus )
+
+        LoginStatusChange loginStatus ->
+            case loginStatus of
+                Ok loginState ->
+                    ( { model | loginState = loginState }, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        EditMachineName ->
+            ( { model | editingName = True }, Cmd.none )
+
+        TypeName n ->
+            let
+                meta =
+                    model.machineMetadata
+            in
+            ( { model | machineMetadata = { meta | name = n } }, Cmd.none )
+
+        SaveMachine ->
+            ( model
+            , saveMachine
+                model.machineMetadata.name
+                model.machineMetadata.description
+                model.appModel.present.sharedModel.machine
+                model.machineMetadata.id
+                model.appModel.present.simulatingData.tapes
+                MachineSaveResponse
+            )
+
+        MachineSaveResponse saveresp ->
+            let
+                meta =
+                    model.machineMetadata
+            in
+            case saveresp of
+                Ok oksaveresp ->
+                    ( { model | machineMetadata = { meta | id = oksaveresp.uuid } }, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        NoOp ->
+            ( model, Cmd.none )
 
 
 processExit :
@@ -568,6 +680,95 @@ modeButtons model =
             ]
             |> move ( -winX / 2 + 134, winY / 2 - 15 )
             |> notifyTap (GoTo ExportingModule)
+        , case model.loginState of
+            NotLoggedIn ->
+                group
+                    [ roundedRect 50 15 1
+                        |> filled
+                            (if exporting then
+                                finsmBlue
+
+                             else
+                                blank
+                            )
+                        |> addOutline (solid 1) darkGray
+                    , text "Log in"
+                        |> centered
+                        |> fixedwidth
+                        |> filled black
+                        |> move ( 0, -4 )
+                    ]
+                    |> move ( winX / 2 - 50, winY / 2 - 15 )
+                    |> notifyTap OpenLoginDialog
+
+            LoggedIn email ->
+                group
+                    [ text ("Welcome " ++ email)
+                        |> alignRight
+                        |> fixedwidth
+                        |> filled
+                            black
+                        |> move ( 0, -4 )
+                    , group
+                        [ roundedRect 55 15 1
+                            |> filled
+                                (if exporting then
+                                    finsmBlue
+
+                                 else
+                                    blank
+                                )
+                            |> addOutline (solid 1) darkGray
+                        , text "Log out"
+                            |> centered
+                            |> fixedwidth
+                            |> filled black
+                            |> move ( 0, -4 )
+                        ]
+                        |> move ( 40, 0 )
+                        |> notifyTap OpenLogoutDialog
+                    ]
+                    |> move ( winX / 2 - 100, winY / 2 - 15 )
+
+            _ ->
+                group []
+        , if not model.editingName then
+            text model.machineMetadata.name
+                |> fixedwidth
+                |> size 16
+                |> filled black
+                |> move ( -winX / 2 + 250, winY / 2 - 20 )
+                |> notifyTap EditMachineName
+
+          else
+            textBox model.machineMetadata.name 1000 20 "Machine Name" TypeName
+                |> move ( -winX / 2 + 700, winY / 2 - 20 )
+        , group
+            [ roundedRect 50 15 1
+                |> filled
+                    (if exporting then
+                        finsmBlue
+
+                     else
+                        blank
+                    )
+                |> addOutline (solid 1) darkGray
+            , text "Save"
+                |> centered
+                |> fixedwidth
+                |> filled
+                    (if exporting then
+                        white
+
+                     else
+                        darkGray
+                    )
+                |> move ( 0, -4 )
+            ]
+            |> move ( -winX / 2 + 183, winY / 2 - 15 )
+            |> notifyTap SaveMachine
+
+        --, if model.loginDialog then
         ]
 
 
