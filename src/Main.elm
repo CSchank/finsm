@@ -51,6 +51,7 @@ type Msg
     | TypeName String
     | SaveMachine
     | MachineSaveResponse (Result Http.Error SaveLoad.SaveResponse)
+    | GetTime Time.Posix
     | NoOp
 
 
@@ -92,6 +93,12 @@ type LoginStatus
     = LoggedIn String
     | NotLoggedIn
     | LoggingIn
+
+
+type SaveStatus
+    = NotSaved
+    | LastSaved Time.Posix
+    | Saved Time.Posix
 
 
 type alias Model =
@@ -139,6 +146,7 @@ main =
                 , Cmd.batch
                     [ Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
                     , getLoginStatus
+                    , Task.perform GetTime Time.now
                     ]
                 )
         , update = update
@@ -162,6 +170,7 @@ main =
                     , Browser.Events.onVisibilityChange (\_ -> GetLoginStatus)
                     , Ports.loginComplete (\_ -> GetLoginStatus)
                     , Ports.logoutComplete (\_ -> GetLoginStatus)
+                    , Time.every 10000 GetTime -- get the new time every 10 seconds
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
@@ -469,6 +478,13 @@ update msg model =
 
                 Err _ ->
                     ( model, Cmd.none )
+
+        GetTime time ->
+            let
+                oldEnv =
+                    model.environment
+            in
+            ( { model | environment = { oldEnv | currentTime = time } }, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
