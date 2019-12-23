@@ -7,6 +7,7 @@ import Browser.Dom
 import Browser.Events exposing (Visibility)
 import Building
 import Dict exposing (Dict)
+import Duration
 import Environment exposing (Environment)
 import Exporting
 import GraphicSVG exposing (..)
@@ -104,10 +105,17 @@ type SaveStatus
 type alias Model =
     { appModel : BetterUndoList ApplicationModel
     , environment : Environment
-    , loginState : LoginStatus
+    , saveModel : SaveModel
+    }
+
+
+type alias SaveModel =
+    { loginState : LoginStatus
     , loginDialog : Bool
     , machineMetadata : SaveLoad.LoadMetadata
     , editingName : Bool
+    , lastSaved : Time.Posix
+    , unsavedChanges : Bool
     }
 
 
@@ -138,10 +146,14 @@ main =
             \flags url key ->
                 ( { appModel = initAppModel
                   , environment = Environment.init
-                  , loginState = NotLoggedIn
-                  , loginDialog = False
-                  , machineMetadata = { id = "", name = "Untitled", description = "", date = Time.millisToPosix 0 }
-                  , editingName = False
+                  , saveModel =
+                        { loginState = NotLoggedIn
+                        , loginDialog = False
+                        , machineMetadata = { id = "", name = "Untitled", description = "", date = Time.millisToPosix 0 }
+                        , editingName = False
+                        , lastSaved = Time.millisToPosix 0
+                        , unsavedChanges = False
+                        }
                   }
                 , Cmd.batch
                     [ Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
@@ -153,7 +165,7 @@ main =
         , view = \m -> { body = view m, title = "finsm - create and simulate finite state machines" }
         , subscriptions =
             \model ->
-                Sub.batch
+                Sub.batch <|
                     [ Browser.Events.onResize (\w h -> WindowSize ( w, h ))
                     , Browser.Events.onKeyDown (D.map KeyPressed (D.field "key" D.string))
                     , Browser.Events.onKeyUp (D.map KeyReleased (D.field "key" D.string))
@@ -170,7 +182,7 @@ main =
                     , Browser.Events.onVisibilityChange (\_ -> GetLoginStatus)
                     , Ports.loginComplete (\_ -> GetLoginStatus)
                     , Ports.logoutComplete (\_ -> GetLoginStatus)
-                    , Time.every 10000 GetTime -- get the new time every 10 seconds
+                    , Time.every 5000 GetTime -- get the new time every 10 seconds
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
@@ -209,6 +221,12 @@ moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel m
                 , sharedModel = newSModel
             }
                 |> setpModel newPModel
+
+        sm =
+            model.saveModel
+
+        cp =
+            Debug.log "unsavedChanges" sm.unsavedChanges
     in
     ( { model
         | appModel =
@@ -217,6 +235,15 @@ moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel m
 
             else
                 replace newAppState model.appModel
+        , saveModel =
+            { sm
+                | unsavedChanges =
+                    if checkpoint then
+                        True
+
+                    else
+                        sm.unsavedChanges
+            }
       }
     , Cmd.map msgWrapper cmd
     )
@@ -230,6 +257,9 @@ update msg model =
 
         currentAppState =
             model.appModel.present
+
+        sm =
+            model.saveModel
     in
     case msg of
         BMsg bmsg ->
@@ -303,7 +333,7 @@ update msg model =
                 ( { model | environment = { oldEnvironment | holdingControl = False } }, Cmd.none )
 
             else if k == "Enter" then
-                ( { model | editingName = False }, Cmd.none )
+                ( { model | saveModel = { sm | editingName = False, unsavedChanges = True } }, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -331,6 +361,7 @@ update msg model =
 
                         else
                             model.appModel
+                    , saveModel = { sm | unsavedChanges = doRedo || doUndo }
                   }
                 , Cmd.none
                 )
@@ -430,10 +461,10 @@ update msg model =
             )
 
         OpenLoginDialog ->
-            ( { model | loginDialog = not model.loginDialog }, Ports.launchLogin () )
+            ( { model | saveModel = { sm | loginDialog = not sm.loginDialog } }, Ports.launchLogin () )
 
         OpenLogoutDialog ->
-            ( { model | loginDialog = not model.loginDialog }, Ports.launchLogout () )
+            ( { model | saveModel = { sm | loginDialog = not sm.loginDialog } }, Ports.launchLogout () )
 
         GetLoginStatus ->
             ( model, getLoginStatus )
@@ -441,28 +472,28 @@ update msg model =
         LoginStatusChange loginStatus ->
             case loginStatus of
                 Ok loginState ->
-                    ( { model | loginState = loginState }, Cmd.none )
+                    ( { model | saveModel = { sm | loginState = loginState } }, Cmd.none )
 
                 Err _ ->
                     ( model, Cmd.none )
 
         EditMachineName ->
-            ( { model | editingName = True }, Cmd.none )
+            ( { model | saveModel = { sm | editingName = True } }, Cmd.none )
 
         TypeName n ->
             let
                 meta =
-                    model.machineMetadata
+                    model.saveModel.machineMetadata
             in
-            ( { model | machineMetadata = { meta | name = n } }, Cmd.none )
+            ( { model | saveModel = { sm | machineMetadata = { meta | name = n } } }, Cmd.none )
 
         SaveMachine ->
             ( model
             , saveMachine
-                model.machineMetadata.name
-                model.machineMetadata.description
+                model.saveModel.machineMetadata.name
+                model.saveModel.machineMetadata.description
                 model.appModel.present.sharedModel.machine
-                model.machineMetadata.id
+                model.saveModel.machineMetadata.id
                 model.appModel.present.simulatingData.tapes
                 MachineSaveResponse
             )
@@ -470,11 +501,20 @@ update msg model =
         MachineSaveResponse saveresp ->
             let
                 meta =
-                    model.machineMetadata
+                    model.saveModel.machineMetadata
             in
             case saveresp of
                 Ok oksaveresp ->
-                    ( { model | machineMetadata = { meta | id = oksaveresp.uuid } }, Cmd.none )
+                    ( { model
+                        | saveModel =
+                            { sm
+                                | machineMetadata = { meta | id = oksaveresp.uuid }
+                                , lastSaved = model.environment.currentTime
+                                , unsavedChanges = False
+                            }
+                      }
+                    , Cmd.none
+                    )
 
                 Err _ ->
                     ( model, Cmd.none )
@@ -484,7 +524,19 @@ update msg model =
                 oldEnv =
                     model.environment
             in
-            ( { model | environment = { oldEnv | currentTime = time } }, Cmd.none )
+            ( { model | environment = { oldEnv | currentTime = time } }
+            , if sm.unsavedChanges then
+                saveMachine
+                    model.saveModel.machineMetadata.name
+                    model.saveModel.machineMetadata.description
+                    model.appModel.present.sharedModel.machine
+                    model.saveModel.machineMetadata.id
+                    model.appModel.present.simulatingData.tapes
+                    MachineSaveResponse
+
+              else
+                Cmd.none
+            )
 
         NoOp ->
             ( model, Cmd.none )
@@ -696,7 +748,7 @@ modeButtons model =
             ]
             |> move ( -winX / 2 + 134, winY / 2 - 15 )
             |> notifyTap (GoTo ExportingModule)
-        , case model.loginState of
+        , case model.saveModel.loginState of
             NotLoggedIn ->
                 group
                     [ roundedRect 50 15 1
@@ -722,8 +774,7 @@ modeButtons model =
                     [ text ("Welcome " ++ email)
                         |> alignRight
                         |> fixedwidth
-                        |> filled
-                            black
+                        |> filled black
                         |> move ( 0, -4 )
                     , group
                         [ roundedRect 55 15 1
@@ -748,8 +799,8 @@ modeButtons model =
 
             _ ->
                 group []
-        , if not model.editingName then
-            text model.machineMetadata.name
+        , if not model.saveModel.editingName then
+            text model.saveModel.machineMetadata.name
                 |> fixedwidth
                 |> size 16
                 |> filled black
@@ -757,8 +808,13 @@ modeButtons model =
                 |> notifyTap EditMachineName
 
           else
-            textBox model.machineMetadata.name 1000 20 "Machine Name" TypeName
-                |> move ( -winX / 2 + 700, winY / 2 - 20 )
+            textBox model.saveModel.machineMetadata.name 300 20 "Machine Name" TypeName
+                |> move ( -winX / 2 + 400, winY / 2 - 10 )
+        , text (lastSaved model)
+            |> fixedwidth
+            |> size 14
+            |> filled darkGray
+            |> move ( -winX / 2 + 550, winY / 2 - 20 )
         , group
             [ roundedRect 50 15 1
                 |> filled
@@ -786,6 +842,40 @@ modeButtons model =
 
         --, if model.loginDialog then
         ]
+
+
+lastSaved : Model -> String
+lastSaved model =
+    let
+        duration =
+            Duration.from model.saveModel.lastSaved model.environment.currentTime
+    in
+    if not model.saveModel.unsavedChanges then
+        if Duration.inSeconds duration <= 30 then
+            "last edit saved just now"
+
+        else if Duration.inSeconds duration <= 90 then
+            "last edit saved about a minute ago"
+
+        else if Duration.inMinutes duration <= 60 then
+            "last edit saved " ++ String.fromInt (round <| Duration.inMinutes duration) ++ " minutes ago"
+
+        else if Duration.inMinutes duration <= 90 then
+            "last edit saved about an hour ago"
+
+        else
+            "last edit saved " ++ String.fromInt (round <| Duration.inHours duration) ++ " hours ago"
+
+    else
+        case model.saveModel.loginState of
+            LoggedIn _ ->
+                "saving..."
+
+            NotLoggedIn ->
+                "log in to save changes"
+
+            _ ->
+                ""
 
 
 errorEpsTrans model =
