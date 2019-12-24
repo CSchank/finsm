@@ -100,7 +100,7 @@ archiveMachine id toMsg =
 
 type alias LoadPayload =
     { machine : Machine
-    , tape : InputTape
+    , tapes : Dict Int InputTape
     }
 
 
@@ -108,16 +108,16 @@ decodeLoadPayload : D.Decoder LoadPayload
 decodeLoadPayload =
     D.map2 LoadPayload
         (D.field "machine" Machine.machineDecoder)
-        (D.field "tape" Simulating.inputTapeDecoder)
+        (D.field "tape" Simulating.inputTapeDictDecoder)
 
 
-loadMachine : String -> String -> Posix -> String -> (Result Http.Error Machine -> msg) -> Cmd msg
-loadMachine name desc time uuid toMsg =
+loadMachine : String -> (Result Http.Error LoadPayload -> msg) -> Cmd msg
+loadMachine uuid toMsg =
     Http.send toMsg <|
         Http.post
             "/api/machine/load"
             (Http.jsonBody <| E.string uuid)
-            Machine.machineDecoder
+            decodeLoadPayload
 
 
 loadList : (Result Http.Error (List LoadMetadata) -> msg) -> Cmd msg

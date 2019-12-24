@@ -1,4 +1,4 @@
-module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, inputTapeDecoder, inputTapeEncoder, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
+module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, inputTapeDecoder, inputTapeEncoder, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view, inputTapeDictDecoder, checkTapesNoStatus)
 
 import Array exposing (Array)
 import Browser.Events
@@ -16,7 +16,7 @@ import Set exposing (Set)
 import SharedModel exposing (..)
 import Task
 import Tuple exposing (first, second)
-import Utils exposing (encodeDict)
+import Utils exposing (encodeDict, decodeDict)
 
 
 subscriptions : Model -> Sub Msg
@@ -39,6 +39,10 @@ inputTapeDecoder : D.Decoder InputTape
 inputTapeDecoder =
     D.map Array.fromList
         (D.list D.string)
+
+inputTapeDictDecoder : D.Decoder (Dict Int InputTape)
+inputTapeDictDecoder =
+    decodeDict D.int inputTapeDecoder
 
 
 type alias InputTape =
@@ -110,6 +114,10 @@ initPModel =
 checkTapes : SharedModel -> Dict Int ( InputTape, TapeStatus ) -> Dict Int ( InputTape, TapeStatus )
 checkTapes sModel tapes =
     Dict.map (\k ( tape, _ ) -> ( tape, checkTape sModel tape )) tapes
+
+checkTapesNoStatus : SharedModel -> Dict Int InputTape -> Dict Int ( InputTape, TapeStatus )
+checkTapesNoStatus sModel tapes =
+    Dict.map (\k tape -> ( tape, checkTape sModel tape )) tapes
 
 
 checkTape : SharedModel -> InputTape -> TapeStatus
