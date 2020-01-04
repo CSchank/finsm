@@ -358,6 +358,24 @@ update env msg ( model, pModel, sModel ) =
                     in
                     ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
 
+                EditTransitionLabel tLabel _ st ->
+                    let
+                        newState =
+                            case model.machineState of
+                                EditingTransitionLabel tId ( s, c, n ) ->
+                                    case tLabel of
+                                        TapeChar ->
+                                            EditingTransitionLabel tId ( st, c, n)
+                                        CurStackSymbol ->
+                                            EditingTransitionLabel tId ( s, st, n)
+                                        PushStackSymbols ->
+                                            EditingTransitionLabel tId ( s, c, st)
+                                _ ->
+                                    model.machineState
+                                            
+                    in
+                        ( ( { model | machineState = newState }, pModel, sModel), False, Cmd.none )
+                        
                 TapState sId ->
                     let
                         oldStateName =

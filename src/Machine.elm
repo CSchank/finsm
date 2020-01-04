@@ -61,7 +61,8 @@ type alias Machine =
     , transitionNames : TransitionNames
     }
 
-
+type TransitionLabel = TapeChar | CurStackSymbol | PushStackSymbols
+    
 type Model
     = Regular
     | DraggingState StateID ( Float, Float ) ( Float, Float )
@@ -72,7 +73,7 @@ type Model
     | MousingOverStateLabel StateID
     | MousingOverTransitionLabel TransitionID
     | EditingStateLabel StateID String
-    | EditingTransitionLabel TransitionID ( Character, StackChar, StackChar)
+    | EditingTransitionLabel TransitionID (Character, StackChar, StackChar)
     | SelectedArrow ( StateID, TransitionID, StateID )
     | DraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
     | CreatingNewArrow StateID
@@ -89,6 +90,7 @@ type Msg
     | MouseOverTransitionLabel TransitionID
     | MouseLeaveLabel
     | EditLabel StateID String
+    | EditTransitionLabel TransitionLabel TransitionID String
     | Drag ( Float, Float )
     | TapState StateID
     | StopDragging
@@ -159,7 +161,7 @@ view env model machine currentStates =
                                 ( 0, 0 )
 
                     newTrans =
-                        ("", "", "")
+                        (" ", " ", " ")
 
                     newTransID =
                         case List.head <| Dict.keys machine.transitionNames of
@@ -359,6 +361,9 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 transTuple charID sel s1 s2 m
                                 char
                                 alignment
                                 ) |> move (toFloat mv * 10, 0)
+
+        textboxSize str =
+            if String.length str == 0 then 34 else 6 * toFloat (String.length str)
     in
     group
         [ group
@@ -402,9 +407,9 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 transTuple charID sel s1 s2 m
                             let (inp, curStack, pStack) = str
                             in
                             group
-                            [ textBox inp (if String.length inp == 0 then 34 else 6 * toFloat (String.length inp)) 20 "LaTeX" (EditLabel tId)
-                            , textBox curStack (if String.length curStack == 0 then 34 else 6 * toFloat (String.length curStack)) 20 "LaTeX" (EditLabel tId) |> move (10, 0)
-                            , textBox pStack (if String.length pStack == 0 then 34 else 6 * toFloat (String.length pStack)) 20 "LaTeX" (EditLabel tId) |> move (20, 0)
+                            [ textBox inp (if String.length inp == 0 then 34 else 6 * toFloat (String.length inp)) 20 "LaTeX" (EditTransitionLabel TapeChar tId)
+                            , textBox curStack (if String.length curStack == 0 then 34 else 6 * toFloat (String.length curStack)) 20 "LaTeX" (EditTransitionLabel CurStackSymbol tId) |> move (10, 0)
+                            , textBox pStack (if String.length pStack == 0 then 34 else 6 * toFloat (String.length pStack)) 20 "LaTeX" (EditTransitionLabel PushStackSymbols tId) |> move (20, 0)
                             ]
                         else
                             transTuple |> homTripleToList |> List.indexedMap renderTextbox |> group
@@ -523,7 +528,7 @@ renderArrows machine model =
                                                         transTuple
 
                                                     _ ->
-                                                        ("", "", "")
+                                                        (" ", " ", " ")
 
                                             sel =
                                                 case model of
