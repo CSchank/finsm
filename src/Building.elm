@@ -13,6 +13,7 @@ import SharedModel exposing (SharedModel)
 import Task
 import Tuple exposing (first, second)
 
+import Debug exposing (log)
 
 type alias Model =
     { machineState : Machine.Model
@@ -73,7 +74,7 @@ update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Mo
 update env msg ( model, pModel, sModel ) =
     let
         oldMachine =
-            sModel.machine
+            log "machine" sModel.machine
     in
     case msg of
         MachineMsg mmsg ->

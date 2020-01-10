@@ -88,7 +88,15 @@ trashIcon =
         , rect 4 30 |> filled black |> move ( 8, 0 )
         ]
 
-
+simulateIcon =
+    group
+        [ rect 15 10
+              |> filled black
+        , triangle 10
+              |> filled black
+              |> move (7.5, 0)
+        ]
+        
 type LatexAlign
     = AlignLeft
     | AlignRight

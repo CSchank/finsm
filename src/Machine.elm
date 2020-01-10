@@ -110,7 +110,7 @@ test =
         start =
             Set.fromList [ 0 ]
 
-        stackStart = "\\epsilon"
+        stackStart = "\\bot"
                 
         final =
             Set.empty
@@ -122,7 +122,7 @@ test =
             Dict.fromList [ ( 0, "q_0" ) ]
 
         transitionNames =
-            Dict.fromList <| [ ( 0, ("[", "⊥", "[⊥" )), ( 1, ("[", "[", "[[") ), ( 2, ("]", "[", "\\epsilon")), (3, ("\\epsilon", "⊥", "\\epsilon"))]
+            Dict.fromList <| [ ( 0, ("[", "\\bot", "[\\bot" )), ( 1, ("[", "[", "[[") ), ( 2, ("]", "[", "\\epsilon")), (3, ("\\epsilon", "\\bot", "\\epsilon"))]
 
         stateTransitions = 
             Dict.fromList
@@ -145,6 +145,7 @@ view env model machine currentStates =
                 |> filled blank
                 |> notifyMouseMoveAt Drag
                 |> notifyMouseUp StopDragging
+
     in
     group
         [ renderArrows machine model
@@ -354,14 +355,22 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 transTuple charID sel s1 s2 m
                 Right ->
                     AlignLeft
 
-        renderTextbox mv char = -- note: retest!
-                                (latex tLblW
-                                12
-                                "none"
-                                char
-                                alignment
-                                ) |> move (toFloat mv * 10, 0)
-
+        renderTextbox mv char = -- LMD: retest!
+            let
+                moveAmt =
+                    case mv of
+                        0 -> -15
+                        1 -> 0
+                        2 -> 15
+                        _ -> 0
+            in
+            (latex tLblW
+                 12
+                 "none"
+                 char
+                 alignment
+            ) |> move (moveAmt, 0)
+                
         textboxSize str =
             if String.length str == 0 then 34 else 6 * toFloat (String.length str)
     in
@@ -404,12 +413,15 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 transTuple charID sel s1 s2 m
                 [ case model of
                     EditingTransitionLabel tId str ->
                         if tId == charID then
-                            let (inp, curStack, pStack) = str
+                            let
+                                (inp, curStack, pStack) = str
+                                tbox inpTxt constr =
+                                    textBox inpTxt (if String.length inp == 0 then 34 else 6 * toFloat (String.length inpTxt)) 20 "LaTeX" (EditTransitionLabel constr tId)
                             in
                             group
-                            [ textBox inp (if String.length inp == 0 then 34 else 6 * toFloat (String.length inp)) 20 "LaTeX" (EditTransitionLabel TapeChar tId)
-                            , textBox curStack (if String.length curStack == 0 then 34 else 6 * toFloat (String.length curStack)) 20 "LaTeX" (EditTransitionLabel CurStackSymbol tId) |> move (10, 0)
-                            , textBox pStack (if String.length pStack == 0 then 34 else 6 * toFloat (String.length pStack)) 20 "LaTeX" (EditTransitionLabel PushStackSymbols tId) |> move (20, 0)
+                            [ tbox inp TapeChar |> move (-20, 0)
+                            , tbox curStack CurStackSymbol
+                            , tbox pStack PushStackSymbols |> move (20, 0)
                             ]
                         else
                             transTuple |> homTripleToList |> List.indexedMap renderTextbox |> group

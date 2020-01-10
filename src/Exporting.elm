@@ -144,7 +144,6 @@ view env ( model, pModel, sModel ) =
     in
     group
         [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start) |> move ( -winX / 6, 0 )
-        , machineSelected sModel.machineType winX winY
         , text "Choose format:"
             |> size 20
             |> fixedwidth
@@ -161,25 +160,6 @@ view env ( model, pModel, sModel ) =
             _ ->
                 group []
         ]
-
-
-machineSelected : MachineType -> Float -> Float -> Shape Msg
-machineSelected mtype winX winY =
-    let
-        mtypeStr =
-            case mtype of
-                DFA ->
-                    "DFA"
-
-                NFA ->
-                    "NFA"
-    in
-    text ("Your exported machine type: " ++ mtypeStr)
-        |> centered
-        |> fixedwidth
-        |> filled darkGray
-        |> move ( -winX / 2 + 117, winY / 2 - 32 )
-
 
 exportTikz : Bool -> Shape Msg
 exportTikz selected =

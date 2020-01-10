@@ -1,4 +1,4 @@
-module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
+module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, isAccept, latexKeyboard, machineDefn, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
 import Browser.Events
@@ -42,8 +42,9 @@ type alias HoverError =
 
 
 type Model
-    = Default Int {- tapeID -} Int {- charID -} HoverError
+    = Default HoverError
     | Editing Int
+    | Simulating Int {- tapeID -} Int {- charID -}
 
 
 type Msg
@@ -54,15 +55,15 @@ type Msg
     | ChangeTape Int
     | ToggleStart StateID
     | KeyPressed String
-    | ChangeMachine MachineType
     | MachineMsg Machine.Msg
     | HoverErrorEnter Int
     | HoverErrorExit
+    | SimulateTape Int
 
 
 onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 onEnter env ( pModel, sModel ) =
-    ( ( Default 0 -1 Nothing
+    ( ( Default Nothing
       , { pModel
             | currentStates =
                 epsTrans
@@ -87,8 +88,8 @@ initPModel : PersistentModel
 initPModel =
     { tapes =
         Dict.fromList
-            [ ( 0, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ], Fresh ) )
-            , ( 1, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0", "1", "1", "1", "1", "0" ], Fresh ) )
+            [ ( 0, ( Array.fromList [ "[", "[", "]", "]" ], Fresh ) )
+            , ( 1, ( Array.fromList [ "[", "[", "]" ], Fresh ) )
             ]
     , currentStates = test.start
     }
@@ -119,12 +120,12 @@ checkTape sModel inp =
             Stale <| Set.fromList <| Array.toList arrFilter
 
 
-renderTape : Model -> Array String -> TapeStatus -> Int -> Int -> Int -> Bool -> Shape Msg
-renderTape model input tapeSt tapeId selectedId inputAt showButtons =
+renderTape : Model -> Array String -> TapeStatus -> Int -> {- Int -> Int -> -} Bool -> Shape Msg
+renderTape model input tapeSt tapeId {- selectedId inputAt -} showButtons =
     let
         hoverOn =
             case model of
-                Default _ _ (Just errId) ->
+                Default (Just errId) ->
                     if errId == tapeId then
                         True
 
@@ -183,25 +184,25 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                 )
                 input
             )
-            ++ (if tapeId == selectedId then
-                    [ group
-                        [ triangle 2.25
-                            |> filled black
-                            |> rotate (degrees 30)
-                            |> move ( 0, xpad / 2 + 5.75 )
-                        , triangle 2.25
-                            |> filled black
-                            |> rotate (degrees -30)
-                            |> move ( 0, -xpad / 2 + 0.25 )
-                        , rect 2 (xpad + 1)
-                            |> filled black
-                            |> move ( 0, 3 )
-                        ]
+            ++ (case model of
+                    Simulating _ inputAt ->  
+                        [ group
+                              [ triangle 2.25
+                              |> filled black
+                              |> rotate (degrees 30)
+                              |> move ( 0, xpad / 2 + 5.75 )
+                              , triangle 2.25
+                              |> filled black
+                              |> rotate (degrees -30)
+                              |> move ( 0, -xpad / 2 + 0.25 )
+                              , rect 2 (xpad + 1)
+                              |> filled black
+                              |> move ( 0, 3 )
+                              ]
                         |> move ( xpad / 2 + xpad * toFloat inputAt, 0 )
-                    ]
-
-                else
-                    []
+                        ]
+                    _ ->
+                        []
                )
             ++ (if showButtons then
                     [ group
@@ -219,10 +220,18 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                         [ roundedRect 15 15 2
                             |> filled white
                             |> addOutline (solid 1) darkGray
-                        , trashIcon |> scale 0.2 |> move ( 0, -1 )
+                        , trashIcon |> scale 0.2 |> move ( -2, 0 )
                         ]
                         |> move ( toFloat <| (Array.length input + 1) * xpad, 3 )
                         |> notifyTap (DeleteTape tapeId)
+                    , group
+                        [ roundedRect 15 15 2
+                            |> filled white
+                            |> addOutline (solid 1) darkGray
+                        , simulateIcon |> scale 0.4 |> move (-2, 0)
+                        ]
+                        |> move ( toFloat <| (Array.length input + 2) * xpad, 3 )
+                        |> notifyTap (SimulateTape tapeId)
                     , if not (tapeSt == Fresh) then
                         group
                             ([ triangle 20 |> filled red |> rotate 22.5
@@ -237,7 +246,7 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                                    )
                             )
                             |> scale 0.5
-                            |> move ( toFloat <| (Array.length input + 2) * xpad, 1 )
+                            |> move ( toFloat <| (Array.length input + 3) * xpad, 1 )
                             |> notifyEnter (HoverErrorEnter tapeId)
                             |> notifyLeave HoverErrorExit
 
@@ -255,14 +264,11 @@ update env msg ( model, pModel, sModel ) =
     let
         oldMachine =
             sModel.machine
-
-        machineType =
-            sModel.machineType
     in
     case msg of
         Step ->
             case model of
-                Default tapeId charId hover ->
+                Simulating tapeId charId ->
                     let
                         nextCh =
                             case Dict.get tapeId pModel.tapes of
@@ -282,7 +288,7 @@ update env msg ( model, pModel, sModel ) =
                                     ""
                     in
                     if nextCh /= "" then
-                        ( ( Default tapeId (charId + 1) hover
+                        ( ( Simulating tapeId (charId + 1) 
                           , { pModel
                                 | currentStates =
                                     deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates
@@ -302,22 +308,17 @@ update env msg ( model, pModel, sModel ) =
         EditTape tId ->
             ( ( Editing tId, pModel, sModel ), False, Cmd.none )
 
+        SimulateTape tId ->
+            ( ( model, pModel, sModel ), False, Cmd.none )
+
         DeleteTape tId ->
             let
                 newModel =
                     case model of
-                        Default tId0 chId hover ->
-                            -- FIXME: choose a good tape to go to
-                            if tId0 == tId then
-                                Default 0 -1 hover
-
-                            else
-                                Default tId0 chId hover
-
                         _ ->
                             model
             in
-            ( ( newModel, { pModel | tapes = Dict.remove tId pModel.tapes }, sModel ), True, Cmd.none )
+            ( ( model, { pModel | tapes = Dict.remove tId pModel.tapes }, sModel ), True, Cmd.none )
 
         AddNewTape ->
             let
@@ -334,13 +335,13 @@ update env msg ( model, pModel, sModel ) =
             ( ( model, { pModel | tapes = Dict.insert newId ( Array.empty, Fresh ) pModel.tapes }, sModel ), True, Cmd.none )
 
         ChangeTape tId ->
-            ( ( Default tId -1 Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
+            ( ( Default Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
 
         KeyPressed k ->
             if k == "Enter" then
                 case model of
                     Editing tId ->
-                        ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
+                        ( ( Default Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -378,7 +379,7 @@ update env msg ( model, pModel, sModel ) =
 
             else if k == "ArrowRight" then
                 case model of
-                    Default _ _ _ ->
+                    Simulating _ _ ->
                         ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
 
                     _ ->
@@ -386,8 +387,8 @@ update env msg ( model, pModel, sModel ) =
 
             else if k == "ArrowLeft" then
                 case model of
-                    Default tId _ hErr ->
-                        ( ( Default tId -1 hErr, { pModel | currentStates = sModel.machine.start }, sModel ), False, Cmd.none )
+                    Simulating tId _ ->
+                        ( ( Simulating tId -1, { pModel | currentStates = sModel.machine.start }, sModel ), False, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -508,59 +509,6 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-        ChangeMachine mtype ->
-            case mtype of
-                NFA ->
-                    case sModel.machineType of
-                        NFA ->
-                            ( ( model, pModel, sModel ), False, Cmd.none )
-
-                        DFA ->
-                            case model of
-                                Editing tId ->
-                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
-
-                                _ ->
-                                    ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
-
-                DFA ->
-                    case sModel.machineType of
-                        DFA ->
-                            ( ( model, pModel, sModel ), False, Cmd.none )
-
-                        NFA ->
-                            let
-                                startState =
-                                    if Set.size oldMachine.start > 1 then
-                                        Set.singleton <|
-                                            (\x ->
-                                                case x of
-                                                    Just val ->
-                                                        val
-
-                                                    Nothing ->
-                                                        -1
-                                            )
-                                            <|
-                                                List.head <|
-                                                    Set.toList oldMachine.start
-
-                                    else
-                                        oldMachine.start
-
-                                newPModel =
-                                    { pModel | currentStates = startState }
-
-                                newSModel =
-                                    { sModel | machine = { oldMachine | start = startState }, machineType = DFA }
-                            in
-                            case model of
-                                Editing tId ->
-                                    ( ( Default tId -1 Nothing, newPModel, newSModel ), True, Cmd.none )
-
-                                _ ->
-                                    ( ( model, newPModel, newSModel ), True, Cmd.none )
-
         MachineMsg mmsg ->
             case mmsg of
                 StartDragging sId _ ->
@@ -578,42 +526,29 @@ update env msg ( model, pModel, sModel ) =
                     oldMachine.start
 
                 newMachine =
-                    case machineType of
-                        NFA ->
-                            { oldMachine
-                                | start =
-                                    case Set.member sId oldMachine.start of
-                                        True ->
-                                            Set.remove sId oldMachine.start
-
-                                        False ->
-                                            Set.insert sId oldMachine.start
-                            }
-
-                        DFA ->
-                            { oldMachine
-                                | start = Set.singleton sId
-                            }
+                    { oldMachine
+                        | start = Set.singleton sId
+                    }
             in
             case model of
-                Default tId _ _ ->
-                    ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta newMachine.start }, { sModel | machine = newMachine } ), True, Cmd.none )
+                Simulating tId _ ->
+                    ( ( Simulating tId -1 , { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta newMachine.start }, { sModel | machine = newMachine } ), True, Cmd.none )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
 
         HoverErrorEnter tapeId ->
             case model of
-                Default tId pos _ ->
-                    ( ( Default tId pos (Just tapeId), pModel, sModel ), False, Cmd.none )
+                Default _ ->
+                    ( ( Default (Just tapeId), pModel, sModel ), False, Cmd.none )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
 
         HoverErrorExit ->
             case model of
-                Default tId pos _ ->
-                    ( ( Default tId pos Nothing, pModel, sModel ), False, Cmd.none )
+                Default _ ->
+                    ( ( Default Nothing, pModel, sModel ), False, Cmd.none )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
@@ -640,9 +575,10 @@ view env ( model, pModel, sModel ) =
         winY =
             toFloat <| second env.windowSize
 
-        transMistakes = Nothing
-            -- getTransitionMistakes sModel.machine
+        transMistakes =
+            Nothing
 
+        -- getTransitionMistakes sModel.machine
         chars =
             -- This is broken?
             Set.toList <| Set.remove "\\epsilon" <| Set.fromList <| List.map tripFst <| Dict.values oldMachine.transitionNames
@@ -672,8 +608,8 @@ view env ( model, pModel, sModel ) =
                     ]
                     |> move ( -winX / 2 + 20, winY / 6 - 35 - 25 * (toFloat <| Dict.size pModel.tapes) )
                 , case model of
-                    Default tapeId charId _ ->
-                        group (List.indexedMap (\x ( chId, ( ch, tapeSt ) ) -> renderTape model ch tapeSt chId tapeId charId True |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList tapes)
+                    Default _ ->
+                        group (List.indexedMap (\x ( chId, ( ch, tapeSt ) ) -> renderTape model ch tapeSt chId True |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList tapes)
                             |> move ( -winX / 2 + 20, winY / 6 - 40 )
 
                     _ ->
@@ -684,17 +620,17 @@ view env ( model, pModel, sModel ) =
             pModel.tapes
 
         {-
-        validCheck =
-            machineCheck sModel
-         -}
+           validCheck =
+               machineCheck sModel
+        -}
     in
     group
         [ case model of
-            Default _ _ _ ->
+            Default _ ->
                 group
                     [ rect winX (winY / 3)
                         |> filled lightGray
-                    , machineDefn sModel sModel.machineType winX winY
+                    , machineDefn sModel winX winY
                     , menu
                     ]
                     |> move ( 0, -winY / 3 )
@@ -724,17 +660,24 @@ view env ( model, pModel, sModel ) =
                         |> move ( -winX / 2 + 95, winY / 6 - 15 )
                     , latexKeyboard winX winY chars
                         |> move ( 0, 0 )
-                    , renderTape model tape tapeSt tapeId -1 -1 False
+                    , renderTape model tape tapeSt tapeId False
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
+
+            Simulating _ _ -> -- PLACEHOLDER
+                group
+                    [ rect winX (winY / 3)
+                        |> filled lightGray
+                    , machineDefn sModel winX winY
+                    , menu
+                    ]
+                    |> move ( 0, -winY / 3 )
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
-        , machineModeButtons sModel.machineType winX winY
         ]
 
-
-machineDefn : SharedModel -> MachineType -> Float -> Float -> Shape Msg
-machineDefn sModel mtype winX winY =
+machineDefn : SharedModel -> Float -> Float -> Shape Msg
+machineDefn sModel winX winY =
     let
         machine =
             sModel.machine
@@ -754,59 +697,43 @@ machineDefn sModel mtype winX winY =
                 |> filled black
                 |> move ( -winX / 2 + 492, winY / 6 - 15 )
     in
-    case mtype of
-        NFA ->
-            group
-                [ machineHeader
-                , latex 500 18 "blank" "let\\ N = (Q,\\Sigma,\\Delta,S,F)" AlignLeft
-                    |> move ( -winX / 2 + 500, winY / 6 - 25 )
-                , latex 500 14 "blank" "where" AlignLeft
-                    |> move ( -winX / 2 + 500, winY / 6 - 45 )
-                , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 65 )
-                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| Set.fromList <| List.map tripFst <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 90 )
-                , latex 500 18 "blank" "\\Delta = (above)" AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 115 )
-                , latex 500 18 "blank" ("S = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.start) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 140 )
-                , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 165 )
-                ]
+    group
+        [ machineHeader
+        , latex 500 18 "blank" "let\\ M = (Q,\\Sigma,\\Gamma,\\delta,s,\\bot,F)" AlignLeft
+            |> move ( -winX / 2 + 500, winY / 6 - 25 )
+        , latex 500 14 "blank" "where" AlignLeft
+            |> move ( -winX / 2 + 500, winY / 6 - 45 )
+        , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
+            |> move ( -winX / 2 + 510, winY / 6 - 65 )
+        , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| Set.fromList <| List.map tripFst <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
+            |> move ( -winX / 2 + 510, winY / 6 - 90 )
+        , latex 500 18 "blank" ("\\Gamma = \\{ " ++ String.join "," (Dict.values machine.transitionNames |> List.map tripSnd |> Set.fromList |> Set.toList) ++ " \\}") AlignLeft
+            -- LMD: Making assumption that stack alphabets are completely derivable from the current stack symbol value
+            |> move ( -winX / 2 + 510, winY / 6 - 115 )
+        , latex 500 18 "blank" "\\delta = (above)" AlignLeft
+            |> move ( -winX / 2 + 510, winY / 6 - 140 )
+        , latex 500 18 "blank" "\\bot = \\bot" AlignLeft
+            |> move ( -winX / 2 + 510, winY / 6 - 165 )
+        , latex 500
+            14
+            "blank"
+            ("s = "
+                ++ (case Set.toList machine.start of
+                        [] ->
+                            "Please\\ select\\ a\\ start\\ state"
 
-        DFA ->
-            group
-                [ machineHeader
-                , latex 500 18 "blank" "let\\ M = (Q,\\Sigma,\\delta,s,F)" AlignLeft
-                    |> move ( -winX / 2 + 500, winY / 6 - 25 )
-                , latex 500 14 "blank" "where" AlignLeft
-                    |> move ( -winX / 2 + 500, winY / 6 - 45 )
-                , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 65 )
-                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| Set.fromList <| List.map tripFst <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 90 )
-                , latex 500 18 "blank" "\\delta = (above)" AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 115 )
-                , latex 500
-                    14
-                    "blank"
-                    ("s = "
-                        ++ (case Set.toList machine.start of
-                                [] ->
-                                    "Please\\ select\\ a\\ start\\ state"
+                        x :: [] ->
+                            getStateName x
 
-                                x :: [] ->
-                                    getStateName x
-
-                                x :: xs ->
-                                    "Congratulations,\\ you\\ found\\ a\\ bug!"
-                           )
-                    )
-                    AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 140 )
-                , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 160 )
-                ]
+                        x :: xs ->
+                            "Congratulations,\\ you\\ found\\ a\\ bug!"
+                   )
+            )
+            AlignLeft
+            |> move ( -winX / 2 + 510, winY / 6 - 190 )
+        , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
+            |> move ( -winX / 2 + 510, winY / 6 - 215 )
+        ]
 
 
 epsTrans : TransitionNames -> Delta -> Set StateID -> Set StateID
@@ -818,7 +745,7 @@ epsTrans tNames d states =
         -- LMD: This was copy-pasted from delta
         getName trans =
             case Dict.get trans tNames of
-                Just (n, _, _) ->
+                Just ( n, _, _ ) ->
                     n
 
                 _ ->
@@ -863,7 +790,7 @@ delta tNames d ch state =
     let
         getName trans =
             case Dict.get trans tNames of
-                Just (tname, _, _) ->
+                Just ( tname, _, _ ) ->
                     tname
 
                 _ ->
@@ -955,58 +882,4 @@ latexKeyboard w h chars =
         [ oneRow topRow (fillOutExtras 10 9 chars) |> move ( -keyW / 3, 0 )
         , oneRow homeRow (fillOutExtras 9 0 chars) |> move ( -keyW / 3, -keyH - 2 )
         , oneRow botRow (fillOutExtras 7 19 chars) |> move ( -keyW, -(keyH + 2) * 2 )
-        ]
-
-
-machineModeButtons : MachineType -> Float -> Float -> Shape Msg
-machineModeButtons mtype winX winY =
-    group
-        [ group
-            [ roundedRect 30 15 1
-                |> filled
-                    (if mtype == DFA then
-                        finsmLightBlue
-
-                     else
-                        blank
-                    )
-                |> addOutline (solid 1) darkGray
-            , text "DFA"
-                |> centered
-                |> fixedwidth
-                |> filled
-                    (if mtype == DFA then
-                        white
-
-                     else
-                        darkGray
-                    )
-                |> move ( 0, -4 )
-            ]
-            |> move ( -winX / 2 + 20, winY / 2 - 32 )
-            |> notifyTap (ChangeMachine DFA)
-        , group
-            [ roundedRect 30 15 1
-                |> filled
-                    (if mtype == NFA then
-                        finsmLightBlue
-
-                     else
-                        blank
-                    )
-                |> addOutline (solid 1) darkGray
-            , text "NFA"
-                |> centered
-                |> fixedwidth
-                |> filled
-                    (if mtype == NFA then
-                        white
-
-                     else
-                        darkGray
-                    )
-                |> move ( 0, -4 )
-            ]
-            |> move ( -winX / 2 + 52, winY / 2 - 32 )
-            |> notifyTap (ChangeMachine NFA)
         ]
