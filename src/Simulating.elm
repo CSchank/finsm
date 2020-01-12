@@ -16,6 +16,7 @@ import SharedModel exposing (..)
 import Task
 import Tuple exposing (first, second)
 
+import Debug exposing (todo)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -24,7 +25,6 @@ subscriptions model =
 
 type alias PersistentModel =
     { tapes : Dict Int ( InputTape, TapeStatus )
-    , currentStates : Set StateID
     }
 
 
@@ -40,11 +40,18 @@ type TapeStatus
 type alias HoverError =
     Maybe Int
 
+type Stack = List Character
 
+type alias Configuration =
+    { readHead : Int
+    , state : StateID
+    , stack : Stack
+    }
+    
 type Model
     = Default HoverError
     | Editing Int
-    | Simulating Int {- tapeID -} Int {- charID -}
+    | Simulating Int {- tapeID of what I'm simulating currently -} (List Configuration) {- Stacks. Should this be a dict instead? -}
 
 
 type Msg
@@ -52,7 +59,6 @@ type Msg
     | EditTape Int
     | DeleteTape Int
     | AddNewTape
-    | ChangeTape Int
     | ToggleStart StateID
     | KeyPressed String
     | MachineMsg Machine.Msg
@@ -65,12 +71,7 @@ onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, Persiste
 onEnter env ( pModel, sModel ) =
     ( ( Default Nothing
       , { pModel
-            | currentStates =
-                epsTrans
-                    sModel.machine.transitionNames
-                    sModel.machine.delta
-                    sModel.machine.start
-            , tapes = checkTapes sModel pModel.tapes
+            | tapes = checkTapes sModel pModel.tapes
         }
       , sModel
       )
@@ -91,7 +92,6 @@ initPModel =
             [ ( 0, ( Array.fromList [ "[", "[", "]", "]" ], Fresh ) )
             , ( 1, ( Array.fromList [ "[", "[", "]" ], Fresh ) )
             ]
-    , currentStates = test.start
     }
 
 
@@ -180,12 +180,11 @@ renderTape model input tapeSt tapeId {- selectedId inputAt -} showButtons =
                                   )
                             , 0
                             )
-                        |> notifyTap (ChangeTape tapeId)
-                )
+                        )
                 input
             )
             ++ (case model of
-                    Simulating _ inputAt ->  
+                    {- Simulating _ _ ->  
                         [ group
                               [ triangle 2.25
                               |> filled black
@@ -199,8 +198,8 @@ renderTape model input tapeSt tapeId {- selectedId inputAt -} showButtons =
                               |> filled black
                               |> move ( 0, 3 )
                               ]
-                        |> move ( xpad / 2 + xpad * toFloat inputAt, 0 )
-                        ]
+                        |> move ( xpad + xpad * toFloat inputAt, 0 )
+                        ] -}
                     _ ->
                         []
                )
@@ -258,7 +257,10 @@ renderTape model input tapeSt tapeId {- selectedId inputAt -} showButtons =
                     []
                )
 
-
+renderStack : (StateID, Stack) -> Shape Msg
+renderStack ( stId, stk ) =
+    todo "todo"
+                
 update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
     let
@@ -268,7 +270,7 @@ update env msg ( model, pModel, sModel ) =
     case msg of
         Step ->
             case model of
-                Simulating tapeId charId ->
+            {-     Simulating tapeId configs ->
                     let
                         nextCh =
                             case Dict.get tapeId pModel.tapes of
@@ -286,9 +288,11 @@ update env msg ( model, pModel, sModel ) =
 
                                 _ ->
                                     ""
+
+                        nextStacks = todo "stacks"
                     in
                     if nextCh /= "" then
-                        ( ( Simulating tapeId (charId + 1) 
+                        ( ( Simulating tapeId (charId + 1) stacks
                           , { pModel
                                 | currentStates =
                                     deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates
@@ -301,7 +305,7 @@ update env msg ( model, pModel, sModel ) =
 
                     else
                         ( ( model, pModel, sModel ), False, Cmd.none )
-
+-}
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
 
@@ -309,7 +313,7 @@ update env msg ( model, pModel, sModel ) =
             ( ( Editing tId, pModel, sModel ), False, Cmd.none )
 
         SimulateTape tId ->
-            ( ( model, pModel, sModel ), False, Cmd.none )
+            ( ( Simulating tId [] , pModel, sModel ), False, Cmd.none )
 
         DeleteTape tId ->
             let
@@ -334,14 +338,11 @@ update env msg ( model, pModel, sModel ) =
             in
             ( ( model, { pModel | tapes = Dict.insert newId ( Array.empty, Fresh ) pModel.tapes }, sModel ), True, Cmd.none )
 
-        ChangeTape tId ->
-            ( ( Default Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
-
         KeyPressed k ->
             if k == "Enter" then
                 case model of
                     Editing tId ->
-                        ( ( Default Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
+                        ( ( Default Nothing, pModel, sModel ), True, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -388,7 +389,8 @@ update env msg ( model, pModel, sModel ) =
             else if k == "ArrowLeft" then
                 case model of
                     Simulating tId _ ->
-                        ( ( Simulating tId -1, { pModel | currentStates = sModel.machine.start }, sModel ), False, Cmd.none )
+                        -- currentStates = sModel.machine.start
+                        ( ( Simulating tId [], pModel, sModel ), False, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -532,7 +534,7 @@ update env msg ( model, pModel, sModel ) =
             in
             case model of
                 Simulating tId _ ->
-                    ( ( Simulating tId -1 , { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta newMachine.start }, { sModel | machine = newMachine } ), True, Cmd.none )
+                    ( ( Simulating tId [] , pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
@@ -583,18 +585,13 @@ view env ( model, pModel, sModel ) =
             -- This is broken?
             Set.toList <| Set.remove "\\epsilon" <| Set.fromList <| List.map tripFst <| Dict.values oldMachine.transitionNames
 
-        menu =
+        defaultMenu =
             group <|
                 [ text "Simulate"
                     |> size 16
                     |> fixedwidth
                     |> filled black
                     |> move ( -winX / 2 + 2, winY / 6 - 15 )
-                , text "(Click to toggle start state(s), right arrow to scrub through tape)"
-                    |> size 6
-                    |> fixedwidth
-                    |> filled black
-                    |> move ( -winX / 2 + 85, winY / 6 - 15 )
                 , group
                     [ roundedRect 15 15 2
                         |> filled white
@@ -616,6 +613,32 @@ view env ( model, pModel, sModel ) =
                         group []
                 ]
 
+        simMenu =
+            group <|
+                [ text "Simulate"
+                    |> size 16
+                    |> fixedwidth
+                    |> filled black
+                    |> move ( -winX / 2 + 2, winY / 6 - 15 )
+                , text "Press ESC to exit, right arrow to scrub through tape"
+                    |> size 6
+                    |> fixedwidth
+                    |> filled black
+                    |> move ( -winX / 2 + 85, winY / 6 - 15 )
+                , case model of
+                      Simulating tId configs ->
+                          let
+                              tapeInfo = Dict.get tId pModel.tapes
+
+                          in
+                          case tapeInfo of
+                              Nothing -> group [] -- Error!
+                              Just ( tapeInp, tapeSt ) ->
+                                  renderTape model tapeInp tapeSt tId False |> move ( -winX / 2 + 20, winY / 6 - 40 )
+                      _ ->
+                          group []
+                ]
+
         tapes =
             pModel.tapes
 
@@ -631,7 +654,7 @@ view env ( model, pModel, sModel ) =
                     [ rect winX (winY / 3)
                         |> filled lightGray
                     , machineDefn sModel winX winY
-                    , menu
+                    , defaultMenu
                     ]
                     |> move ( 0, -winY / 3 )
 
@@ -669,11 +692,10 @@ view env ( model, pModel, sModel ) =
                 group
                     [ rect winX (winY / 3)
                         |> filled lightGray
-                    , machineDefn sModel winX winY
-                    , menu
+                    , simMenu
                     ]
                     |> move ( 0, -winY / 3 )
-        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
+        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start) |> move ( 0, winY / 6 )
         ]
 
 machineDefn : SharedModel -> Float -> Float -> Shape Msg
