@@ -2,7 +2,7 @@ module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), Persisten
 
 import Array exposing (Array)
 import Browser.Events
-import Debug
+import Debug exposing (todo)
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import Error exposing (..)
@@ -16,7 +16,6 @@ import SharedModel exposing (..)
 import Task
 import Tuple exposing (first, second)
 
-import Debug exposing (todo)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -37,21 +36,37 @@ type TapeStatus
     | Stale (Set String)
 
 
+type TapeSimStatus
+    = InProgress
+    | Dead
+    | Accept
+
+
+type AcceptType
+    = FinalState
+    | EmptyStack
+
+
 type alias HoverError =
     Maybe Int
 
-type Stack = List Character
+
+type alias Stack =
+    List Character
+
 
 type alias Configuration =
     { readHead : Int
     , state : StateID
     , stack : Stack
+    , tapeSimStatus : TapeSimStatus
     }
-    
+
+
 type Model
     = Default HoverError
     | Editing Int
-    | Simulating Int {- tapeID of what I'm simulating currently -} (List Configuration) {- Stacks. Should this be a dict instead? -}
+    | Simulating Int {- tapeID of what I'm simulating currently -} (List Configuration) -- Stacks. Should this be a dict instead?
 
 
 type Msg
@@ -120,9 +135,18 @@ checkTape sModel inp =
             Stale <| Set.fromList <| Array.toList arrFilter
 
 
-renderTape : Model -> Array String -> TapeStatus -> Int -> {- Int -> Int -> -} Bool -> Shape Msg
-renderTape model input tapeSt tapeId {- selectedId inputAt -} showButtons =
+renderTape : Model -> Array Character -> TapeStatus -> Int {- Int -> Int -> -} -> Shape Msg
+renderTape model input tapeSt tapeId =
+    {- selectedId inputAt -}
     let
+        showButtons =
+            case model of
+                Default _ ->
+                    True
+
+                _ ->
+                    False
+
         hoverOn =
             case model of
                 Default (Just errId) ->
@@ -180,26 +204,27 @@ renderTape model input tapeSt tapeId {- selectedId inputAt -} showButtons =
                                   )
                             , 0
                             )
-                        )
+                )
                 input
             )
             ++ (case model of
-                    {- Simulating _ _ ->  
-                        [ group
-                              [ triangle 2.25
-                              |> filled black
-                              |> rotate (degrees 30)
-                              |> move ( 0, xpad / 2 + 5.75 )
-                              , triangle 2.25
-                              |> filled black
-                              |> rotate (degrees -30)
-                              |> move ( 0, -xpad / 2 + 0.25 )
-                              , rect 2 (xpad + 1)
-                              |> filled black
-                              |> move ( 0, 3 )
-                              ]
-                        |> move ( xpad + xpad * toFloat inputAt, 0 )
-                        ] -}
+                    {- Simulating _ _ ->
+                       [ group
+                             [ triangle 2.25
+                             |> filled black
+                             |> rotate (degrees 30)
+                             |> move ( 0, xpad / 2 + 5.75 )
+                             , triangle 2.25
+                             |> filled black
+                             |> rotate (degrees -30)
+                             |> move ( 0, -xpad / 2 + 0.25 )
+                             , rect 2 (xpad + 1)
+                             |> filled black
+                             |> move ( 0, 3 )
+                             ]
+                       |> move ( xpad + xpad * toFloat inputAt, 0 )
+                       ]
+                    -}
                     _ ->
                         []
                )
@@ -227,7 +252,7 @@ renderTape model input tapeSt tapeId {- selectedId inputAt -} showButtons =
                         [ roundedRect 15 15 2
                             |> filled white
                             |> addOutline (solid 1) darkGray
-                        , simulateIcon |> scale 0.4 |> move (-2, 0)
+                        , simulateIcon |> scale 0.4 |> move ( -2, 0 )
                         ]
                         |> move ( toFloat <| (Array.length input + 2) * xpad, 3 )
                         |> notifyTap (SimulateTape tapeId)
@@ -257,10 +282,26 @@ renderTape model input tapeSt tapeId {- selectedId inputAt -} showButtons =
                     []
                )
 
-renderStack : (StateID, Stack) -> Shape Msg
+
+
+-- need to know past stack state to be able to highlight new stack changes
+
+
+renderStack : ( StateID, Stack ) -> Shape Msg
 renderStack ( stId, stk ) =
-    todo "todo"
-                
+    let
+        singleShape stkChar =
+            group
+                [ rect 15 10
+                    |> outlined (solid 1) black
+                , latex 0 0 "white" stkChar AlignCentre
+
+                -- |> move ( 0, 10.25 )
+                ]
+    in
+    group <| List.indexedMap (\idx ch -> singleShape ch |> move ( 0, toFloat idx * 10 )) stk
+
+
 update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
     let
@@ -268,35 +309,17 @@ update env msg ( model, pModel, sModel ) =
             sModel.machine
     in
     case msg of
+        -- deltaHat : SharedModel -> InputTape -> TransitionNames -> Delta -> List Configuration -> List Configuration
         Step ->
             case model of
-            {-     Simulating tapeId configs ->
+                Simulating tapeId configs ->
                     let
-                        nextCh =
-                            case Dict.get tapeId pModel.tapes of
-                                Just ( ar, tapeStatus ) ->
-                                    case Array.get (charId + 1) ar of
-                                        Just ch ->
-                                            if tapeStatus == Fresh then
-                                                ch
-
-                                            else
-                                                ""
-
-                                        _ ->
-                                            ""
-
-                                _ ->
-                                    ""
-
-                        nextStacks = todo "stacks"
+                        nextConfigs =
+                            deltaHat sModel (todo "inputTape") oldMachine.transitionNames oldMachine.delta configs
                     in
-                    if nextCh /= "" then
-                        ( ( Simulating tapeId (charId + 1) stacks
-                          , { pModel
-                                | currentStates =
-                                    deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates
-                            }
+                    if True then
+                        ( ( Simulating tapeId nextConfigs
+                          , pModel
                           , sModel
                           )
                         , False
@@ -305,7 +328,7 @@ update env msg ( model, pModel, sModel ) =
 
                     else
                         ( ( model, pModel, sModel ), False, Cmd.none )
--}
+
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
 
@@ -313,7 +336,16 @@ update env msg ( model, pModel, sModel ) =
             ( ( Editing tId, pModel, sModel ), False, Cmd.none )
 
         SimulateTape tId ->
-            ( ( Simulating tId [] , pModel, sModel ), False, Cmd.none )
+            let
+                initCfg : Configuration
+                initCfg =
+                    { readHead = -1
+                    , stack = []
+                    , state = oldMachine.start
+                    , tapeSimStatus = InProgress
+                    }
+            in
+            ( ( Simulating tId [ initCfg ], pModel, sModel ), False, Cmd.none )
 
         DeleteTape tId ->
             let
@@ -529,12 +561,12 @@ update env msg ( model, pModel, sModel ) =
 
                 newMachine =
                     { oldMachine
-                        | start = Set.singleton sId
+                        | start = sId
                     }
             in
             case model of
                 Simulating tId _ ->
-                    ( ( Simulating tId [] , pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                    ( ( Simulating tId [], pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
@@ -606,7 +638,7 @@ view env ( model, pModel, sModel ) =
                     |> move ( -winX / 2 + 20, winY / 6 - 35 - 25 * (toFloat <| Dict.size pModel.tapes) )
                 , case model of
                     Default _ ->
-                        group (List.indexedMap (\x ( chId, ( ch, tapeSt ) ) -> renderTape model ch tapeSt chId True |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList tapes)
+                        group (List.indexedMap (\x ( chId, ( ch, tapeSt ) ) -> renderTape model ch tapeSt chId |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList pModel.tapes)
                             |> move ( -winX / 2 + 20, winY / 6 - 40 )
 
                     _ ->
@@ -625,22 +657,25 @@ view env ( model, pModel, sModel ) =
                     |> fixedwidth
                     |> filled black
                     |> move ( -winX / 2 + 85, winY / 6 - 15 )
-                , case model of
-                      Simulating tId configs ->
-                          let
-                              tapeInfo = Dict.get tId pModel.tapes
 
-                          in
-                          case tapeInfo of
-                              Nothing -> group [] -- Error!
-                              Just ( tapeInp, tapeSt ) ->
-                                  renderTape model tapeInp tapeSt tId False |> move ( -winX / 2 + 20, winY / 6 - 40 )
-                      _ ->
-                          group []
+                {- , case model of
+                   Simulating tId configs ->
+                       let
+                           tapeInfo =
+                               Dict.get tId pModel.tapes
+                       in
+                       case tapeInfo of
+                           Nothing ->
+                               group []
+
+                           -- Error!
+                           Just ( tapeInp, tapeSt ) ->
+                               renderTape model tapeInp tapeSt tId |> move ( -winX / 2 + 20, winY / 6 - 40 )
+
+                   _ ->
+                       group []
+                -}
                 ]
-
-        tapes =
-            pModel.tapes
 
         {-
            validCheck =
@@ -683,20 +718,33 @@ view env ( model, pModel, sModel ) =
                         |> move ( -winX / 2 + 95, winY / 6 - 15 )
                     , latexKeyboard winX winY chars
                         |> move ( 0, 0 )
-                    , renderTape model tape tapeSt tapeId False
+                    , renderTape model tape tapeSt tapeId
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
 
-            Simulating _ _ -> -- PLACEHOLDER
+            Simulating tapeId cfgs ->
+                -- PLACEHOLDER
+                let
+                    inpTape =
+                        case Dict.get tapeId pModel.tapes of
+                            Just ( tape, _ ) ->
+                                tape
+
+                            Nothing ->
+                                Array.empty
+                in
                 group
-                    [ rect winX (winY / 3)
+                    ([ rect winX (winY / 3)
                         |> filled lightGray
-                    , simMenu
-                    ]
+                     , simMenu
+                     ]
+                        ++ List.map (renderConfig model sModel inpTape tapeId) cfgs
+                    )
                     |> move ( 0, -winY / 3 )
-        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start) |> move ( 0, winY / 6 )
+        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine (Set.singleton sModel.machine.start)) |> move ( 0, winY / 6 )
         ]
+
 
 machineDefn : SharedModel -> Float -> Float -> Shape Msg
 machineDefn sModel winX winY =
@@ -740,15 +788,11 @@ machineDefn sModel winX winY =
             14
             "blank"
             ("s = "
-                ++ (case Set.toList machine.start of
-                        [] ->
-                            "Please\\ select\\ a\\ start\\ state"
+                ++ (if machine.start == -1 then
+                        "Please\\ select\\ a\\ start\\ state"
 
-                        x :: [] ->
-                            getStateName x
-
-                        x :: xs ->
-                            "Congratulations,\\ you\\ found\\ a\\ bug!"
+                    else
+                        getStateName machine.start
                    )
             )
             AlignLeft
@@ -758,97 +802,138 @@ machineDefn sModel winX winY =
         ]
 
 
-epsTrans : TransitionNames -> Delta -> Set StateID -> Set StateID
+epsTrans : TransitionNames -> Delta -> StateID -> List Configuration
 epsTrans tNames d states =
-    let
-        dList =
-            (Dict.toList << Dict.filter (\k _ -> Set.member k states)) d
+    todo "todo"
 
-        -- LMD: This was copy-pasted from delta
-        getName trans =
-            case Dict.get trans tNames of
-                Just ( n, _, _ ) ->
-                    n
+
+
+{-
+   let
+       dList =
+           (Dict.toList << Dict.filter (\k _ -> Set.member k states)) d
+
+       -- LMD: This was copy-pasted from delta
+       getName trans =
+           case Dict.get trans tNames of
+               Just ( n, _, _ ) ->
+                   n
+
+               _ ->
+                   ""
+
+       findEpsTransitions : List ( StateID, Dict TransitionID StateID ) -> List StateID
+       findEpsTransitions lst =
+           case lst of
+               [] ->
+                   []
+
+               ( sID, dictTrans ) :: xs ->
+                   let
+                       listTrans =
+                           Dict.toList dictTrans
+
+                       epsStates =
+                           List.filterMap
+                               (\( tId, sId ) ->
+                                   if getName tId == "\\epsilon" then
+                                       Just sId
+
+                                   else
+                                       Nothing
+                               )
+                               listTrans
+                   in
+                   epsStates ++ findEpsTransitions xs
+
+       newCurrentStates =
+           Set.union (Set.fromList <| findEpsTransitions dList) states
+   in
+   if newCurrentStates == states then
+       states
+
+   else
+       epsTrans tNames d newCurrentStates
+
+-}
+
+
+delta : SharedModel -> InputTape -> TransitionNames -> Delta -> Configuration -> List Configuration
+delta sModel inpTape tNames d cfg =
+    let
+        getName transID =
+            case Dict.get transID tNames of
+                Just transition ->
+                    transition
 
                 _ ->
+                    ( "", "", "" )
+
+        -- error string?
+        ch =
+            case Array.get cfg.readHead inpTape of
+                Just char ->
+                    char
+
+                Nothing ->
                     ""
 
-        findEpsTransitions : List ( StateID, Dict TransitionID StateID ) -> List StateID
-        findEpsTransitions lst =
-            case lst of
-                [] ->
-                    []
+        predStackTop curTop =
+            -- need to push this error (stack top >1 char) into Build mode. Put here for now
+            case List.head cfg.stack of
+                Just char ->
+                    case String.toList curTop of
+                        c :: [] ->
+                            char == String.fromList (c :: [])
 
-                ( sID, dictTrans ) :: xs ->
-                    let
-                        listTrans =
-                            Dict.toList dictTrans
+                        _ ->
+                            False
 
-                        epsStates =
-                            List.filterMap
-                                (\( tId, sId ) ->
-                                    if getName tId == "\\epsilon" then
-                                        Just sId
-
-                                    else
-                                        Nothing
-                                )
-                                listTrans
-                    in
-                    epsStates ++ findEpsTransitions xs
-
-        newCurrentStates =
-            Set.union (Set.fromList <| findEpsTransitions dList) states
+                Nothing ->
+                    False
     in
-    if newCurrentStates == states then
-        states
-
-    else
-        epsTrans tNames d newCurrentStates
-
-
-delta : TransitionNames -> Delta -> Character -> StateID -> Set StateID
-delta tNames d ch state =
-    let
-        getName trans =
-            case Dict.get trans tNames of
-                Just ( tname, _, _ ) ->
-                    tname
-
-                _ ->
-                    ""
-    in
-    case Dict.get state d of
+    case Dict.get cfg.state d of
         Just transMap ->
-            let
-                states =
-                    List.filterMap
-                        (\( tId, sId ) ->
+            List.map
+                (\( tId, sId ) ->
+                    if
+                        (ch == tripFst (getName tId) && (predStackTop <| tripSnd <| getName tId))
+                            || (tripFst (getName tId) == "\\epsilon" && sId == cfg.state)
+                    then
+                        { readHead = cfg.readHead + 1
+                        , state = sId
+                        , stack = String.split "" (tripThd (getName tId)) ++ cfg.stack
+                        , tapeSimStatus =
                             if
-                                (ch == getName tId)
-                                    || (getName tId == "\\epsilon" && sId == state)
+                                (cfg.readHead + 1)
+                                    == Array.length inpTape
+                                    - 1
+                                    && Set.member sId sModel.machine.final
+                                -- This is acceptance by final state, need to program both in!
                             then
-                                Just sId
+                                Accept
 
                             else
-                                Nothing
-                        )
-                    <|
-                        Dict.toList transMap
-            in
-            Set.fromList states
+                                InProgress
+                        }
+
+                    else
+                        { cfg | tapeSimStatus = Dead }
+                )
+            <|
+                Dict.toList transMap
 
         Nothing ->
-            Set.empty
+            [ { cfg | tapeSimStatus = Dead } ]
 
 
-deltaHat : TransitionNames -> Delta -> Character -> Set StateID -> Set StateID
-deltaHat tNames d ch states =
-    let
-        newStates =
-            Set.foldl (\curr ss -> Set.union ss (delta tNames d ch curr)) Set.empty states
-    in
-    epsTrans tNames d newStates
+
+-- deltaHat : TransitionNames -> Delta -> Character -> Set StateID -> Set StateID
+
+
+deltaHat : SharedModel -> InputTape -> TransitionNames -> Delta -> List Configuration -> List Configuration
+deltaHat sModel inpTape tNames d cfgs =
+    List.concat (List.map (delta sModel inpTape tNames d) cfgs)
 
 
 latexKeyboard : Float -> Float -> List Character -> Shape Msg
@@ -905,3 +990,34 @@ latexKeyboard w h chars =
         , oneRow homeRow (fillOutExtras 9 0 chars) |> move ( -keyW / 3, -keyH - 2 )
         , oneRow botRow (fillOutExtras 7 19 chars) |> move ( -keyW, -(keyH + 2) * 2 )
         ]
+
+
+renderConfig : Model -> SharedModel -> InputTape -> Int -> Configuration -> Shape Msg
+renderConfig model sModel inpTape tapeID cfg =
+    let
+        m =
+            sModel.machine
+
+        stk =
+            renderStack ( cfg.state, cfg.stack )
+
+        stateShape =
+            group
+                [ circle 20
+                    |> filled blank
+                    |> addOutline (solid 1) black
+                , group
+                    [ latex 25 18 "none" (Maybe.withDefault "IMPOSSIBLE HAPPENED" <| Dict.get cfg.state m.stateNames) AlignCentre
+                        |> move ( 0, 9 )
+                    ]
+                ]
+
+        renderedInpTape =
+            renderTape model inpTape Fresh tapeID
+    in
+    group
+        [ stk
+        , stateShape
+        , renderedInpTape |> move ( 25, 0 )
+        ]
+

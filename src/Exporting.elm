@@ -143,7 +143,7 @@ view env ( model, pModel, sModel ) =
          -}
     in
     group
-        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start) |> move ( -winX / 6, 0 )
+        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine (Set.singleton sModel.machine.start)) |> move ( -winX / 6, 0 )
         , text "Choose format:"
             |> size 20
             |> fixedwidth
@@ -307,7 +307,7 @@ generateTikz time machine =
                     ( String.fromFloat <| x / scale, String.fromFloat <| y / scale )
 
                 start =
-                    if Set.member sId machine.start then
+                    if sId == machine.start then
                         "line width = 0.55mm,"
 
                     else

@@ -466,11 +466,16 @@ update env msg ( model, pModel, sModel ) =
                                 Dict.map (\_ d -> Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d) oldMachine.delta
                                     |> Dict.filter (\key _ -> Set.member key new_q)
 
+                            newStart =
+                                if stId == oldMachine.start
+                                    then -1 -- might cause bug for new states...
+                                    else oldMachine.start
+                                       
                             newMachine =
                                 { oldMachine
                                     | q = new_q
                                     , delta = newDelta
-                                    , start = Set.remove stId oldMachine.start
+                                    , start = newStart
                                     , final = Set.remove stId oldMachine.final
                                     , statePositions = Dict.remove stId oldMachine.statePositions
                                     , stateTransitions = newStateTransitions

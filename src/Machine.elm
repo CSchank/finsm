@@ -28,7 +28,7 @@ type alias StateNames =
 
 
 type alias TransitionNames =
-    Dict TransitionID (Character, StackChar, StackChar)
+    Dict TransitionID (Character, StackChar {- should be only one character -} , StackChar)
 
 
 type alias StateTransitions =
@@ -47,12 +47,10 @@ type alias StackChar = String -- Stack alphabet
 type alias TransitionMistakes =
     Maybe (Set TransitionID)
 
--- type alias Stack = List Character
-
 type alias Machine =
     { q : Set StateID
     , delta : Delta
-    , start : Set StateID
+    , start : StateID
     , stackStart : StackChar
     , final : {- Maybe -} Set StateID
     , statePositions : StatePositions
@@ -108,7 +106,7 @@ test =
                 [ ( 0, Dict.fromList [ ( 0, 0 ), (1, 0), (2, 0), (3, 0) ] ) ]
 
         start =
-            Set.fromList [ 0 ]
+            0
 
         stackStart = "\\bot"
                 
