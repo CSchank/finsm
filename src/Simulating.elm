@@ -648,7 +648,7 @@ view env ( model, pModel, sModel ) =
         simMenu =
             group <|
                 [ text "Simulate"
-                    |> size 16
+                    |> size 162
                     |> fixedwidth
                     |> filled black
                     |> move ( -winX / 2 + 2, winY / 6 - 15 )
