@@ -430,7 +430,7 @@ update : Msg -> Model -> Environment -> ApplicationModel -> ( Model, Cmd Msg )
 update msg model env appModel =
     case msg of
         OpenLoadDialog ->
-            ( { m | loadDialog = LoadLoading }
+            ( { model | loadDialog = LoadLoading }
             , Cmd.batch
                 [ loadList FilterActive ListLoadResponse
                 , if model.unsavedChanges then
