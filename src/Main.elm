@@ -1,20 +1,20 @@
-module Main exposing (ApplicationModel, ApplicationState(..), Model, Module(..), Msg(..), initAppModel, main, modeButtons, textHtml, update, view)
+module Main exposing (Model, Module(..), Msg(..), initAppModel, main, modeButtons, textHtml, update, view)
 
+import ApplicationModel exposing (ApplicationModel, ApplicationState(..))
 import Array exposing (Array)
 import BetterUndoList exposing (..)
+import Bootstrap.Modal as Modal
 import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events exposing (Visibility)
 import Building
 import Dict exposing (Dict)
-import Duration
 import Environment exposing (Environment)
 import Exporting
 import GraphicSVG exposing (..)
 import Helpers exposing (finsmBlue, icon, sendMsg)
 import Html as H exposing (Html, input, node)
-import Html.Attributes exposing (attribute, placeholder, style, value)
-import Html.Events exposing (onInput)
+import Html.Attributes
 import Http
 import Json.Decode as D
 import Json.Encode
@@ -30,20 +30,13 @@ import Task
 import Time
 import Tuple exposing (first, second)
 import Url exposing (Url)
-import Utils exposing (textBox)
-import Bootstrap.ListGroup as ListGroup
-import Html
-import Bootstrap.Utilities.Spacing as Spacing
-import Bootstrap.Utilities.Flex as Flex
-import Bootstrap.Utilities.Size as Size
-import Bootstrap.ButtonGroup as ButtonGroup
-import Bootstrap.Button as Button
 
 
 type Msg
     = BMsg Building.Msg
     | SMsg Simulating.Msg
     | EMsg Exporting.Msg
+    | SaveMsg SaveLoad.Msg
     | KeyPressed String
     | KeyReleased String
     | WindowSize ( Int, Int )
@@ -51,42 +44,9 @@ type Msg
     | UrlRequest UrlRequest
     | GoTo Module
     | VisibilityChanged Visibility
-    | OpenLoginDialog
-    | OpenLogoutDialog
-    | OpenLoadDialog
-    | GetLoginStatus
-    | LoginStatusChange (Result Http.Error LoginStatus)
-    | EditMachineName
-    | TypeName String
-    | SaveMachine
-    | MachineSaveResponse (Result Http.Error SaveLoad.SaveResponse)
-    | ListLoadResponse (Result Http.Error (List SaveLoad.LoadMetadata))
-    | LoadMachine SaveLoad.LoadMetadata
-    | LoadMachineResponse (Result Http.Error SaveLoad.LoadPayload)
     | GetTime Time.Posix
+    | GetTZ Time.Zone
     | NoOp
-
-
-loginStatusDecoder : D.Decoder LoginStatus
-loginStatusDecoder =
-    D.field "loggedin" D.bool
-        |> D.andThen
-            (\loggedIn ->
-                if loggedIn then
-                    D.map LoggedIn (D.field "email" D.string)
-
-                else
-                    D.succeed NotLoggedIn
-            )
-
-
-getLoginStatus : Cmd Msg
-getLoginStatus =
-    Http.send LoginStatusChange <|
-        Http.post
-            "/accounts/loginstate/"
-            Http.emptyBody
-            loginStatusDecoder
 
 
 type Module
@@ -95,52 +55,10 @@ type Module
     | ExportingModule
 
 
-type ApplicationState
-    = Building Building.Model
-    | Simulating Simulating.Model
-    | Exporting Exporting.Model
-
-
-type LoginStatus
-    = LoggedIn String
-    | NotLoggedIn
-    | LoggingIn
-
-
-type SaveStatus
-    = NotSaved
-    | LastSaved Time.Posix
-    | Saved Time.Posix
-
-
 type alias Model =
     { appModel : BetterUndoList ApplicationModel
     , environment : Environment
-    , saveModel : SaveModel
-    }
-
-
-type LoadDialog =
-    LoadNotOpen
-    | LoadLoading
-    | LoadOpen (List SaveLoad.LoadMetadata)
-
-type alias SaveModel =
-    { loginState : LoginStatus
-    , loadDialog : LoadDialog
-    , machineMetadata : SaveLoad.LoadMetadata
-    , editingName : Bool
-    , lastSaved : Time.Posix
-    , unsavedChanges : Bool
-    }
-
-
-type alias ApplicationModel =
-    { appState : ApplicationState
-    , simulatingData : Simulating.PersistentModel
-    , buildingData : Building.PersistentModel
-    , exportingData : Exporting.PersistentModel
-    , sharedModel : SharedModel
+    , saveModel : SaveLoad.Model
     }
 
 
@@ -149,20 +67,13 @@ initAppModel =
     fresh initAppRecord
 
 
-initAppRecord = { appState = Building Building.init
-        , sharedModel = SharedModel.init
-        , simulatingData = Simulating.initPModel
-        , buildingData = Building.initPModel
-        , exportingData = Exporting.initPModel
-        }
-
-initSaveModel = { loginState = NotLoggedIn
-                , loadDialog = LoadNotOpen
-                , machineMetadata = { id = "", name = "Untitled", description = "", date = Time.millisToPosix 0 }
-                , editingName = False
-                , lastSaved = Time.millisToPosix 0
-                , unsavedChanges = True
-                }
+initAppRecord =
+    { appState = Building Building.init
+    , sharedModel = SharedModel.init
+    , simulatingData = Simulating.initPModel
+    , buildingData = Building.initPModel
+    , exportingData = Exporting.initPModel
+    }
 
 
 main : App () Model Msg
@@ -170,14 +81,19 @@ main =
     app
         { init =
             \flags url key ->
+                let
+                    ( initSave, saveCmd ) =
+                        SaveLoad.initSaveModel
+                in
                 ( { appModel = initAppModel
                   , environment = Environment.init
-                  , saveModel = initSaveModel
+                  , saveModel = initSave
                   }
                 , Cmd.batch
                     [ Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
-                    , getLoginStatus
                     , Task.perform GetTime Time.now
+                    , Cmd.map SaveMsg saveCmd
+                    , Task.perform GetTZ Time.here
                     ]
                 )
         , update = update
@@ -198,10 +114,8 @@ main =
 
                         Exporting m ->
                             Sub.map EMsg (Exporting.subscriptions m)
-                    , Browser.Events.onVisibilityChange (\_ -> GetLoginStatus)
-                    , Ports.loginComplete (\_ -> GetLoginStatus)
-                    , Ports.logoutComplete (\_ -> GetLoginStatus)
                     , Time.every 5000 GetTime -- get the new time every 10 seconds
+                    , Sub.map SaveMsg (SaveLoad.subscriptions model.saveModel)
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
@@ -243,9 +157,6 @@ moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel m
 
         sm =
             model.saveModel
-
-        cp =
-            Debug.log "unsavedChanges" sm.unsavedChanges
     in
     ( { model
         | appModel =
@@ -479,105 +390,29 @@ update msg model =
             , Cmd.none
             )
 
-        OpenLoginDialog ->
-            ( model , Ports.launchLogin () )
-
-        OpenLogoutDialog ->
-            (model , Ports.launchLogout () )
-
-        OpenLoadDialog ->
-            ( { model | saveModel = { sm | loadDialog = LoadLoading } }, SaveLoad.loadList ListLoadResponse )
-
-        GetLoginStatus ->
-            ( model, getLoginStatus )
-
-        LoginStatusChange loginStatus ->
-            case loginStatus of
-                Ok loginState ->
-                    ( { model | saveModel = { sm | loginState = loginState } }, Cmd.none )
-
-                Err _ ->
-                    ( model, Cmd.none )
-
-        EditMachineName ->
-            ( { model | saveModel = { sm | editingName = True } }, Cmd.none )
-
-        TypeName n ->
-            let
-                meta =
-                    model.saveModel.machineMetadata
-            in
-            ( { model | saveModel = { sm | machineMetadata = { meta | name = n } } }, Cmd.none )
-
-        SaveMachine ->
-            ( model
-            , saveMachine
-                model.saveModel.machineMetadata.name
-                model.saveModel.machineMetadata.description
-                model.appModel.present.sharedModel.machine
-                model.saveModel.machineMetadata.id
-                model.appModel.present.simulatingData.tapes
-                MachineSaveResponse
-            )
-
-        MachineSaveResponse saveresp ->
-            let
-                meta =
-                    model.saveModel.machineMetadata
-            in
-            case saveresp of
-                Ok oksaveresp ->
-                    ( { model
-                        | saveModel =
-                            { sm
-                                | machineMetadata = { meta | id = oksaveresp.uuid }
-                                , lastSaved = model.environment.currentTime
-                                , unsavedChanges = False
-                            }
-                      }
-                    , Cmd.none
-                    )
-
-                Err _ ->
-                    ( model, Cmd.none )
-
         GetTime time ->
             let
                 oldEnv =
                     model.environment
             in
             ( { model | environment = { oldEnv | currentTime = time } }
-            , if sm.unsavedChanges then
-                saveMachine
-                    model.saveModel.machineMetadata.name
-                    model.saveModel.machineMetadata.description
-                    model.appModel.present.sharedModel.machine
-                    model.saveModel.machineMetadata.id
-                    model.appModel.present.simulatingData.tapes
-                    MachineSaveResponse
-
-              else
-                Cmd.none
+            , Cmd.none
             )
 
-        ListLoadResponse response ->
-            case Debug.log "machineListResponse" response of
-                Ok machineList ->
-                    ( { model | saveModel = { sm | loadDialog = LoadOpen machineList } }, Cmd.none )
-                Err _ ->
-                    ( { model | saveModel = { sm | loadDialog = LoadNotOpen } }, Cmd.none )
+        SaveMsg saveMsg ->
+            case saveMsg of
+                SaveLoad.LoadMachineResponse response ->
+                    case Debug.log "loadMachineResponse" response of
+                        Ok loadPayload ->
+                            let
+                                initSharedModel =
+                                    SharedModel.init
 
-        LoadMachine meta ->
-            ( { model  | saveModel = { sm | machineMetadata = meta, loadDialog = LoadNotOpen }}
-            , SaveLoad.loadMachine meta.id LoadMachineResponse)
+                                newSharedModel =
+                                    { initSharedModel | machine = loadPayload.machine }
 
-        LoadMachineResponse response ->
-            case Debug.log "loadMachineResponse" response of
-                Ok loadPayload ->
-                    let
-                        initSharedModel = SharedModel.init
-                        newSharedModel = { initSharedModel | machine = loadPayload.machine }
-                        initSimModel = Simulating.initPModel
+                                initSimModel =
+                                    Simulating.initPModel
 
                                 --{ appState = Building Building.init
                                 --, sharedModel = SharedModel.init
@@ -585,19 +420,75 @@ update msg model =
                                 --, buildingData = Building.initPModel
                                 --, exportingData = Exporting.initPModel
                                 --}
+                                newModel =
+                                    fresh
+                                        { initAppRecord
+                                            | sharedModel = newSharedModel
+                                            , simulatingData = { initSimModel | tapes = Simulating.checkTapesNoStatus newSharedModel loadPayload.tapes }
+                                        }
+                            in
+                            ( { model
+                                | appModel = newModel
+                                , saveModel =
+                                    let
+                                        meta =
+                                            sm.machineMetadata
+                                    in
+                                    { sm | lastSaved = oldEnvironment.currentTime, machineData = SaveLoad.MachineCreated, machineMetadata = { meta | name = loadPayload.name, id = loadPayload.uuid } }
+                              }
+                            , Cmd.none
+                            )
+
+                        Err _ ->
+                            ( model, Cmd.none )
+
+                SaveLoad.CreateNewMachine ->
+                    let
+                        initSharedModel =
+                            SharedModel.init
+
+                        newSharedModel =
+                            initSharedModel
+
+                        initSimModel =
+                            Simulating.initPModel
+
+                        --{ appState = Building Building.init
+                        --, sharedModel = SharedModel.init
+                        --, simulatingData = Simulating.initPModel
+                        --, buildingData = Building.initPModel
+                        --, exportingData = Exporting.initPModel
+                        --}
                         newModel =
-                                fresh {
-                                    initAppRecord |
-                                  sharedModel = newSharedModel
-                                , simulatingData = { initSimModel | tapes = Simulating.checkTapesNoStatus newSharedModel loadPayload.tapes }
+                            fresh
+                                { initAppRecord
+                                    | sharedModel = newSharedModel
+                                    , simulatingData = initSimModel
                                 }
                     in
-                    ( { model | appModel = newModel
+                    ( { model
+                        | appModel = newModel
+                        , saveModel =
+                            { sm
+                                | lastSaved = oldEnvironment.currentTime
+                                , machineData = SaveLoad.MachineCreated
+                                , loadDialog = SaveLoad.NothingOpen
+                                , loadDialogModal = Modal.hidden
+                                , machineMetadata = SaveLoad.initMachineMetadata
+                            }
                       }
-                    , Cmd.none)
-                Err _ ->
-                    (model, Cmd.none)
+                    , Cmd.none
+                    )
 
+                other ->
+                    let
+                        ( newSM, sCmd ) =
+                            SaveLoad.update other model.saveModel model.environment model.appModel.present
+                    in
+                    ( { model | saveModel = newSM }, Cmd.map SaveMsg sCmd )
+
+        GetTZ zone ->
+            ( { model | environment = { oldEnvironment | timeZone = zone } }, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
@@ -809,146 +700,8 @@ modeButtons model =
             ]
             |> move ( -winX / 2 + 134, winY / 2 - 15 )
             |> notifyTap (GoTo ExportingModule)
-        , case model.saveModel.loginState of
-            NotLoggedIn ->
-                group
-                    [ roundedRect 50 15 1
-                        |> filled
-                            (if exporting then
-                                finsmBlue
-
-                             else
-                                blank
-                            )
-                        |> addOutline (solid 1) darkGray
-                    , text "Log in"
-                        |> centered
-                        |> fixedwidth
-                        |> filled black
-                        |> move ( 0, -4 )
-                    ]
-                    |> move ( winX / 2 - 50, winY / 2 - 15 )
-                    |> notifyTap OpenLoginDialog
-
-            LoggedIn email ->
-                group
-                    [ text ("Welcome " ++ email)
-                        |> alignRight
-                        |> fixedwidth
-                        |> filled black
-                        |> move ( 0, -4 )
-                    , group
-                        [ roundedRect 55 15 1
-                            |> filled blank
-                            |> addOutline (solid 1) darkGray
-                        , text "Log out"
-                            |> centered
-                            |> fixedwidth
-                            |> filled black
-                            |> move ( 0, -4 )
-                        ]
-                        |> move ( 40, 0 )
-                        |> notifyTap OpenLogoutDialog
-                    , group
-                        [ roundedRect 85 15 1
-                            |> filled blank
-                            |> addOutline (solid 1) darkGray
-                        , text "My Machines"
-                            |> centered
-                            |> fixedwidth
-                            |> filled black
-                            |> move ( 0, -4 )
-                        ]
-                        |> move ( 40, -20 )
-                        |> notifyTap OpenLoadDialog
-                    ]
-                    |> move ( winX / 2 - 100, winY / 2 - 15 )
-
-            _ ->
-                group []
-        , if not model.saveModel.editingName then
-            text model.saveModel.machineMetadata.name
-                |> fixedwidth
-                |> size 16
-                |> filled black
-                |> move ( -winX / 2 + 175, winY / 2 - 20 )
-                |> notifyTap EditMachineName
-
-          else
-            textBox model.saveModel.machineMetadata.name 300 20 "Machine Name" TypeName
-                |> move ( -winX / 2 + 325, winY / 2 - 10 )
-        , text (lastSaved model)
-            |> fixedwidth
-            |> size 14
-            |> filled darkGray
-            |> move ( -winX / 2 + 490, winY / 2 - 20 )
-        , case model.saveModel.loadDialog of
-            LoadNotOpen -> group []
-            LoadLoading -> group [text "Loading" |> fixedwidth |> centered |> size 24 |> filled black]
-            LoadOpen metas ->
-                let
-                    (w,h) = model.environment.windowSize
-                in
-                GraphicSVG.html (toFloat w/2) (toFloat h/2) (renderLoadList (w//2) (h//2) metas)
-                     |> move(-(toFloat w)/4,(toFloat h)/4)
-
-             --group (List.indexedMap (\n meta -> text (meta.name) |> filled black |> move(0,10*toFloat n)) metas)
+        , GraphicSVG.map SaveMsg <| SaveLoad.view model.saveModel model.environment
         ]
-
-
-lastSaved : Model -> String
-lastSaved model =
-    let
-        duration =
-            Duration.from model.saveModel.lastSaved model.environment.currentTime
-    in
-    if not model.saveModel.unsavedChanges then
-        if Duration.inSeconds duration <= 30 then
-            "last edit saved just now"
-
-        else if Duration.inSeconds duration <= 90 then
-            "last edit saved about a minute ago"
-
-        else if Duration.inMinutes duration <= 60 then
-            "last edit saved " ++ String.fromInt (round <| Duration.inMinutes duration) ++ " minutes ago"
-
-        else if Duration.inMinutes duration <= 90 then
-            "last edit saved about an hour ago"
-
-        else
-            "last edit saved " ++ String.fromInt (round <| Duration.inHours duration) ++ " hours ago"
-
-    else
-        case model.saveModel.loginState of
-            LoggedIn _ ->
-                "saving..."
-
-            NotLoggedIn ->
-                "log in to save changes"
-
-            _ ->
-                ""
-
-renderLoadList : Int -> Int -> List SaveLoad.LoadMetadata -> Html Msg
-renderLoadList w h metas =
-    let
-        oneRow machine =
-            ListGroup.anchor
-                 [ ListGroup.attrs [ Html.Events.onClick (LoadMachine machine), Flex.col, Flex.alignItemsStart ]
-                 ]
-                 [ Html.div [ Flex.block, Flex.justifyBetween, Size.w100 ]
-                     [ Html.h5 [ Spacing.mb1 ] [ Html.text machine.name ]
-                     , Html.small [] [ Html.text "3 days ago" ]
-                     ]
-                 , ButtonGroup.buttonGroup [ButtonGroup.attrs [style "float" "right"]]
-                       [ ButtonGroup.button [ Button.primary, Button.small ] [  Html.text "Load" ]
-                       , ButtonGroup.button [ Button.danger, Button.small ] [  Html.text "Archive" ]
-                       ]
-                 ]
-    in
-        Html.div [style "overflow" "scroll", style "width" (String.fromInt w ++ "px"), style "height" (String.fromInt h ++ "px"), style "position" "fixed"]
-            [ Html.h3 [] [Html.text "Load a saved machine"]
-            ,ListGroup.custom (List.map oneRow metas)]
 
 
 errorEpsTrans model =

@@ -10,6 +10,7 @@ init =
     , holdingControl = False
     , holdingMeta = False
     , currentTime = Time.millisToPosix 1576798602274
+    , timeZone = Time.utc
     }
 
 
@@ -19,4 +20,5 @@ type alias Environment =
     , holdingControl : Bool
     , holdingMeta : Bool
     , currentTime : Time.Posix
+    , timeZone : Time.Zone
     }

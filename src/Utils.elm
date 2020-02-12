@@ -8,6 +8,7 @@ import Html.Events exposing (..)
 import Json.Decode as D
 import Json.Encode as E
 import Set exposing (Set)
+import Task
 
 
 encodePair : (a -> E.Value) -> (b -> E.Value) -> ( a, b ) -> E.Value
@@ -73,3 +74,8 @@ textBox txt w h place msg =
                 , style "font-family" "monospace"
                 ]
                 []
+
+
+newMsg : msg -> Cmd msg
+newMsg msg =
+    Task.perform identity <| Task.succeed msg
