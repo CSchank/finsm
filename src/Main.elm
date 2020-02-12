@@ -146,7 +146,7 @@ moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel m
             model.appModel.present
 
         ( ( newM, newPModel, newSModel ), checkpoint, cmd ) =
-            mUpdate env (Debug.log "mMsg" mMsg) ( mModel, pModel, currentAppState.sharedModel )
+            mUpdate env mMsg ( mModel, pModel, currentAppState.sharedModel )
 
         newAppState =
             { currentAppState
@@ -402,7 +402,7 @@ update msg model =
         SaveMsg saveMsg ->
             case saveMsg of
                 SaveLoad.LoadMachineResponse response ->
-                    case Debug.log "loadMachineResponse" response of
+                    case response of
                         Ok loadPayload ->
                             let
                                 initSharedModel =

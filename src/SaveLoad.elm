@@ -428,10 +428,6 @@ type SaveStatus
 
 update : Msg -> Model -> Environment -> ApplicationModel -> ( Model, Cmd Msg )
 update msg model env appModel =
-    let
-        m =
-            Debug.log "model" model
-    in
     case msg of
         OpenLoadDialog ->
             ( { m | loadDialog = LoadLoading }
@@ -446,7 +442,7 @@ update msg model env appModel =
             )
 
         ListLoadResponse response ->
-            case Debug.log "machineListResponse" response of
+            case response of
                 Ok machineList ->
                     ( { model | loadDialog = LoadOpen machineList, loadDialogModal = Modal.shown, loadingList = Nothing, machineData = MachineCreated }, Cmd.none )
 
@@ -490,7 +486,7 @@ update msg model env appModel =
                     ( model, Cmd.none )
 
         InitLoginStatus loginStatus ->
-            case Debug.log "loginStatus" loginStatus of
+            case loginStatus of
                 Ok loginState ->
                     ( { model
                         | loginState = loginState
