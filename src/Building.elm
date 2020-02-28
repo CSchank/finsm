@@ -464,7 +464,7 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == "d" then
+            else if k == "d" || k == "D" then
                 case model.machineState of
                     SelectedState stId ->
                         let
@@ -526,13 +526,13 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == "g" then
+            else if k == "g" || k == "G" then
                 ( ( model, pModel, sModel ), False, sendMsg ToggleSnap )
 
             else
                 case model.machineState of
                     SelectedState sId ->
-                        if k == "f" then
+                        if k == "f" || k == "F" then
                             let
                                 newMachine =
                                     { oldMachine
