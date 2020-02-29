@@ -336,7 +336,11 @@ update env msg ( model, pModel, sModel ) =
             ( ( Default tId -1 Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
 
         KeyPressed k ->
-            if k == "Enter" then
+            let
+                normalizedKey =
+                    String.toLower k
+            in
+            if normalizedKey == "enter" then
                 case model of
                     Editing tId ->
                         ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
@@ -344,7 +348,7 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == "Backspace" || k == "ArrowLeft" then
+            else if normalizedKey == "backspace" || normalizedKey == "arrowleft" then
                 case model of
                     Editing tapeId ->
                         let
@@ -375,7 +379,7 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == "ArrowRight" then
+            else if normalizedKey == "arrowright" then
                 case model of
                     Default _ _ _ ->
                         ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
@@ -383,7 +387,7 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == "ArrowLeft" then
+            else if normalizedKey == "arrowleft" then
                 case model of
                     Default tId _ hErr ->
                         ( ( Default tId -1 hErr, { pModel | currentStates = sModel.machine.start }, sModel ), False, Cmd.none )
@@ -396,7 +400,7 @@ update env msg ( model, pModel, sModel ) =
                     Editing tapeId ->
                         let
                             charCode =
-                                case k of
+                                case normalizedKey of
                                     "a" ->
                                         0
 
