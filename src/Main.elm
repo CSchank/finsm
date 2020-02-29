@@ -241,17 +241,21 @@ update msg model =
                 ( model, Cmd.none )
 
         KeyPressed k ->
-            if k == "Shift" then
+            let
+                normalizedKey =
+                    String.toLower k
+            in
+            if normalizedKey == "shift" then
                 ( { model | environment = { oldEnvironment | holdingShift = True } }, Cmd.none )
 
-            else if k == "y" || k == "z" then
+            else if normalizedKey == "y" || normalizedKey == "z" then
                 let
                     doUndo =
-                        (oldEnvironment.holdingControl || oldEnvironment.holdingMeta) && k == "z"
+                        (oldEnvironment.holdingControl || oldEnvironment.holdingMeta) && normalizedKey == "z"
 
                     doRedo =
-                        (oldEnvironment.holdingControl && k == "y")
-                            || (oldEnvironment.holdingMeta && oldEnvironment.holdingShift && k == "z")
+                        (oldEnvironment.holdingControl && normalizedKey == "y")
+                            || (oldEnvironment.holdingMeta && oldEnvironment.holdingShift && normalizedKey == "z")
                 in
                 ( { model
                     | appModel =
@@ -267,11 +271,11 @@ update msg model =
                 , Cmd.none
                 )
 
-            else if k == "Meta" then
+            else if normalizedKey == "meta" then
                 --pressed meta key
                 ( { model | environment = { oldEnvironment | holdingMeta = True } }, Cmd.none )
 
-            else if k == "Control" then
+            else if normalizedKey == "control" then
                 --pressed control
                 ( { model | environment = { oldEnvironment | holdingControl = True } }, Cmd.none )
                 {- else if k == 66 then
