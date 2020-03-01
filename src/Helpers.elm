@@ -96,6 +96,19 @@ type LatexAlign
 
 
 latex w h backclr txt align =
+    --image (latexurl txt)
+    --    |> move
+    --                ( case align of
+    --                    AlignLeft ->
+    --                        0
+    --
+    --                    AlignRight ->
+    --                        -w
+    --
+    --                    AlignCentre ->
+    --                        -w / 2
+    --                , 0
+    --                )
     (html w h <|
         H.div
             [ style "width" "100%"

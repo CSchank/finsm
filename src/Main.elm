@@ -1,7 +1,9 @@
-module Main exposing (ApplicationModel, ApplicationState(..), Model, Module(..), Msg(..), initAppModel, main, modeButtons, textHtml, update, view)
+module Main exposing (Model, Module(..), Msg(..), initAppModel, main, modeButtons, textHtml, update, view)
 
+import ApplicationModel exposing (ApplicationModel, ApplicationState(..))
 import Array exposing (Array)
 import BetterUndoList exposing (..)
+import Bootstrap.Modal as Modal
 import Browser exposing (UrlRequest)
 import Browser.Dom
 import Browser.Events exposing (Visibility)
@@ -12,17 +14,20 @@ import Exporting
 import GraphicSVG exposing (..)
 import Helpers exposing (finsmBlue, icon, sendMsg)
 import Html as H exposing (Html, input, node)
-import Html.Attributes exposing (attribute, placeholder, style, value)
-import Html.Events exposing (onInput)
+import Html.Attributes
+import Http
 import Json.Decode as D
 import Json.Encode
 import List
 import Machine exposing (..)
+import Ports
 import Random
+import SaveLoad exposing (saveMachine)
 import Set exposing (Set)
 import SharedModel exposing (SharedModel)
 import Simulating
 import Task
+import Time
 import Tuple exposing (first, second)
 import Url exposing (Url)
 
@@ -31,13 +36,17 @@ type Msg
     = BMsg Building.Msg
     | SMsg Simulating.Msg
     | EMsg Exporting.Msg
-    | KeyPressed Int
-    | KeyReleased Int
+    | SaveMsg SaveLoad.Msg
+    | KeyPressed String
+    | KeyReleased String
     | WindowSize ( Int, Int )
     | UrlChange Url
     | UrlRequest UrlRequest
     | GoTo Module
     | VisibilityChanged Visibility
+    | GetTime Time.Posix
+    | GetTZ Time.Zone
+    | NoOp
 
 
 type Module
@@ -46,36 +55,25 @@ type Module
     | ExportingModule
 
 
-type ApplicationState
-    = Building Building.Model
-    | Simulating Simulating.Model
-    | Exporting Exporting.Model
-
-
 type alias Model =
     { appModel : BetterUndoList ApplicationModel
     , environment : Environment
-    }
-
-
-type alias ApplicationModel =
-    { appState : ApplicationState
-    , simulatingData : Simulating.PersistentModel
-    , buildingData : Building.PersistentModel
-    , exportingData : Exporting.PersistentModel
-    , sharedModel : SharedModel
+    , saveModel : SaveLoad.Model
     }
 
 
 initAppModel : BetterUndoList ApplicationModel
 initAppModel =
-    fresh
-        { appState = Building Building.init
-        , sharedModel = SharedModel.init
-        , simulatingData = Simulating.initPModel
-        , buildingData = Building.initPModel
-        , exportingData = Exporting.initPModel
-        }
+    fresh initAppRecord
+
+
+initAppRecord =
+    { appState = Building Building.init
+    , sharedModel = SharedModel.init
+    , simulatingData = Simulating.initPModel
+    , buildingData = Building.initPModel
+    , exportingData = Exporting.initPModel
+    }
 
 
 main : App () Model Msg
@@ -83,19 +81,29 @@ main =
     app
         { init =
             \flags url key ->
+                let
+                    ( initSave, saveCmd ) =
+                        SaveLoad.initSaveModel
+                in
                 ( { appModel = initAppModel
                   , environment = Environment.init
+                  , saveModel = initSave
                   }
-                , Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
+                , Cmd.batch
+                    [ Task.perform (\vp -> WindowSize ( round vp.viewport.width, round vp.viewport.height )) Browser.Dom.getViewport
+                    , Task.perform GetTime Time.now
+                    , Cmd.map SaveMsg saveCmd
+                    , Task.perform GetTZ Time.here
+                    ]
                 )
         , update = update
         , view = \m -> { body = view m, title = "finsm - create and simulate finite state machines" }
         , subscriptions =
             \model ->
-                Sub.batch
+                Sub.batch <|
                     [ Browser.Events.onResize (\w h -> WindowSize ( w, h ))
-                    , Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
-                    , Browser.Events.onKeyUp (D.map KeyReleased (D.field "keyCode" D.int))
+                    , Browser.Events.onKeyDown (D.map KeyPressed (D.field "key" D.string))
+                    , Browser.Events.onKeyUp (D.map KeyReleased (D.field "key" D.string))
                     , Browser.Events.onVisibilityChange VisibilityChanged
                     , case model.appModel.present.appState of
                         Building m ->
@@ -106,6 +114,8 @@ main =
 
                         Exporting m ->
                             Sub.map EMsg (Exporting.subscriptions m)
+                    , Time.every 5000 GetTime -- get the new time every 10 seconds
+                    , Sub.map SaveMsg (SaveLoad.subscriptions model.saveModel)
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
@@ -144,6 +154,9 @@ moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel m
                 , sharedModel = newSModel
             }
                 |> setpModel newPModel
+
+        sm =
+            model.saveModel
     in
     ( { model
         | appModel =
@@ -152,6 +165,15 @@ moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel m
 
             else
                 replace newAppState model.appModel
+        , saveModel =
+            { sm
+                | unsavedChanges =
+                    if checkpoint then
+                        True
+
+                    else
+                        sm.unsavedChanges
+            }
       }
     , Cmd.map msgWrapper cmd
     )
@@ -165,6 +187,9 @@ update msg model =
 
         currentAppState =
             model.appModel.present
+
+        sm =
+            model.saveModel
     in
     case msg of
         BMsg bmsg ->
@@ -228,30 +253,33 @@ update msg model =
             ( model, Cmd.none )
 
         KeyReleased k ->
-            if k == 16 then
+            if k == "Shift" then
                 ( { model | environment = { oldEnvironment | holdingShift = False } }, Cmd.none )
 
-            else if k == 91 then
+            else if k == "Meta" then
                 ( { model | environment = { oldEnvironment | holdingMeta = False } }, Cmd.none )
 
-            else if k == 17 then
+            else if k == "Control" then
                 ( { model | environment = { oldEnvironment | holdingControl = False } }, Cmd.none )
+
+            else if k == "Enter" then
+                ( { model | saveModel = { sm | editingName = False, unsavedChanges = True } }, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
         KeyPressed k ->
-            if k == 16 then
+            if k == "Shift" then
                 ( { model | environment = { oldEnvironment | holdingShift = True } }, Cmd.none )
 
-            else if k == 89 {- y -} || k == 90 {- z -} then
+            else if k == "y" || k == "z" then
                 let
                     doUndo =
-                        (oldEnvironment.holdingControl || oldEnvironment.holdingMeta) && k == 90
+                        (oldEnvironment.holdingControl || oldEnvironment.holdingMeta) && k == "z"
 
                     doRedo =
-                        (oldEnvironment.holdingControl && k == 89)
-                            || (oldEnvironment.holdingMeta && oldEnvironment.holdingShift && k == 90)
+                        (oldEnvironment.holdingControl && k == "y")
+                            || (oldEnvironment.holdingMeta && oldEnvironment.holdingShift && k == "z")
                 in
                 ( { model
                     | appModel =
@@ -263,15 +291,16 @@ update msg model =
 
                         else
                             model.appModel
+                    , saveModel = { sm | unsavedChanges = doRedo || doUndo }
                   }
                 , Cmd.none
                 )
 
-            else if k == 91 then
+            else if k == "Meta" then
                 --pressed meta key
                 ( { model | environment = { oldEnvironment | holdingMeta = True } }, Cmd.none )
 
-            else if k == 17 then
+            else if k == "Control" then
                 --pressed control
                 ( { model | environment = { oldEnvironment | holdingControl = True } }, Cmd.none )
                 {- else if k == 66 then
@@ -360,6 +389,109 @@ update msg model =
               }
             , Cmd.none
             )
+
+        GetTime time ->
+            let
+                oldEnv =
+                    model.environment
+            in
+            ( { model | environment = { oldEnv | currentTime = time } }
+            , Cmd.none
+            )
+
+        SaveMsg saveMsg ->
+            case saveMsg of
+                SaveLoad.LoadMachineResponse response ->
+                    case response of
+                        Ok loadPayload ->
+                            let
+                                initSharedModel =
+                                    SharedModel.init
+
+                                newSharedModel =
+                                    { initSharedModel | machine = loadPayload.machine }
+
+                                initSimModel =
+                                    Simulating.initPModel
+
+                                --{ appState = Building Building.init
+                                --, sharedModel = SharedModel.init
+                                --, simulatingData = Simulating.initPModel
+                                --, buildingData = Building.initPModel
+                                --, exportingData = Exporting.initPModel
+                                --}
+                                newModel =
+                                    fresh
+                                        { initAppRecord
+                                            | sharedModel = newSharedModel
+                                            , simulatingData = { initSimModel | tapes = Simulating.checkTapesNoStatus newSharedModel loadPayload.tapes }
+                                        }
+                            in
+                            ( { model
+                                | appModel = newModel
+                                , saveModel =
+                                    let
+                                        meta =
+                                            sm.machineMetadata
+                                    in
+                                    { sm | lastSaved = oldEnvironment.currentTime, machineData = SaveLoad.MachineCreated, machineMetadata = { meta | name = loadPayload.name, id = loadPayload.uuid } }
+                              }
+                            , Cmd.none
+                            )
+
+                        Err _ ->
+                            ( model, Cmd.none )
+
+                SaveLoad.CreateNewMachine ->
+                    let
+                        initSharedModel =
+                            SharedModel.init
+
+                        newSharedModel =
+                            initSharedModel
+
+                        initSimModel =
+                            Simulating.initPModel
+
+                        --{ appState = Building Building.init
+                        --, sharedModel = SharedModel.init
+                        --, simulatingData = Simulating.initPModel
+                        --, buildingData = Building.initPModel
+                        --, exportingData = Exporting.initPModel
+                        --}
+                        newModel =
+                            fresh
+                                { initAppRecord
+                                    | sharedModel = newSharedModel
+                                    , simulatingData = initSimModel
+                                }
+                    in
+                    ( { model
+                        | appModel = newModel
+                        , saveModel =
+                            { sm
+                                | lastSaved = oldEnvironment.currentTime
+                                , machineData = SaveLoad.MachineCreated
+                                , loadDialog = SaveLoad.NothingOpen
+                                , loadDialogModal = Modal.hidden
+                                , machineMetadata = SaveLoad.initMachineMetadata
+                            }
+                      }
+                    , Cmd.none
+                    )
+
+                other ->
+                    let
+                        ( newSM, sCmd ) =
+                            SaveLoad.update other model.saveModel model.environment model.appModel.present
+                    in
+                    ( { model | saveModel = newSM }, Cmd.map SaveMsg sCmd )
+
+        GetTZ zone ->
+            ( { model | environment = { oldEnvironment | timeZone = zone } }, Cmd.none )
+
+        NoOp ->
+            ( model, Cmd.none )
 
 
 processExit :
@@ -568,6 +700,7 @@ modeButtons model =
             ]
             |> move ( -winX / 2 + 134, winY / 2 - 15 )
             |> notifyTap (GoTo ExportingModule)
+        , GraphicSVG.map SaveMsg <| SaveLoad.view model.saveModel model.environment
         ]
 
 

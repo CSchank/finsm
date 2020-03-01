@@ -1,4 +1,4 @@
-module Machine exposing (Character, Delta, Machine, Model(..), Msg(..), StateID, StateNames, StatePositions, StateTransitions, TransitionID, TransitionMistakes, TransitionNames, arrow, renderArrow, renderArrows, renderStates, tMistakeAdd, tMistakeRemove, test, textBox, view)
+module Machine exposing (..)
 
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -7,7 +7,10 @@ import Helpers exposing (..)
 import Html as H exposing (Html, input, node)
 import Html.Attributes exposing (attribute, id, placeholder, style, value)
 import Html.Events exposing (onInput)
+import Json.Decode as D
+import Json.Encode as E
 import Set exposing (Set)
+import Utils exposing (decodeDict, decodePair, decodeSet, decodeTriple, encodeDict, encodePair, encodeSet, encodeTriple, textBox)
 
 
 type alias StateID =
@@ -46,6 +49,125 @@ type alias TransitionMistakes =
     Maybe (Set TransitionID)
 
 
+machineEncoder : Machine -> E.Value
+machineEncoder =
+    machineEncoderV1
+
+
+machineEncoderV1 : Machine -> E.Value
+machineEncoderV1 machine =
+    let
+        transTriple =
+            decodeTriple D.int D.int D.int
+
+        qEncoder : Set StateID -> E.Value
+        qEncoder =
+            encodeSet E.int
+
+        deltaEncoder : Delta -> E.Value
+        deltaEncoder =
+            encodeDict E.int (encodeDict E.int E.int)
+
+        startEncoder : Set StateID -> E.Value
+        startEncoder =
+            encodeSet E.int
+
+        finalEncoder : Set StateID -> E.Value
+        finalEncoder =
+            encodeSet E.int
+
+        statePosEncoder : StatePositions -> E.Value
+        statePosEncoder =
+            encodeDict E.int (encodePair E.float E.float)
+
+        transPosEncoder : StateTransitions -> E.Value
+        transPosEncoder =
+            encodeDict (encodeTriple E.int E.int E.int) (encodePair E.float E.float)
+
+        stateNamesEncoder : StateNames -> E.Value
+        stateNamesEncoder =
+            encodeDict E.int E.string
+
+        transNamesEncoder : TransitionNames -> E.Value
+        transNamesEncoder =
+            encodeDict E.int (encodeSet E.string)
+    in
+    E.object
+        [ ( "q", qEncoder machine.q )
+        , ( "delta", deltaEncoder machine.delta )
+        , ( "start", startEncoder machine.start )
+        , ( "final", finalEncoder machine.final )
+        , ( "statePositions", statePosEncoder machine.statePositions )
+        , ( "transPositions", transPosEncoder machine.stateTransitions )
+        , ( "stateNames", stateNamesEncoder machine.stateNames )
+        , ( "transNames", transNamesEncoder machine.transitionNames )
+        , ( "v", E.int 1 )
+        ]
+
+
+machineDecoder : D.Decoder Machine
+machineDecoder =
+    D.field "v" D.int
+        |> D.andThen
+            (\v ->
+                case v of
+                    1 ->
+                        machineDecoderV1
+
+                    _ ->
+                        D.fail <| "Invalid save metadata version " ++ String.fromInt v
+            )
+
+
+machineDecoderV1 : D.Decoder Machine
+machineDecoderV1 =
+    let
+        transTriple =
+            decodeTriple D.int D.int D.int
+
+        qDecoder : D.Decoder (Set StateID)
+        qDecoder =
+            D.field "q" <| decodeSet D.int
+
+        deltaDecoder : D.Decoder Delta
+        deltaDecoder =
+            D.field "delta" <| decodeDict D.int (decodeDict D.int D.int)
+
+        startDecoder : D.Decoder (Set StateID)
+        startDecoder =
+            D.field "start" <| decodeSet D.int
+
+        finalDecoder : D.Decoder (Set StateID)
+        finalDecoder =
+            D.field "final" <| decodeSet D.int
+
+        statePosDecoder : D.Decoder StatePositions
+        statePosDecoder =
+            D.field "statePositions" <| decodeDict D.int (decodePair D.float D.float)
+
+        transPosDecoder : D.Decoder StateTransitions
+        transPosDecoder =
+            D.field "transPositions" <| decodeDict transTriple (decodePair D.float D.float)
+
+        stateNamesDecoder : D.Decoder StateNames
+        stateNamesDecoder =
+            D.field "stateNames" <| decodeDict D.int D.string
+
+        transNamesDecoder : D.Decoder TransitionNames
+        transNamesDecoder =
+            D.field "transNames" <| decodeDict D.int (decodeSet D.string)
+    in
+    D.map8 Machine
+        qDecoder
+        deltaDecoder
+        startDecoder
+        finalDecoder
+        statePosDecoder
+        transPosDecoder
+        stateNamesDecoder
+        transNamesDecoder
+
+
 type alias Machine =
     { q : Set StateID
     , delta : Delta
@@ -55,7 +177,6 @@ type alias Machine =
     , stateTransitions : StateTransitions
     , stateNames : StateNames
     , transitionNames : TransitionNames
-    , transitionMistakes : TransitionMistakes
     }
 
 
@@ -132,15 +253,12 @@ test =
                 , ( ( 1, 3, 3 ), ( 0, 10 ) )
                 , ( ( 3, 7, 1 ), ( 0, 10 ) )
                 ]
-
-        transitionMistakes =
-            Nothing
     in
-    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames transitionMistakes
+    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
 
 
-view : Environment -> Model -> Machine -> Set StateID -> Shape Msg
-view env model machine currentStates =
+view : Environment -> Model -> Machine -> Set StateID -> TransitionMistakes -> Shape Msg
+view env model machine currentStates tMistakes =
     let
         ( winX, winY ) =
             env.windowSize
@@ -152,7 +270,7 @@ view env model machine currentStates =
                 |> notifyMouseUp StopDragging
     in
     group
-        [ renderArrows machine model
+        [ renderArrows machine model tMistakes
         , renderStates currentStates machine model env
         , case model of
             AddingArrow s ( x, y ) ->
@@ -246,53 +364,8 @@ view env model machine currentStates =
         ]
 
 
-tMistakeRemove : TransitionID -> TransitionMistakes -> TransitionMistakes
-tMistakeRemove tId tMistake =
-    case tMistake of
-        Just setOfMistakes ->
-            let
-                newSetOfMistakes =
-                    Set.remove tId setOfMistakes
-            in
-            if Set.isEmpty newSetOfMistakes then
-                Nothing
-
-            else
-                Just newSetOfMistakes
-
-        Nothing ->
-            Nothing
-
-
-tMistakeAdd : TransitionID -> TransitionMistakes -> TransitionMistakes
-tMistakeAdd tId tMistake =
-    case tMistake of
-        Nothing ->
-            Just <| Set.singleton tId
-
-        Just setOfMistakes ->
-            Just <| Set.insert tId setOfMistakes
-
-
 
 --These two functions will eventually become part of GraphicSVG in some form
-
-
-textBox : String -> Float -> Float -> String -> (String -> Msg) -> Shape Msg
-textBox txt w h place msg =
-    move ( -w / 2, h / 2 ) <|
-        html (w * 1.5) (h * 1.5) <|
-            input
-                [ id "input"
-                , placeholder place
-                , onInput msg
-                , value txt
-                , style "width" (String.fromFloat w ++ "px")
-                , style "height" (String.fromFloat h ++ "px")
-                , style "margin-top" "1px"
-                , style "font-family" "monospace"
-                ]
-                []
 
 
 arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
@@ -514,8 +587,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
         ]
 
 
-renderArrows : Machine -> Model -> Shape Msg
-renderArrows machine model =
+renderArrows : Machine -> Model -> TransitionMistakes -> Shape Msg
+renderArrows machine model tMistakes =
     let
         states =
             machine.q
@@ -528,9 +601,6 @@ renderArrows machine model =
 
         transPos =
             machine.stateTransitions
-
-        transMistakes =
-            machine.transitionMistakes
 
         stateList =
             Set.toList states
@@ -560,14 +630,6 @@ renderArrows machine model =
 
                 Nothing ->
                     ( 0, 0 )
-
-        getTransMistake tId =
-            case transMistakes of
-                Nothing ->
-                    False
-
-                Just setOfMistakes ->
-                    Set.member tId setOfMistakes
     in
     group <|
         List.map
@@ -607,8 +669,18 @@ renderArrows machine model =
                                                     _ ->
                                                         False
 
+                                            -- Transition mistake function
+                                            getTransMistake : TransitionMistakes -> TransitionID -> Bool
+                                            getTransMistake transMistakes tId =
+                                                case transMistakes of
+                                                    Nothing ->
+                                                        False
+
+                                                    Just setOfMistakes ->
+                                                        Set.member tId setOfMistakes
+
                                             mistake =
-                                                getTransMistake chId
+                                                getTransMistake tMistakes chId
                                         in
                                         group
                                             [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel mistake s1 s2 model
@@ -752,15 +824,18 @@ renderStates currentStates machine model env =
 
                         _ ->
                             group []
-                    , rect 25 18
-                        |> filled blank
                     ]
                     |> move (getPos sId)
-                    |> (if not env.holdingShift then
-                            notifyMouseDownAt (StartDragging sId)
+                    |> (case model of
+                            EditingStateLabel _ _ ->
+                                identity
 
-                        else
-                            notifyTap (TapState sId)
+                            _ ->
+                                if not env.holdingShift then
+                                    notifyMouseDownAt (StartDragging sId)
+
+                                else
+                                    notifyTap (TapState sId)
                        )
             )
             stateList

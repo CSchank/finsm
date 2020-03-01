@@ -1,29 +1,49 @@
-module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
+module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, checkTapesNoStatus, delta, deltaHat, epsTrans, initPModel, inputTapeDecoder, inputTapeDictDecoder, inputTapeEncoder, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
 import Browser.Events
+import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import Error exposing (..)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
+import Json.Encode as E
 import Machine exposing (..)
+import Mistakes exposing (..)
 import Set exposing (Set)
 import SharedModel exposing (..)
 import Task
 import Tuple exposing (first, second)
+import Utils exposing (decodeDict, encodeDict)
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Browser.Events.onKeyDown (D.map KeyPressed (D.field "keyCode" D.int))
+    Browser.Events.onKeyDown (D.map KeyPressed (D.field "key" D.string))
 
 
 type alias PersistentModel =
     { tapes : Dict Int ( InputTape, TapeStatus )
     , currentStates : Set StateID
     }
+
+
+inputTapeEncoder : Dict Int ( InputTape, a ) -> E.Value
+inputTapeEncoder =
+    encodeDict E.int (E.list E.string << Array.toList << Tuple.first)
+
+
+inputTapeDecoder : D.Decoder InputTape
+inputTapeDecoder =
+    D.map Array.fromList
+        (D.list D.string)
+
+
+inputTapeDictDecoder : D.Decoder (Dict Int InputTape)
+inputTapeDictDecoder =
+    decodeDict D.int inputTapeDecoder
 
 
 type alias InputTape =
@@ -51,7 +71,7 @@ type Msg
     | AddNewTape
     | ChangeTape Int
     | ToggleStart StateID
-    | KeyPressed Int
+    | KeyPressed String
     | ChangeMachine MachineType
     | MachineMsg Machine.Msg
     | HoverErrorEnter Int
@@ -95,6 +115,11 @@ initPModel =
 checkTapes : SharedModel -> Dict Int ( InputTape, TapeStatus ) -> Dict Int ( InputTape, TapeStatus )
 checkTapes sModel tapes =
     Dict.map (\k ( tape, _ ) -> ( tape, checkTape sModel tape )) tapes
+
+
+checkTapesNoStatus : SharedModel -> Dict Int InputTape -> Dict Int ( InputTape, TapeStatus )
+checkTapesNoStatus sModel tapes =
+    Dict.map (\k tape -> ( tape, checkTape sModel tape )) tapes
 
 
 checkTape : SharedModel -> InputTape -> TapeStatus
@@ -166,7 +191,17 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                         , latex (xpad * 0.9) (xpad * 0.7) "white" st AlignCentre
                             |> move ( 0, 10.25 )
                         ]
-                        |> move ( toFloat n * xpad, 0 )
+                        |> move
+                            ( toFloat n
+                                * xpad
+                                + (if not showButtons then
+                                    xpad / 2
+
+                                   else
+                                    0
+                                  )
+                            , 0
+                            )
                         |> notifyTap (ChangeTape tapeId)
                 )
                 input
@@ -325,17 +360,15 @@ update env msg ( model, pModel, sModel ) =
             ( ( Default tId -1 Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
 
         KeyPressed k ->
-            if k == 13 then
-                --pressed enter
+            if k == "Enter" then
                 case model of
                     Editing tId ->
-                        ( ( Default tId -1 Nothing, pModel, sModel ), True, Cmd.none )
+                        ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == 8 then
-                --pressed delete
+            else if k == "Backspace" || k == "ArrowLeft" then
                 case model of
                     Editing tapeId ->
                         let
@@ -366,11 +399,18 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == 39 then
-                --right arrow key
+            else if k == "ArrowRight" then
                 case model of
                     Default _ _ _ ->
                         ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
+
+                    _ ->
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
+            else if k == "ArrowLeft" then
+                case model of
+                    Default tId _ hErr ->
+                        ( ( Default tId -1 hErr, { pModel | currentStates = sModel.machine.start }, sModel ), False, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -381,82 +421,82 @@ update env msg ( model, pModel, sModel ) =
                         let
                             charCode =
                                 case k of
-                                    65 ->
+                                    "a" ->
                                         0
 
-                                    83 ->
+                                    "s" ->
                                         1
 
-                                    68 ->
+                                    "d" ->
                                         2
 
-                                    70 ->
+                                    "f" ->
                                         3
 
-                                    71 ->
+                                    "g" ->
                                         4
 
-                                    72 ->
+                                    "h" ->
                                         5
 
-                                    74 ->
+                                    "j" ->
                                         6
 
-                                    75 ->
+                                    "k" ->
                                         7
 
-                                    76 ->
+                                    "l" ->
                                         8
 
-                                    81 ->
+                                    "q" ->
                                         9
 
-                                    87 ->
+                                    "w" ->
                                         10
 
-                                    69 ->
+                                    "e" ->
                                         11
 
-                                    82 ->
+                                    "r" ->
                                         12
 
-                                    84 ->
+                                    "t" ->
                                         13
 
-                                    89 ->
+                                    "y" ->
                                         14
 
-                                    85 ->
+                                    "u" ->
                                         15
 
-                                    73 ->
+                                    "i" ->
                                         16
 
-                                    79 ->
+                                    "o" ->
                                         17
 
-                                    80 ->
+                                    "p" ->
                                         18
 
-                                    90 ->
+                                    "z" ->
                                         19
 
-                                    88 ->
+                                    "x" ->
                                         20
 
-                                    67 ->
+                                    "c" ->
                                         21
 
-                                    86 ->
+                                    "v" ->
                                         22
 
-                                    66 ->
+                                    "b" ->
                                         23
 
-                                    78 ->
+                                    "n" ->
                                         24
 
-                                    77 ->
+                                    "m" ->
                                         25
 
                                     _ ->
@@ -623,6 +663,9 @@ view env ( model, pModel, sModel ) =
         winY =
             toFloat <| second env.windowSize
 
+        transMistakes =
+            getTransitionMistakes sModel.machine
+
         chars =
             -- This is broken?
             Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values oldMachine.transitionNames
@@ -710,7 +753,7 @@ view env ( model, pModel, sModel ) =
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
-        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
+        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
         , machineModeButtons sModel.machineType winX winY
         ]
 
