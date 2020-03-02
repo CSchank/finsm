@@ -1,4 +1,4 @@
-module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, delta, deltaHat, epsTrans, initPModel, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
+module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, checkTapesNoStatus, delta, deltaHat, epsTrans, initPModel, inputTapeDecoder, inputTapeDictDecoder, inputTapeEncoder, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
 import Browser.Events
@@ -9,11 +9,14 @@ import Error exposing (..)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
+import Json.Encode as E
 import Machine exposing (..)
+import Mistakes exposing (..)
 import Set exposing (Set)
 import SharedModel exposing (..)
 import Task
 import Tuple exposing (first, second)
+import Utils exposing (decodeDict, encodeDict)
 
 
 subscriptions : Model -> Sub Msg
@@ -25,6 +28,22 @@ type alias PersistentModel =
     { tapes : Dict Int ( InputTape, TapeStatus )
     , currentStates : Set StateID
     }
+
+
+inputTapeEncoder : Dict Int ( InputTape, a ) -> E.Value
+inputTapeEncoder =
+    encodeDict E.int (E.list E.string << Array.toList << Tuple.first)
+
+
+inputTapeDecoder : D.Decoder InputTape
+inputTapeDecoder =
+    D.map Array.fromList
+        (D.list D.string)
+
+
+inputTapeDictDecoder : D.Decoder (Dict Int InputTape)
+inputTapeDictDecoder =
+    decodeDict D.int inputTapeDecoder
 
 
 type alias InputTape =
@@ -96,6 +115,11 @@ initPModel =
 checkTapes : SharedModel -> Dict Int ( InputTape, TapeStatus ) -> Dict Int ( InputTape, TapeStatus )
 checkTapes sModel tapes =
     Dict.map (\k ( tape, _ ) -> ( tape, checkTape sModel tape )) tapes
+
+
+checkTapesNoStatus : SharedModel -> Dict Int InputTape -> Dict Int ( InputTape, TapeStatus )
+checkTapesNoStatus sModel tapes =
+    Dict.map (\k tape -> ( tape, checkTape sModel tape )) tapes
 
 
 checkTape : SharedModel -> InputTape -> TapeStatus
@@ -643,6 +667,9 @@ view env ( model, pModel, sModel ) =
         winY =
             toFloat <| second env.windowSize
 
+        transMistakes =
+            getTransitionMistakes sModel.machine
+
         chars =
             -- This is broken?
             Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values oldMachine.transitionNames
@@ -730,7 +757,7 @@ view env ( model, pModel, sModel ) =
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
-        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates) |> move ( 0, winY / 6 )
+        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
         , machineModeButtons sModel.machineType winX winY
         ]
 

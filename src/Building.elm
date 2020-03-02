@@ -1,13 +1,13 @@
 module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
 import Browser.Events
-import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
 import Machine exposing (..)
+import Mistakes exposing (..)
 import Set
 import SharedModel exposing (SharedModel)
 import Task
@@ -148,34 +148,6 @@ update env msg ( model, pModel, sModel ) =
                                 isValidTransition =
                                     checkTransitionValid newTrans
 
-                                oldTransitionMistakes =
-                                    oldMachine.transitionMistakes
-
-                                newTransitionMistakes =
-                                    if isValidTransition then
-                                        case oldTransitionMistakes of
-                                            Just setOfMistakes ->
-                                                let
-                                                    newSetOfMistakes =
-                                                        Set.remove newTransID setOfMistakes
-                                                in
-                                                if Set.isEmpty newSetOfMistakes then
-                                                    Nothing
-
-                                                else
-                                                    Just newSetOfMistakes
-
-                                            Nothing ->
-                                                Nothing
-
-                                    else
-                                        case oldTransitionMistakes of
-                                            Just setOfMistakes ->
-                                                Just <| Set.insert newTransID setOfMistakes
-
-                                            Nothing ->
-                                                Just <| Set.singleton newTransID
-
                                 newDelta : Delta
                                 newDelta =
                                     Dict.update st
@@ -209,7 +181,6 @@ update env msg ( model, pModel, sModel ) =
                                             | delta = newDelta
                                             , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
                                             , stateTransitions = Dict.insert ( st, newTransID, s1 ) newTransPos oldMachine.stateTransitions
-                                            , transitionMistakes = newTransitionMistakes
                                         }
                                 }
                               )
@@ -489,14 +460,10 @@ update env msg ( model, pModel, sModel ) =
                                     , stateTransitions = newStateTransitions
                                     , stateNames = Dict.remove stId oldMachine.stateNames
                                     , transitionNames = Dict.diff oldMachine.transitionNames removedTransitions
-                                    , transitionMistakes = newTMistakes
                                 }
 
                             newStateTransitions =
                                 Dict.filter (\( _, t, _ ) _ -> not <| Dict.member t removedTransitions) oldMachine.stateTransitions
-
-                            newTMistakes =
-                                List.foldr (\tId mistakes -> tMistakeRemove (first tId) mistakes) oldMachine.transitionMistakes removedTransitionsLst
 
                             removedTransitionsLst =
                                 List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) oldMachine.stateTransitions
@@ -516,14 +483,10 @@ update env msg ( model, pModel, sModel ) =
                                     | delta = newDelta
                                     , stateTransitions = newStateTransitions
                                     , transitionNames = Dict.remove tId oldMachine.transitionNames
-                                    , transitionMistakes = newTMistakes
                                 }
 
                             newStateTransitions =
                                 Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.stateTransitions
-
-                            newTMistakes =
-                                tMistakeRemove tId oldMachine.transitionMistakes
                         in
                         ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
@@ -572,20 +535,9 @@ update env msg ( model, pModel, sModel ) =
                 isValidTransition =
                     checkTransitionValid newTransitions
 
-                oldTransitionMistakes =
-                    oldMachine.transitionMistakes
-
-                newTransitionMistakes =
-                    if isValidTransition then
-                        tMistakeRemove tId oldTransitionMistakes
-
-                    else
-                        tMistakeAdd tId oldTransitionMistakes
-
                 newMachine =
                     { oldMachine
                         | transitionNames = Dict.insert tId newTransitions oldMachine.transitionNames
-                        , transitionMistakes = newTransitionMistakes
                     }
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
@@ -635,6 +587,9 @@ view env ( model, pModel, sModel ) =
 
         winY =
             toFloat <| second env.windowSize
+
+        transMistakes =
+            getTransitionMistakes sModel.machine
     in
     group
         [ rect winX winY
@@ -669,7 +624,7 @@ view env ( model, pModel, sModel ) =
 
             _ ->
                 group []
-        , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty
+        , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty transMistakes
         , editingButtons model |> move ( winX / 2 - 30, -winY / 2 + 25 )
         ]
 
@@ -766,17 +721,3 @@ snapIcon =
             ]
             |> move ( 5, -10 )
         ]
-
-
-checkTransitionValid : Set.Set String -> Bool
-checkTransitionValid set =
-    case Set.member "\\epsilon" set of
-        False ->
-            True
-
-        True ->
-            if Set.size set == 1 then
-                True
-
-            else
-                False

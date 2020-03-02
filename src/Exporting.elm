@@ -11,6 +11,7 @@ import Html as H
 import Html.Attributes as A
 import Json.Decode as D
 import Machine exposing (..)
+import Mistakes exposing (..)
 import Set exposing (Set)
 import Sha256 exposing (sha256)
 import SharedModel exposing (..)
@@ -122,6 +123,9 @@ view env ( model, pModel, sModel ) =
         hasErr =
             contextHasError errCheck sModel.machineType
 
+        transMistakes =
+            getTransitionMistakes oldMachine
+
         -- TODO: Adjust popup box size to fix custom error messages
         errHover =
             group
@@ -137,7 +141,7 @@ view env ( model, pModel, sModel ) =
                 |> move ( winX / 6 - 100, -105 )
     in
     group
-        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start) |> move ( -winX / 6, 0 )
+        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start transMistakes) |> move ( -winX / 6, 0 )
         , machineSelected sModel.machineType winX winY
         , text "Choose format:"
             |> size 20
