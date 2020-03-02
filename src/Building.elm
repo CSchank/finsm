@@ -426,7 +426,11 @@ update env msg ( model, pModel, sModel ) =
                     ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
         KeyPressed k ->
-            if k == "Enter" then
+            let
+                normalizedKey =
+                    String.toLower k
+            in
+            if normalizedKey == "enter" then
                 --pressed enter
                 case model.machineState of
                     EditingStateLabel sId newLbl ->
@@ -464,7 +468,7 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == "d" then
+            else if normalizedKey == "d" then
                 case model.machineState of
                     SelectedState stId ->
                         let
@@ -526,13 +530,13 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-            else if k == "g" then
+            else if normalizedKey == "g" then
                 ( ( model, pModel, sModel ), False, sendMsg ToggleSnap )
 
             else
                 case model.machineState of
                     SelectedState sId ->
-                        if k == "f" then
+                        if normalizedKey == "f" then
                             let
                                 newMachine =
                                     { oldMachine
