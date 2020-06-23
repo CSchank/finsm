@@ -135,8 +135,8 @@ checkTape sModel inp =
             Stale <| Set.fromList <| Array.toList arrFilter
 
 
-renderTape : Model -> Array Character -> TapeStatus -> Int {- Int -> Int -> -} -> Shape Msg
-renderTape model input tapeSt tapeId =
+renderTape : Model -> Array Character -> TapeStatus -> Int -> Maybe Int {- -> Int -> -} -> Shape Msg
+renderTape model input tapeSt tapeId mReadHead =
     {- selectedId inputAt -}
     let
         showButtons =
@@ -207,8 +207,8 @@ renderTape model input tapeSt tapeId =
                 )
                 input
             )
-            ++ (case model of
-                    {- Simulating _ _ ->
+            ++ (case mReadHead of
+                    Just inputAt ->
                        [ group
                              [ triangle 2.25
                              |> filled black
@@ -224,7 +224,6 @@ renderTape model input tapeSt tapeId =
                              ]
                        |> move ( xpad + xpad * toFloat inputAt, 0 )
                        ]
-                    -}
                     _ ->
                         []
                )
@@ -302,6 +301,36 @@ renderStack ( stId, stk ) =
     group <| List.indexedMap (\idx ch -> singleShape ch |> move ( 0, toFloat idx * 10 )) stk
 
 
+renderConfig : Model -> SharedModel -> InputTape -> Int -> Configuration -> Shape Msg
+renderConfig model sModel inpTape tapeID cfg =
+    let
+        m =
+            sModel.machine
+
+        stk =
+            renderStack ( cfg.state, cfg.stack ) |> move (60, 0) -- placeholder
+
+        stateShape =
+            group
+                [ circle 20
+                    |> filled blank
+                    |> addOutline (solid 1) black
+                , group
+                    [ latex 25 18 "none" (Maybe.withDefault "D:" <| Dict.get cfg.state m.stateNames) AlignCentre
+                        |> move ( 0, 9 )
+                    ]
+                ]
+
+        renderedInpTape =
+            renderTape model inpTape Fresh tapeID (Just cfg.readHead)
+    in
+    group
+        [ stk
+        , stateShape
+        , renderedInpTape |> move ( 25, 0 )
+        ]
+
+
 update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
     let
@@ -314,8 +343,16 @@ update env msg ( model, pModel, sModel ) =
             case model of
                 Simulating tapeId configs ->
                     let
+                        -- filter dead/accepted configs here
+                        fConfigs =
+                            List.filter (\cfg -> cfg.tapeSimStatus == InProgress) configs
+                                
+                        inpTape =
+                            Maybe.withDefault ( Array.fromList [], Fresh ) (Dict.get tapeId pModel.tapes)
+                                |> Tuple.first
+
                         nextConfigs =
-                            deltaHat sModel (todo "inputTape") oldMachine.transitionNames oldMachine.delta configs
+                            Debug.log  "nextCfgs" <| deltaHat sModel inpTape oldMachine.transitionNames oldMachine.delta fConfigs
                     in
                     if True then
                         ( ( Simulating tapeId nextConfigs
@@ -337,15 +374,30 @@ update env msg ( model, pModel, sModel ) =
 
         SimulateTape tId ->
             let
+                mTapeTuple =
+                    Dict.get tId pModel.tapes
+
+                isFresh =
+                    case mTapeTuple of
+                        Just ( _, Fresh ) ->
+                            True
+
+                        _ ->
+                            False
+
                 initCfg : Configuration
                 initCfg =
                     { readHead = -1
-                    , stack = []
+                    , stack = [ "\\bot"]
                     , state = oldMachine.start
                     , tapeSimStatus = InProgress
                     }
             in
-            ( ( Simulating tId [ initCfg ], pModel, sModel ), False, Cmd.none )
+            if isFresh then
+                ( ( Simulating tId [ initCfg ], pModel, sModel ), False, Cmd.none )
+
+            else
+                ( ( model, pModel, sModel ), False, Cmd.none )
 
         DeleteTape tId ->
             let
@@ -375,6 +427,14 @@ update env msg ( model, pModel, sModel ) =
                 case model of
                     Editing tId ->
                         ( ( Default Nothing, pModel, sModel ), True, Cmd.none )
+
+                    _ ->
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
+            else if k == "Escape" then
+                case model of
+                    Simulating _ _ ->
+                        ( ( Default Nothing, pModel, sModel ), False, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -565,8 +625,8 @@ update env msg ( model, pModel, sModel ) =
                     }
             in
             case model of
-                Simulating tId _ ->
-                    ( ( Simulating tId [], pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                Default hErr ->
+                    ( ( Default hErr, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
@@ -638,7 +698,7 @@ view env ( model, pModel, sModel ) =
                     |> move ( -winX / 2 + 20, winY / 6 - 35 - 25 * (toFloat <| Dict.size pModel.tapes) )
                 , case model of
                     Default _ ->
-                        group (List.indexedMap (\x ( chId, ( ch, tapeSt ) ) -> renderTape model ch tapeSt chId |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList pModel.tapes)
+                        group (List.indexedMap (\x ( chId, ( ch, tapeSt ) ) -> renderTape model ch tapeSt chId Nothing |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList pModel.tapes)
                             |> move ( -winX / 2 + 20, winY / 6 - 40 )
 
                     _ ->
@@ -648,7 +708,7 @@ view env ( model, pModel, sModel ) =
         simMenu =
             group <|
                 [ text "Simulate"
-                    |> size 162
+                    |> size 16
                     |> fixedwidth
                     |> filled black
                     |> move ( -winX / 2 + 2, winY / 6 - 15 )
@@ -718,7 +778,7 @@ view env ( model, pModel, sModel ) =
                         |> move ( -winX / 2 + 95, winY / 6 - 15 )
                     , latexKeyboard winX winY chars
                         |> move ( 0, 0 )
-                    , renderTape model tape tapeSt tapeId
+                    , renderTape model tape tapeSt tapeId Nothing
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
@@ -739,7 +799,7 @@ view env ( model, pModel, sModel ) =
                         |> filled lightGray
                      , simMenu
                      ]
-                        ++ List.map (renderConfig model sModel inpTape tapeId) cfgs
+                        ++ (List.indexedMap (\idx cfg -> renderConfig model sModel inpTape tapeId cfg |> move ( toFloat idx * 20 - winX/3 , 0 )) cfgs) 
                     )
                     |> move ( 0, -winY / 3 )
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine (Set.singleton sModel.machine.start)) |> move ( 0, winY / 6 )
@@ -871,7 +931,7 @@ delta sModel inpTape tNames d cfg =
 
         -- error string?
         ch =
-            case Array.get cfg.readHead inpTape of
+            case Array.get (cfg.readHead+1) inpTape of
                 Just char ->
                     char
 
@@ -881,7 +941,7 @@ delta sModel inpTape tNames d cfg =
         predStackTop curTop =
             -- need to push this error (stack top >1 char) into Build mode. Put here for now
             case List.head cfg.stack of
-                Just char ->
+                Just char -> -- Debug.log "pred" <|
                     case String.toList curTop of
                         c :: [] ->
                             char == String.fromList (c :: [])
@@ -896,18 +956,18 @@ delta sModel inpTape tNames d cfg =
         Just transMap ->
             List.map
                 (\( tId, sId ) ->
+                    let
+                        isEpsTrans = (tripFst (getName tId) == "\\epsilon" && sId == cfg.state)
+                        pushNothing = tripThd (getName tId) == "\\epsilon"
+                    in
                     if
                         (ch == tripFst (getName tId) && (predStackTop <| tripSnd <| getName tId))
-                            || (tripFst (getName tId) == "\\epsilon" && sId == cfg.state)
                     then
                         { readHead = cfg.readHead + 1
                         , state = sId
-                        , stack = String.split "" (tripThd (getName tId)) ++ cfg.stack
+                        , stack = if pushNothing then cfg.stack else String.split "" (tripThd (getName tId)) ++ cfg.stack
                         , tapeSimStatus =
-                            if
-                                (cfg.readHead + 1)
-                                    == Array.length inpTape
-                                    - 1
+                            if isEpsTrans && (cfg.readHead + 1) == Array.length inpTape - 1
                                     && Set.member sId sModel.machine.final
                                 -- This is acceptance by final state, need to program both in!
                             then
@@ -916,7 +976,13 @@ delta sModel inpTape tNames d cfg =
                             else
                                 InProgress
                         }
-
+                    else if isEpsTrans
+                    then
+                        { readHead = cfg.readHead
+                        , state = sId
+                        , stack = if pushNothing then cfg.stack else String.split "" (tripThd (getName tId)) ++ cfg.stack
+                        , tapeSimStatus = InProgress
+                        }
                     else
                         { cfg | tapeSimStatus = Dead }
                 )
@@ -990,34 +1056,3 @@ latexKeyboard w h chars =
         , oneRow homeRow (fillOutExtras 9 0 chars) |> move ( -keyW / 3, -keyH - 2 )
         , oneRow botRow (fillOutExtras 7 19 chars) |> move ( -keyW, -(keyH + 2) * 2 )
         ]
-
-
-renderConfig : Model -> SharedModel -> InputTape -> Int -> Configuration -> Shape Msg
-renderConfig model sModel inpTape tapeID cfg =
-    let
-        m =
-            sModel.machine
-
-        stk =
-            renderStack ( cfg.state, cfg.stack )
-
-        stateShape =
-            group
-                [ circle 20
-                    |> filled blank
-                    |> addOutline (solid 1) black
-                , group
-                    [ latex 25 18 "none" (Maybe.withDefault "IMPOSSIBLE HAPPENED" <| Dict.get cfg.state m.stateNames) AlignCentre
-                        |> move ( 0, 9 )
-                    ]
-                ]
-
-        renderedInpTape =
-            renderTape model inpTape Fresh tapeID
-    in
-    group
-        [ stk
-        , stateShape
-        , renderedInpTape |> move ( 25, 0 )
-        ]
-
