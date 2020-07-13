@@ -10,7 +10,8 @@ import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
 import Json.Encode as E
-import Machine exposing (..)
+import MachineCommon exposing (..)
+import MachineFA exposing (..)
 import Mistakes exposing (..)
 import Set exposing (Set)
 import SharedModel exposing (..)
@@ -72,20 +73,20 @@ type Msg
     | ChangeTape Int
     | ToggleStart StateID
     | KeyPressed String
-    | ChangeMachine MachineType
-    | MachineMsg Machine.Msg
+    | ChangeMachine MachineFAType
+    | MachineMsg MachineCommon.Msg
     | HoverErrorEnter Int
     | HoverErrorExit
 
 
-onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+onEnter : Environment -> ( PersistentModel, SharedModel MachineFA ) -> ( ( Model, PersistentModel, SharedModel MachineFA ), Bool, Cmd Msg )
 onEnter env ( pModel, sModel ) =
     ( ( Default 0 -1 Nothing
       , { pModel
             | currentStates =
                 epsTrans
                     sModel.machine.transitionNames
-                    sModel.machine.delta
+                    sModel.machine.core.delta
                     sModel.machine.start
             , tapes = checkTapes sModel pModel.tapes
         }
@@ -96,7 +97,7 @@ onEnter env ( pModel, sModel ) =
     )
 
 
-onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
+onExit : Environment -> ( Model, PersistentModel, SharedModel MachineFA ) -> ( ( PersistentModel, SharedModel MachineFA ), Bool )
 onExit env ( model, pModel, sModel ) =
     ( ( pModel, sModel ), False )
 
@@ -112,17 +113,17 @@ initPModel =
     }
 
 
-checkTapes : SharedModel -> Dict Int ( InputTape, TapeStatus ) -> Dict Int ( InputTape, TapeStatus )
+checkTapes : SharedModel MachineFA -> Dict Int ( InputTape, TapeStatus ) -> Dict Int ( InputTape, TapeStatus )
 checkTapes sModel tapes =
     Dict.map (\k ( tape, _ ) -> ( tape, checkTape sModel tape )) tapes
 
 
-checkTapesNoStatus : SharedModel -> Dict Int InputTape -> Dict Int ( InputTape, TapeStatus )
+checkTapesNoStatus : SharedModel MachineFA -> Dict Int InputTape -> Dict Int ( InputTape, TapeStatus )
 checkTapesNoStatus sModel tapes =
     Dict.map (\k tape -> ( tape, checkTape sModel tape )) tapes
 
 
-checkTape : SharedModel -> InputTape -> TapeStatus
+checkTape : SharedModel MachineFA -> InputTape -> TapeStatus
 checkTape sModel inp =
     let
         tNames =
@@ -273,14 +274,14 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                )
 
 
-update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+update : Environment -> Msg -> ( Model, PersistentModel, SharedModel MachineFA ) -> ( ( Model, PersistentModel, SharedModel MachineFA ), Bool, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
     let
         oldMachine =
             sModel.machine
 
         machineType =
-            sModel.machineType
+            sModel.machineFAType
     in
     case msg of
         Step ->
@@ -308,7 +309,7 @@ update env msg ( model, pModel, sModel ) =
                         ( ( Default tapeId (charId + 1) hover
                           , { pModel
                                 | currentStates =
-                                    deltaHat oldMachine.transitionNames oldMachine.delta nextCh pModel.currentStates
+                                    deltaHat oldMachine.transitionNames oldMachine.core.delta nextCh pModel.currentStates
                             }
                           , sModel
                           )
@@ -357,7 +358,7 @@ update env msg ( model, pModel, sModel ) =
             ( ( model, { pModel | tapes = Dict.insert newId ( Array.empty, Fresh ) pModel.tapes }, sModel ), True, Cmd.none )
 
         ChangeTape tId ->
-            ( ( Default tId -1 Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
+            ( ( Default tId -1 Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.core.delta oldMachine.start }, sModel ), False, Cmd.none )
 
         KeyPressed k ->
             let
@@ -367,7 +368,7 @@ update env msg ( model, pModel, sModel ) =
             if normalizedKey == "enter" then
                 case model of
                     Editing tId ->
-                        ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
+                        ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.core.delta oldMachine.start }, sModel ), True, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
@@ -538,20 +539,20 @@ update env msg ( model, pModel, sModel ) =
         ChangeMachine mtype ->
             case mtype of
                 NFA ->
-                    case sModel.machineType of
+                    case sModel.machineFAType of
                         NFA ->
                             ( ( model, pModel, sModel ), False, Cmd.none )
 
                         DFA ->
                             case model of
                                 Editing tId ->
-                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
+                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineFAType = NFA } ), False, Cmd.none )
 
                                 _ ->
-                                    ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
+                                    ( ( model, pModel, { sModel | machineFAType = NFA } ), False, Cmd.none )
 
                 DFA ->
-                    case sModel.machineType of
+                    case sModel.machineFAType of
                         DFA ->
                             ( ( model, pModel, sModel ), False, Cmd.none )
 
@@ -579,7 +580,7 @@ update env msg ( model, pModel, sModel ) =
                                     { pModel | currentStates = startState }
 
                                 newSModel =
-                                    { sModel | machine = { oldMachine | start = startState }, machineType = DFA }
+                                    { sModel | machine = { oldMachine | start = startState }, machineFAType = DFA }
                             in
                             case model of
                                 Editing tId ->
@@ -624,7 +625,7 @@ update env msg ( model, pModel, sModel ) =
             in
             case model of
                 Default tId _ _ ->
-                    ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta newMachine.start }, { sModel | machine = newMachine } ), True, Cmd.none )
+                    ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.core.delta newMachine.start }, { sModel | machine = newMachine } ), True, Cmd.none )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
@@ -655,7 +656,7 @@ isAccept states finals input inputAt =
         False
 
 
-view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
+view : Environment -> ( Model, PersistentModel, SharedModel MachineFA ) -> Shape Msg
 view env ( model, pModel, sModel ) =
     let
         oldMachine =
@@ -719,8 +720,8 @@ view env ( model, pModel, sModel ) =
                 group
                     [ rect winX (winY / 3)
                         |> filled lightGray
-                    , machineDefn sModel sModel.machineType winX winY
-                    , if contextHasError validCheck sModel.machineType then
+                    , machineDefn sModel sModel.machineFAType winX winY
+                    , if contextHasError validCheck sModel.machineFAType then
                         errorMenu validCheck oldMachine winX winY |> move ( -winX / 2 + 20, winY / 6 )
 
                       else
@@ -757,19 +758,19 @@ view env ( model, pModel, sModel ) =
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
-        , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
-        , machineModeButtons sModel.machineType winX winY
+        , (GraphicSVG.map MachineMsg <| MachineFA.view env Regular sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
+        , machineModeButtons sModel.machineFAType winX winY
         ]
 
 
-machineDefn : SharedModel -> MachineType -> Float -> Float -> Shape Msg
+machineDefn : SharedModel MachineFA -> MachineFAType -> Float -> Float -> Shape Msg
 machineDefn sModel mtype winX winY =
     let
         machine =
             sModel.machine
 
         getStateName sId =
-            case Dict.get sId machine.stateNames of
+            case Dict.get sId machine.core.stateNames of
                 Just n ->
                     n
 
@@ -791,7 +792,7 @@ machineDefn sModel mtype winX winY =
                     |> move ( -winX / 2 + 500, winY / 6 - 25 )
                 , latex 500 14 "blank" "where" AlignLeft
                     |> move ( -winX / 2 + 500, winY / 6 - 45 )
-                , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.core.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
                 , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl Set.union Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 90 )
@@ -810,7 +811,7 @@ machineDefn sModel mtype winX winY =
                     |> move ( -winX / 2 + 500, winY / 6 - 25 )
                 , latex 500 14 "blank" "where" AlignLeft
                     |> move ( -winX / 2 + 500, winY / 6 - 45 )
-                , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.core.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
                 , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl Set.union Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 90 )
@@ -987,7 +988,7 @@ latexKeyboard w h chars =
         ]
 
 
-machineModeButtons : MachineType -> Float -> Float -> Shape Msg
+machineModeButtons : MachineFAType -> Float -> Float -> Shape Msg
 machineModeButtons mtype winX winY =
     group
         [ group

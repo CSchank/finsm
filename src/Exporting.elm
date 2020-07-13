@@ -10,7 +10,8 @@ import Helpers exposing (..)
 import Html as H
 import Html.Attributes as A
 import Json.Decode as D
-import Machine exposing (..)
+import MachineCommon exposing (..)
+import MachineFA exposing (..)
 import Mistakes exposing (..)
 import Set exposing (Set)
 import Sha256 exposing (sha256)
@@ -49,18 +50,18 @@ type Msg
     = SelectOutput Output
     | GenerateOutput
     | CloseOutput
-    | MachineMsg Machine.Msg
+    | MachineMsg MachineCommon.Msg
     | GetTime Int
     | HoverErrorEnter
     | HoverErrorExit
 
 
-onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+onEnter : Environment -> ( PersistentModel, SharedModel MachineFA ) -> ( ( Model, PersistentModel, SharedModel MachineFA ), Bool, Cmd Msg )
 onEnter env ( pModel, sModel ) =
     ( ( Default, pModel, sModel ), False, Cmd.none )
 
 
-onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
+onExit : Environment -> ( Model, PersistentModel, SharedModel MachineFA ) -> ( ( PersistentModel, SharedModel MachineFA ), Bool )
 onExit env ( model, pModel, sModel ) =
     ( ( pModel, sModel ), False )
 
@@ -72,7 +73,7 @@ initPModel =
     }
 
 
-update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+update : Environment -> Msg -> ( Model, PersistentModel, SharedModel MachineFA ) -> ( ( Model, PersistentModel, SharedModel MachineFA ), Bool, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
     let
         machine =
@@ -101,7 +102,7 @@ update env msg ( model, pModel, sModel ) =
             ( ( Default, pModel, sModel ), False, Cmd.none )
 
 
-view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
+view : Environment -> ( Model, PersistentModel, SharedModel MachineFA ) -> Shape Msg
 view env ( model, pModel, sModel ) =
     let
         oldMachine =
@@ -121,7 +122,7 @@ view env ( model, pModel, sModel ) =
             machineCheck sModel
 
         hasErr =
-            contextHasError errCheck sModel.machineType
+            contextHasError errCheck sModel.machineFAType
 
         transMistakes =
             getTransitionMistakes oldMachine
@@ -141,8 +142,8 @@ view env ( model, pModel, sModel ) =
                 |> move ( winX / 6 - 100, -105 )
     in
     group
-        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start transMistakes) |> move ( -winX / 6, 0 )
-        , machineSelected sModel.machineType winX winY
+        [ (GraphicSVG.map MachineMsg <| MachineFA.view env Regular sModel.machine sModel.machine.start transMistakes) |> move ( -winX / 6, 0 )
+        , machineSelected sModel.machineFAType winX winY
         , text "Choose format:"
             |> size 20
             |> fixedwidth
@@ -171,7 +172,7 @@ view env ( model, pModel, sModel ) =
         ]
 
 
-machineSelected : MachineType -> Float -> Float -> Shape Msg
+machineSelected : MachineFAType -> Float -> Float -> Shape Msg
 machineSelected mtype winX winY =
     let
         mtypeStr =
@@ -296,7 +297,7 @@ output w h txt =
         ]
 
 
-generateTikz : Int -> Machine -> String
+generateTikz : Int -> MachineFA -> String
 generateTikz time machine =
     let
         scale =
@@ -305,10 +306,10 @@ generateTikz time machine =
         states =
             indtBy 4 <|
                 List.map oneState <|
-                    Dict.toList machine.statePositions
+                    Dict.toList machine.core.statePositions
 
         stateName sId =
-            case Dict.get sId machine.stateNames of
+            case Dict.get sId machine.core.stateNames of
                 Just n ->
                     n
 
@@ -316,7 +317,7 @@ generateTikz time machine =
                     ""
 
         statePos sId =
-            case Dict.get sId machine.statePositions of
+            case Dict.get sId machine.core.statePositions of
                 Just p ->
                     p
 
@@ -354,7 +355,7 @@ generateTikz time machine =
         transitions =
             indtBy 4 <|
                 List.map oneTransition <|
-                    Dict.toList machine.stateTransitions
+                    Dict.toList machine.core.stateTransitions
 
         oneTransition ( ( s0, tId, s1 ), ( x1, y1 ) ) =
             let

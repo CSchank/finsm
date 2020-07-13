@@ -19,7 +19,7 @@ import Http
 import Json.Decode as D
 import Json.Encode
 import List
-import Machine exposing (..)
+import MachineFA exposing (..)
 import Ports
 import Random
 import SaveLoad exposing (saveMachine)
@@ -56,13 +56,13 @@ type Module
 
 
 type alias Model =
-    { appModel : BetterUndoList ApplicationModel
+    { appModel : BetterUndoList (ApplicationModel MachineFA)
     , environment : Environment
     , saveModel : SaveLoad.Model
     }
 
 
-initAppModel : BetterUndoList ApplicationModel
+initAppModel : BetterUndoList (ApplicationModel MachineFA)
 initAppModel =
     fresh initAppRecord
 
@@ -137,8 +137,8 @@ moduleUpdate :
     -> Model
     -> (mMsg -> Msg)
     -> (mModel -> ApplicationState)
-    -> (pModel -> ApplicationModel -> ApplicationModel)
-    -> (Environment -> mMsg -> ( mModel, pModel, SharedModel ) -> ( ( mModel, pModel, SharedModel ), Bool, Cmd mMsg ))
+    -> (pModel -> (ApplicationModel MachineFA) -> (ApplicationModel MachineFA))
+    -> (Environment -> mMsg -> ( mModel, pModel, SharedModel MachineFA ) -> ( ( mModel, pModel, SharedModel MachineFA ), Bool, Cmd mMsg ))
     -> ( Model, Cmd Msg )
 moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel mUpdate =
     let
@@ -503,9 +503,9 @@ processExit :
     -> mModel
     -> pModel
     -> Model
-    -> (pModel -> ApplicationModel -> ApplicationModel)
-    -> (Environment -> ( mModel, pModel, SharedModel ) -> ( ( pModel, SharedModel ), Bool ))
-    -> BetterUndoList ApplicationModel
+    -> (pModel -> (ApplicationModel MachineFA) -> (ApplicationModel MachineFA))
+    -> (Environment -> ( mModel, pModel, SharedModel MachineFA ) -> ( ( pModel, SharedModel MachineFA ), Bool ))
+    -> BetterUndoList (ApplicationModel MachineFA)
 processExit env m pModel model setpModel onExit =
     let
         currentAppState =
@@ -528,12 +528,12 @@ processExit env m pModel model setpModel onExit =
 processEnter :
     Environment
     -> pModel
-    -> BetterUndoList ApplicationModel
+    -> BetterUndoList (ApplicationModel MachineFA)
     -> (mMsg -> Msg)
     -> (mModel -> ApplicationState)
-    -> (pModel -> ApplicationModel -> ApplicationModel)
-    -> (Environment -> ( pModel, SharedModel ) -> ( ( mModel, pModel, SharedModel ), Bool, Cmd mMsg ))
-    -> ( BetterUndoList ApplicationModel, Cmd Msg )
+    -> (pModel -> (ApplicationModel MachineFA) -> (ApplicationModel MachineFA))
+    -> (Environment -> ( pModel, SharedModel MachineFA ) -> ( ( mModel, pModel, SharedModel MachineFA ), Bool, Cmd mMsg ))
+    -> ( BetterUndoList (ApplicationModel MachineFA), Cmd Msg )
 processEnter env pModel exitModel msgWrapper appStateWrapper setpModel onEnter =
     let
         exitAppState =

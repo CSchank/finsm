@@ -24,12 +24,12 @@ import Html.Events exposing (onInput)
 import Http
 import Json.Decode as D
 import Json.Encode as E
-import Machine exposing (Machine)
+import MachineCommon exposing (MachineCore)
+import MachineFA exposing (..)
 import Ports
 import Simulating exposing (InputTape)
 import Time exposing (Posix)
 import Utils exposing (newMsg, textBox)
-
 
 type MachineType
     = DFA
@@ -165,12 +165,12 @@ encodeMachinePayload =
 -- sending an existing id will overwrite the machine saved with that id
 
 
-encodeMachinePayloadV1 : String -> String -> Machine -> String -> Dict Int ( InputTape, a ) -> MachineType -> E.Value
+encodeMachinePayloadV1 : String -> String -> MachineFA -> String -> Dict Int ( InputTape, a ) -> MachineType -> E.Value
 encodeMachinePayloadV1 name desc machine uuid inputTape machine_type =
     E.object
         [ ( "name", E.string name )
         , ( "desc", E.string desc )
-        , ( "machine", Machine.machineEncoder machine )
+        , ( "machine", MachineFA.machineFAEncoder machine )
         , ( "v", E.int 1 )
         , ( "uuid", E.string uuid )
         , ( "tape", Simulating.inputTapeEncoder inputTape )
@@ -191,7 +191,7 @@ decodeSaveResponse =
         (D.field "uuid" D.string)
 
 
-saveMachine : String -> String -> Machine -> String -> Dict Int ( InputTape, a ) -> MachineType -> (Result Http.Error SaveResponse -> msg) -> Cmd msg
+saveMachine : String -> String -> MachineFA -> String -> Dict Int ( InputTape, a ) -> MachineType -> (Result Http.Error SaveResponse -> msg) -> Cmd msg
 saveMachine name desc machine uuid inputTape machine_type toMsg =
     Http.send toMsg <|
         Http.post
@@ -224,7 +224,7 @@ archiveMachine payload toMsg =
 
 
 type alias LoadPayload =
-    { machine : Machine
+    { machine : MachineFA
     , tapes : Dict Int InputTape
     , name : String
     , uuid : String
@@ -244,7 +244,7 @@ decodeArchiveResponse =
 decodeLoadPayload : D.Decoder LoadPayload
 decodeLoadPayload =
     D.map4 LoadPayload
-        (D.field "machine" Machine.machineDecoder)
+        (D.field "machine" MachineFA.machineFADecoder)
         (D.field "tape" Simulating.inputTapeDictDecoder)
         (D.field "name" D.string)
         (D.field "uuid" D.string)
@@ -426,7 +426,7 @@ type SaveStatus
     | Saved Time.Posix
 
 
-update : Msg -> Model -> Environment -> ApplicationModel -> ( Model, Cmd Msg )
+update : Msg -> Model -> Environment -> ApplicationModel MachineFA -> ( Model, Cmd Msg )
 update msg model env appModel =
     case msg of
         OpenLoadDialog ->
@@ -552,7 +552,7 @@ update msg model env appModel =
             ( model, Cmd.none )
 
 
-machineCreatedUpdate : Environment -> ApplicationModel -> MachineCreatedMsg -> Model -> ( Model, Cmd MachineCreatedMsg )
+machineCreatedUpdate : Environment -> ApplicationModel MachineFA -> MachineCreatedMsg -> Model -> ( Model, Cmd MachineCreatedMsg )
 machineCreatedUpdate env appModel msg model =
     case msg of
         EditMachineName ->

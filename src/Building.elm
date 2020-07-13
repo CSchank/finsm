@@ -6,16 +6,17 @@ import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
-import Machine exposing (..)
+import MachineFA exposing (..)
+import MachineCommon exposing (..)
 import Mistakes exposing (..)
-import Set
+import Set exposing (Set)
 import SharedModel exposing (SharedModel)
 import Task
 import Tuple exposing (first, second)
 
 
 type alias Model =
-    { machineState : Machine.Model
+    { machineState : MachineCommon.Model
     , snapToGrid : Snap
     }
 
@@ -30,9 +31,9 @@ type PersistentModel
 
 
 type Msg
-    = MachineMsg Machine.Msg
+    = MachineMsg MachineCommon.Msg
     | SaveStateName StateID String
-    | SaveTransitionName TransitionID String
+    | SaveTransitionName TransitionID (Set Character)
     | AddState ( Float, Float )
     | KeyPressed String
     | ToggleSnap
@@ -59,21 +60,24 @@ initPModel =
     Empty
 
 
-onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+onEnter : Environment -> ( PersistentModel, SharedModel MachineFA ) -> ( ( Model, PersistentModel, SharedModel MachineFA ), Bool, Cmd Msg )
 onEnter env ( pModel, sModel ) =
     ( ( init, pModel, sModel ), False, Cmd.none )
 
 
-onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
+onExit : Environment -> ( Model, PersistentModel, SharedModel MachineFA ) -> ( ( PersistentModel, SharedModel MachineFA ), Bool )
 onExit env ( model, pModel, sModel ) =
     ( ( pModel, sModel ), False )
 
 
-update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+update : Environment -> Msg -> ( Model, PersistentModel, SharedModel MachineFA ) -> ( ( Model, PersistentModel, SharedModel MachineFA ), Bool, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
     let
         oldMachine =
             sModel.machine
+
+        oldCore =
+            oldMachine.core
     in
     case msg of
         MachineMsg mmsg ->
@@ -81,7 +85,7 @@ update env msg ( model, pModel, sModel ) =
                 StartDragging st ( x, y ) ->
                     let
                         ( sx, sy ) =
-                            case Dict.get st oldMachine.statePositions of
+                            case Dict.get st oldMachine.core.statePositions of
                                 Just ( xx, yy ) ->
                                     ( xx, yy )
 
@@ -164,7 +168,7 @@ update env msg ( model, pModel, sModel ) =
                                                 Nothing ->
                                                     Just <| Dict.singleton newTransID s1
                                         )
-                                        oldMachine.delta
+                                        oldMachine.core.delta
 
                                 newTransPos =
                                     if st == s1 then
@@ -172,15 +176,20 @@ update env msg ( model, pModel, sModel ) =
 
                                     else
                                         ( 0, 0 )
+
                             in
                             ( ( { model | machineState = Regular }
                               , pModel
                               , { sModel
                                     | machine =
                                         { oldMachine
-                                            | delta = newDelta
-                                            , transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
-                                            , stateTransitions = Dict.insert ( st, newTransID, s1 ) newTransPos oldMachine.stateTransitions
+                                            | transitionNames = Dict.insert newTransID newTrans oldMachine.transitionNames
+                                            , core =
+                                              { oldCore
+                                                    | delta = newDelta
+                                                    , stateTransitions = Dict.insert ( st, newTransID, s1 ) newTransPos oldMachine.core.stateTransitions
+
+                                              }
                                         }
                                 }
                               )
@@ -199,10 +208,10 @@ update env msg ( model, pModel, sModel ) =
                         oldTransName =
                             case Dict.get tId sModel.machine.transitionNames of
                                 Just n ->
-                                    renderSet2String n
+                                    FALabel (renderSet2String n)
 
                                 Nothing ->
-                                    ""
+                                    FALabel ""
                     in
                     if env.holdingShift then
                         ( ( { model | machineState = EditingTransitionLabel tId oldTransName }, pModel, sModel ), False, focusInput NoOp )
@@ -215,7 +224,7 @@ update env msg ( model, pModel, sModel ) =
                         DraggingState st ( ox, oy ) _ ->
                             let
                                 ( sx, sy ) =
-                                    case Dict.get st oldMachine.statePositions of
+                                    case Dict.get st oldMachine.core.statePositions of
                                         Just ( xx, yy ) ->
                                             ( xx, yy )
 
@@ -230,7 +239,7 @@ update env msg ( model, pModel, sModel ) =
                                         _ ->
                                             ( x - ox, y - oy )
                             in
-                            ( ( { model | machineState = DraggingState st ( ox, oy ) ( x, y ) }, pModel, { sModel | machine = { oldMachine | statePositions = updateStatePos st newPos oldMachine.statePositions } } )
+                            ( ( { model | machineState = DraggingState st ( ox, oy ) ( x, y ) }, pModel, { sModel | machine = { oldMachine | core = { oldCore | statePositions = updateStatePos st newPos oldMachine.core.statePositions } } } )
                             , False
                             , Cmd.none
                             )
@@ -238,7 +247,7 @@ update env msg ( model, pModel, sModel ) =
                         DraggingArrow ( s1, char, s2 ) _ ->
                             let
                                 ( x0, y0 ) =
-                                    case Dict.get s1 oldMachine.statePositions of
+                                    case Dict.get s1 oldMachine.core.statePositions of
                                         Just ( xx, yy ) ->
                                             ( xx, yy )
 
@@ -246,7 +255,7 @@ update env msg ( model, pModel, sModel ) =
                                             ( 0, 0 )
 
                                 ( x1, y1 ) =
-                                    case Dict.get s2 oldMachine.statePositions of
+                                    case Dict.get s2 oldMachine.core.statePositions of
                                         Just ( xx, yy ) ->
                                             ( xx, yy )
 
@@ -273,14 +282,22 @@ update env msg ( model, pModel, sModel ) =
                                 nprot =
                                     ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
                             in
-                            ( ( { model | machineState = DraggingArrow ( s1, char, s2 ) ( x, y ) }, pModel, { sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), False, Cmd.none )
+                            ( ( { model
+                                    | machineState = DraggingArrow ( s1, char, s2 ) ( x, y ) }, pModel,
+                                    { sModel
+                                        | machine =
+                                          { oldMachine
+                                              | core = {
+                                                    oldCore | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.core.stateTransitions
+                                                        }
+                                          } } ), False, Cmd.none )
 
                         AddingArrow st _ ->
                             let
                                 aboveStates =
                                     List.map (\( sId, _ ) -> sId) <|
                                         Dict.toList <|
-                                            Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.statePositions
+                                            Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.core.statePositions
 
                                 newState =
                                     case aboveStates of
@@ -297,7 +314,7 @@ update env msg ( model, pModel, sModel ) =
                                 aboveStates =
                                     List.map (\( sId, _ ) -> sId) <|
                                         Dict.toList <|
-                                            Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.statePositions
+                                            Dict.filter (\_ ( x1, y1 ) -> (x1 - x) ^ 2 + (y1 - y) ^ 2 <= 400) oldMachine.core.statePositions
 
                                 newState =
                                     case aboveStates of
@@ -350,7 +367,7 @@ update env msg ( model, pModel, sModel ) =
                                     EditingStateLabel st lbl
 
                                 EditingTransitionLabel tr _ ->
-                                    EditingTransitionLabel tr lbl
+                                    EditingTransitionLabel tr (FALabel lbl)
 
                                 _ ->
                                     model.machineState
@@ -360,7 +377,7 @@ update env msg ( model, pModel, sModel ) =
                 TapState sId ->
                     let
                         oldStateName =
-                            case Dict.get sId sModel.machine.stateNames of
+                            case Dict.get sId sModel.machine.core.stateNames of
                                 Just n ->
                                     n
 
@@ -381,14 +398,16 @@ update env msg ( model, pModel, sModel ) =
                 Regular ->
                     let
                         newId =
-                            setMax oldMachine.q + 1
+                            setMax oldMachine.core.q + 1
 
                         newMachine =
                             { oldMachine
-                                | q = Set.insert newId oldMachine.q
-                                , delta = Dict.insert newId Dict.empty oldMachine.delta
-                                , statePositions = Dict.insert newId ( x, y ) oldMachine.statePositions
-                                , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames
+                                | core =
+                                  { oldCore
+                                  | q = Set.insert newId oldMachine.core.q
+                                      , delta = Dict.insert newId Dict.empty oldMachine.core.delta
+                                      , statePositions = Dict.insert newId ( x, y ) oldMachine.core.statePositions
+                                      , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.core.stateNames }
                             }
                     in
                     ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
@@ -407,7 +426,7 @@ update env msg ( model, pModel, sModel ) =
                     EditingStateLabel sId newLbl ->
                         let
                             oldStateName =
-                                case Dict.get sId oldMachine.stateNames of
+                                case Dict.get sId oldMachine.core.stateNames of
                                     Just n ->
                                         n
 
@@ -422,20 +441,21 @@ update env msg ( model, pModel, sModel ) =
 
                     EditingTransitionLabel tId newLbl ->
                         let
-                            oldTransitionName =
+                            oldTransitionSet =
                                 case Dict.get tId oldMachine.transitionNames of
                                     Just n ->
                                         renderSet2String n
 
                                     _ ->
                                         ""
-                        in
-                        if newLbl == oldTransitionName || newLbl == "" then
-                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
-
-                        else
-                            ( ( { model | machineState = Regular }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
-
+                        in case newLbl of
+                            FALabel lbl ->
+                                if lbl == oldTransitionSet || lbl == "" then
+                                    ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+                                else
+                                    ( ( { model | machineState = Regular }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId (parseString2Set lbl) )
+                            _ ->
+                                ( ( model, pModel, sModel ), False, Cmd.none )
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
@@ -444,29 +464,32 @@ update env msg ( model, pModel, sModel ) =
                     SelectedState stId ->
                         let
                             new_q =
-                                Set.remove stId oldMachine.q
+                                Set.remove stId oldMachine.core.q
 
                             newDelta =
-                                Dict.map (\_ d -> Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d) oldMachine.delta
+                                Dict.map (\_ d -> Dict.filter (\tId _ -> not <| Dict.member tId removedTransitions) d) oldMachine.core.delta
                                     |> Dict.filter (\key _ -> Set.member key new_q)
 
                             newMachine =
                                 { oldMachine
-                                    | q = new_q
-                                    , delta = newDelta
+                                    | core =
+                                      { oldCore
+                                          | q = new_q
+                                          , delta = newDelta
+                                          , statePositions = Dict.remove stId oldMachine.core.statePositions
+                                          , stateTransitions = newStateTransitions
+                                          , stateNames = Dict.remove stId oldMachine.core.stateNames
+                                      }
                                     , start = Set.remove stId oldMachine.start
                                     , final = Set.remove stId oldMachine.final
-                                    , statePositions = Dict.remove stId oldMachine.statePositions
-                                    , stateTransitions = newStateTransitions
-                                    , stateNames = Dict.remove stId oldMachine.stateNames
                                     , transitionNames = Dict.diff oldMachine.transitionNames removedTransitions
                                 }
 
                             newStateTransitions =
-                                Dict.filter (\( _, t, _ ) _ -> not <| Dict.member t removedTransitions) oldMachine.stateTransitions
+                                Dict.filter (\( _, t, _ ) _ -> not <| Dict.member t removedTransitions) oldMachine.core.stateTransitions
 
                             removedTransitionsLst =
-                                List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) oldMachine.stateTransitions
+                                List.map (\( _, t, _ ) -> ( t, () )) <| Dict.keys <| Dict.filter (\( s0, _, s1 ) _ -> s0 == stId || s1 == stId) oldMachine.core.stateTransitions
 
                             removedTransitions =
                                 Dict.fromList removedTransitionsLst
@@ -476,17 +499,19 @@ update env msg ( model, pModel, sModel ) =
                     SelectedArrow ( _, tId, _ ) ->
                         let
                             newDelta =
-                                Dict.map (\_ d -> Dict.filter (\tId0 _ -> tId /= tId0) d) oldMachine.delta
+                                Dict.map (\_ d -> Dict.filter (\tId0 _ -> tId /= tId0) d) oldMachine.core.delta
 
                             newMachine =
                                 { oldMachine
-                                    | delta = newDelta
-                                    , stateTransitions = newStateTransitions
+                                    | core =
+                                      { oldCore | delta = newDelta
+                                      , stateTransitions = newStateTransitions
+                                      }
                                     , transitionNames = Dict.remove tId oldMachine.transitionNames
                                 }
 
                             newStateTransitions =
-                                Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.stateTransitions
+                                Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.core.stateTransitions
                         in
                         ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
@@ -523,15 +548,12 @@ update env msg ( model, pModel, sModel ) =
         SaveStateName sId newLbl ->
             let
                 newMachine =
-                    { oldMachine | stateNames = Dict.insert sId newLbl oldMachine.stateNames }
+                    { oldMachine | core = { oldCore | stateNames = Dict.insert sId newLbl oldMachine.core.stateNames } }
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
-        SaveTransitionName tId newLbl ->
+        SaveTransitionName tId newTransitions ->
             let
-                newTransitions =
-                    parseString2Set newLbl
-
                 isValidTransition =
                     checkTransitionValid newTransitions
 
@@ -579,7 +601,7 @@ update env msg ( model, pModel, sModel ) =
             ( ( model, pModel, sModel ), False, Cmd.none )
 
 
-view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg
+view : Environment -> ( Model, PersistentModel, SharedModel MachineFA ) -> Shape Msg
 view env ( model, pModel, sModel ) =
     let
         winX =
@@ -624,7 +646,7 @@ view env ( model, pModel, sModel ) =
 
             _ ->
                 group []
-        , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty transMistakes
+        , GraphicSVG.map MachineMsg <| MachineFA.view env model.machineState sModel.machine Set.empty transMistakes
         , editingButtons model |> move ( winX / 2 - 30, -winY / 2 + 25 )
         ]
 

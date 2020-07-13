@@ -1,11 +1,14 @@
-module Mistakes exposing (checkEpsilonTransLabel, checkTransitionValid, getTransitionMistakes)
+module Mistakes exposing (..)
 
 import Dict exposing (..)
-import Machine exposing (..)
+import MachineFA exposing (..)
+import MachineCommon exposing (..)
 import Set exposing (..)
+import Helpers exposing (parseString2Set)
 
+-- TODO: This is only for FAs, not NPDAs
 
-getTransitionMistakes : Machine -> TransitionMistakes
+getTransitionMistakes : MachineFA -> TransitionMistakes
 getTransitionMistakes mac =
     let
         tNames =
@@ -52,3 +55,10 @@ checkTransitionValid set =
 
             else
                 False
+
+-- TODO: This however, is generalized...
+checkLabelValid : LabelType -> Bool
+checkLabelValid labTy =
+    case labTy of
+        FALabel set -> checkTransitionValid <| parseString2Set set
+        NPDALabel _ -> True

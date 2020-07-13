@@ -1,21 +1,17 @@
-module SharedModel exposing (MachineType(..), SharedModel, init)
+module SharedModel exposing (MachineFAType(..), SharedModel, init)
 
-import Machine exposing (Machine)
+import MachineFA exposing (..)
 
+type MachineFAType = DFA | NFA
 
-type MachineType
-    = DFA
-    | NFA
-
-
-type alias SharedModel =
-    { machine : Machine
-    , machineType : MachineType
+type alias SharedModel a  =
+    { machine : a
+    , machineFAType : MachineFAType
     }
 
 
-init : SharedModel
+init : SharedModel MachineFA
 init =
-    { machine = Machine.test
-    , machineType = DFA
+    { machine = MachineFA.test
+    , machineFAType = DFA
     }

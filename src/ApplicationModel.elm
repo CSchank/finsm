@@ -12,10 +12,10 @@ type ApplicationState
     | Exporting Exporting.Model
 
 
-type alias ApplicationModel =
+type alias ApplicationModel a =
     { appState : ApplicationState
     , simulatingData : Simulating.PersistentModel
     , buildingData : Building.PersistentModel
     , exportingData : Exporting.PersistentModel
-    , sharedModel : SharedModel
+    , sharedModel : SharedModel a
     }

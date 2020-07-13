@@ -8,7 +8,8 @@ import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
-import Machine exposing (Machine, StateID, TransitionID)
+import MachineCommon exposing (..)
+import MachineFA exposing (..)
 import Mistakes exposing (..)
 import Set exposing (Set)
 import SharedModel exposing (..)
@@ -29,7 +30,7 @@ type DFAErrorType
     | Unsure -- Good for debugging?
 
 
-contextHasError : Error -> MachineType -> Bool
+contextHasError : Error -> MachineFAType -> Bool
 contextHasError err mtype =
     case mtype of
         DFA ->
@@ -51,7 +52,7 @@ contextHasError err mtype =
                     False
 
 
-machineCheck : SharedModel -> Error
+machineCheck : SharedModel MachineFA -> Error
 machineCheck sModel =
     let
         mac =
@@ -115,7 +116,7 @@ machineCheck sModel =
         EpsTransError
 
     else
-        List.foldr (\x acc -> foldingFunc x acc) NoError <| Dict.toList mac.delta
+        List.foldr (\x acc -> foldingFunc x acc) NoError <| Dict.toList mac.core.delta
 
 
 errorIcon : Color -> Color -> Shape msg
@@ -127,13 +128,13 @@ errorIcon backclr shapeclrs =
         ]
 
 
-errorMenu : Error -> Machine -> Float -> Float -> Shape msg
+errorMenu : Error -> MachineFA -> Float -> Float -> Shape msg
 errorMenu err mac winX winY =
     let
         errStId =
             case err of
                 DFAError _ stId ->
-                    case Dict.get stId mac.stateNames of
+                    case Dict.get stId mac.core.stateNames of
                         Just name ->
                             name
 
