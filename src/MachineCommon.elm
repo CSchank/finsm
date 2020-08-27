@@ -703,10 +703,10 @@ renderTextBox labTy msg =
              textBox
                  str
                  (if String.length str == 0 then
-                      34
+                      40
 
                   else
-                      6 * toFloat (String.length str)
+                      8 * toFloat (String.length str)
                  )
                  20
                  "LaTeX"

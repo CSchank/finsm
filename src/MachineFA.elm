@@ -34,7 +34,6 @@ machineFAEncoder =
 machineFAEncoderV1 : MachineFA -> E.Value
 machineFAEncoderV1 machine =
     let
-
         startEncoder : Set StateID -> E.Value
         startEncoder =
             encodeSet E.int
