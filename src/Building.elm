@@ -513,6 +513,20 @@ update env msg ( model, pModel, sModel ) =
                                     }
                             in
                             ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                            --else if normalizedKey == "s" then
+                            --     let
+                            --        newMachine =
+                            --            { oldMachine
+                            --                | start =
+                            --                    case Set.member sId oldMachine.start of
+                            --                        True ->
+                            --                            Set.remove sId oldMachine.start
+                            --
+                            --                        False ->
+                            --                            Set.insert sId oldMachine.start
+                            --            }
+                            --    in
+                            --    ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                         else
                             ( ( model, pModel, sModel ), False, Cmd.none )

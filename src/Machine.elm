@@ -732,6 +732,13 @@ renderStates currentStates machine model env =
 
                 _ ->
                     ""
+
+        startArrow =
+            group
+                [ arrow ( -15, 0 ) ( -5, 0 ) ( 0, 0 )
+                , latex 25 18 "none" "\\text{start}" AlignRight |> move ( -16, 9 )
+                ]
+                |> move ( -20, 0 )
     in
     group <|
         List.map
@@ -824,6 +831,11 @@ renderStates currentStates machine model env =
 
                         _ ->
                             group []
+                    , if Set.member sId machine.start then
+                        startArrow
+
+                      else
+                        group []
                     ]
                     |> move (getPos sId)
                     |> (case model of

@@ -141,7 +141,7 @@ view env ( model, pModel, sModel ) =
                 |> move ( winX / 6 - 100, -105 )
     in
     group
-        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine sModel.machine.start transMistakes) |> move ( -winX / 6, 0 )
+        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine Set.empty transMistakes) |> move ( -winX / 6, 0 )
         , machineSelected sModel.machineType winX winY
         , text "Choose format:"
             |> size 20
@@ -336,7 +336,7 @@ generateTikz time machine =
 
                 start =
                     if Set.member sId machine.start then
-                        "line width = 0.55mm,"
+                        "initial,thick,"
 
                     else
                         "thick,"
