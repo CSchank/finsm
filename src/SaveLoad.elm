@@ -18,6 +18,7 @@ import Dict exposing (Dict)
 import Duration
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
+import Helpers exposing (editIcon)
 import Html exposing (Html)
 import Html.Attributes exposing (attribute, placeholder, style, value)
 import Html.Events exposing (onInput)
@@ -353,7 +354,7 @@ type LoginStatus
 
 initSaveModel =
     ( { loginState = NotLoggedIn
-      , machineData = MachineNotCreated
+      , machineData = MachineCreated
       , loadDialog = NothingOpen
       , loadDialogModal = Modal.shown
       , machineMetadata = initMachineMetadata
@@ -388,7 +389,7 @@ subscriptions model =
                         else
                             []
 
-                    ( MachineNotCreated, _ ) ->
+                    ( _, _ ) ->
                         []
                )
 
@@ -819,11 +820,19 @@ view model env =
             MachineCreated ->
                 group
                     [ if not model.editingName then
-                        text model.machineMetadata.name
-                            |> fixedwidth
-                            |> size 16
-                            |> filled black
-                            |> move ( -winX / 2 + 175, winY / 2 - 20 )
+                        group
+                            [ group
+                                [ roundedRect 15 15 2 |> filled white |> addOutline (solid 1) darkGray |> move ( 3, 3 )
+                                , editIcon
+                                    |> scale 1.5
+                                ]
+                                |> move ( -winX / 2 + 470, winY / 2 - 20 )
+                            , text model.machineMetadata.name
+                                |> fixedwidth
+                                |> size 16
+                                |> filled black
+                                |> move ( -winX / 2 + 175, winY / 2 - 20 )
+                            ]
                             |> notifyTap (MachineCreatedMsg EditMachineName)
 
                       else
