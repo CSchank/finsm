@@ -380,15 +380,15 @@ subscriptions model =
         , Ports.logoutComplete (\_ -> GetLoginStatus)
         , Modal.subscriptions model.loadDialogModal ModalAnimation
         ]
-            ++ (case model.machineData of
-                    MachineCreated ->
+            ++ (case ( model.machineData, model.loginState ) of
+                    ( MachineCreated, LoggedIn _ _ ) ->
                         if model.unsavedChanges then
                             [ Time.every 5000 (MachineCreatedMsg << AutoSave) ]
 
                         else
                             []
 
-                    MachineNotCreated ->
+                    ( MachineNotCreated, _ ) ->
                         []
                )
 
