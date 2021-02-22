@@ -205,7 +205,7 @@ update env msg ( model, pModel, sModel ) =
                                     ""
                     in
                     if env.holdingShift then
-                        ( ( { model | machineState = EditingTransitionLabel tId oldTransName }, pModel, sModel ), False, focusInput NoOp )
+                        ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) oldTransName }, pModel, sModel ), False, focusInput NoOp )
 
                     else
                         ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
@@ -415,12 +415,12 @@ update env msg ( model, pModel, sModel ) =
                                         ""
                         in
                         if newLbl == oldStateName || newLbl == "" then
-                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = SelectedState sId }, pModel, sModel ), False, Cmd.none )
 
                         else
-                            ( ( { model | machineState = Regular }, pModel, sModel ), True, sendMsg <| SaveStateName sId newLbl )
+                            ( ( { model | machineState = SelectedState sId }, pModel, sModel ), True, sendMsg <| SaveStateName sId newLbl )
 
-                    EditingTransitionLabel tId newLbl ->
+                    EditingTransitionLabel ( s0, tId, s1 ) newLbl ->
                         let
                             oldTransitionName =
                                 case Dict.get tId oldMachine.transitionNames of
@@ -431,10 +431,34 @@ update env msg ( model, pModel, sModel ) =
                                         ""
                         in
                         if newLbl == oldTransitionName || newLbl == "" then
-                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
 
                         else
-                            ( ( { model | machineState = Regular }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
+                            ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
+
+                    SelectedState sId ->
+                        let
+                            oldStateName =
+                                case Dict.get sId sModel.machine.stateNames of
+                                    Just n ->
+                                        n
+
+                                    _ ->
+                                        ""
+                        in
+                        ( ( { model | machineState = EditingStateLabel sId oldStateName }, pModel, sModel ), False, focusInput NoOp )
+
+                    SelectedArrow ( s0, tId, s1 ) ->
+                        let
+                            oldTransName =
+                                case Dict.get tId sModel.machine.transitionNames of
+                                    Just n ->
+                                        renderSet2String n
+
+                                    Nothing ->
+                                        ""
+                        in
+                        ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) oldTransName }, pModel, sModel ), False, focusInput NoOp )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )

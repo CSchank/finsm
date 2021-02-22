@@ -190,7 +190,7 @@ type Model
     | MousingOverStateLabel StateID
     | MousingOverTransitionLabel TransitionID
     | EditingStateLabel StateID String
-    | EditingTransitionLabel TransitionID String
+    | EditingTransitionLabel ( StateID, TransitionID, StateID ) String
     | SelectedArrow ( StateID, TransitionID, StateID )
     | DraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
     | CreatingNewArrow StateID
@@ -508,14 +508,14 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                     |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
             , group
                 [ case model of
-                    EditingTransitionLabel tId str ->
+                    EditingTransitionLabel ( _, tId, _ ) str ->
                         if tId == charID then
                             textBox str
                                 (if String.length str == 0 then
-                                    34
+                                    40
 
                                  else
-                                    6 * toFloat (String.length str)
+                                    8 * toFloat (String.length str) + 5
                                 )
                                 20
                                 "LaTeX"
@@ -763,10 +763,10 @@ renderStates currentStates machine model env =
                             if st == sId then
                                 textBox str
                                     (if String.length str == 0 then
-                                        34
+                                        40
 
                                      else
-                                        6 * toFloat (String.length str)
+                                        8 * toFloat (String.length str) + 5
                                     )
                                     20
                                     "LaTeX"
