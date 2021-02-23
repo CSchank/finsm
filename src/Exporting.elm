@@ -536,7 +536,7 @@ timeToString timestamp =
            )
         ++ String.fromInt minute
         ++ ":"
-        ++ (if minute < 10 then
+        ++ (if second < 10 then
                 "0"
 
             else
