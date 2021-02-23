@@ -33,6 +33,7 @@ type Msg
     = MachineMsg Machine.Msg
     | SaveStateName StateID String
     | SaveTransitionName TransitionID String
+    | ToggleStart StateID
     | AddState ( Float, Float )
     | KeyPressed String
     | ToggleSnap
@@ -463,6 +464,14 @@ update env msg ( model, pModel, sModel ) =
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
+            else if normalizedKey == "s" then
+                case model.machineState of
+                    SelectedState stId ->
+                        ( ( model, pModel, sModel ), False, sendMsg (ToggleStart stId) )
+
+                    _ ->
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
             else if normalizedKey == "d" then
                 case model.machineState of
                     SelectedState stId ->
@@ -557,6 +566,34 @@ update env msg ( model, pModel, sModel ) =
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
+
+        ToggleStart sId ->
+            let
+                machineType =
+                    sModel.machineType
+
+                tests =
+                    oldMachine.start
+
+                newMachine =
+                    case machineType of
+                        SharedModel.NFA ->
+                            { oldMachine
+                                | start =
+                                    case Set.member sId oldMachine.start of
+                                        True ->
+                                            Set.remove sId oldMachine.start
+
+                                        False ->
+                                            Set.insert sId oldMachine.start
+                            }
+
+                        SharedModel.DFA ->
+                            { oldMachine
+                                | start = Set.singleton sId
+                            }
+            in
+            ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
         SaveStateName sId newLbl ->
             let
