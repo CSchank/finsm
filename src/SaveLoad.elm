@@ -5,6 +5,8 @@ import Bootstrap.Button as Button
 import Bootstrap.ButtonGroup as ButtonGroup
 import Bootstrap.Card as Card
 import Bootstrap.Card.Block as Block
+import Bootstrap.Grid as Grid
+import Bootstrap.Grid.Row as Row
 import Bootstrap.ListGroup as ListGroup
 import Bootstrap.Modal as Modal
 import Bootstrap.Spinner as Spinner
@@ -722,10 +724,10 @@ view model env =
                                                         "All"
 
                                                     MachineFilter DFA ->
-                                                        "DFA/NFA"
+                                                        "DFA"
 
                                                     MachineFilter NFA ->
-                                                        "DFA/NFA"
+                                                        "NFA"
 
                                                     MachineFilter NPDA ->
                                                         "NPDA"
@@ -773,6 +775,7 @@ view model env =
                                         (List.map tab
                                             [ FilterActive
                                             , MachineFilter DFA
+                                            , MachineFilter NFA
 
                                             {- , MachineFilter NPDA, MachineFilter Turing, -}
                                             , FilterArchived
@@ -1037,41 +1040,59 @@ renderLoadList loadingList archiveList metas now zn =
 
 renderNew : LoginStatus -> Html Msg
 renderNew loginStatus =
-    Card.deck
-        [ Card.config []
-            |> Card.headerH3 [] [ Html.text "DFA / NFA" ]
-            |> Card.block []
-                [ Block.text [] [ Html.text "Create a new Finite State Machine." ] ]
-            |> Card.footer []
-                [ Button.button [ Button.primary, Button.onClick CreateNewMachine ] [ Html.text "Create!" ] ]
-        , case loginStatus of
-            LoggedIn _ _ ->
-                Card.config []
-                    |> Card.headerH3 [] [ Html.text "Load Existing" ]
-                    |> Card.block []
-                        [ Block.text [] [ Html.text "Load an existing machine." ] ]
-                    |> Card.footer []
-                        [ Button.button [ Button.primary, Button.onClick OpenLoadDialog ] [ Html.text "Load" ] ]
+    Grid.container []
+        [ Grid.row []
+            [ Grid.col []
+                [ Card.deck
+                    [ Card.config []
+                        |> Card.headerH3 [] [ Html.text "DFA / NFA" ]
+                        |> Card.block []
+                            [ Block.text [] [ Html.text "Create a new Finite State Machine." ] ]
+                        |> Card.footer []
+                            [ Button.button [ Button.primary, Button.onClick CreateNewMachine ] [ Html.text "Create!" ] ]
+                    , case loginStatus of
+                        LoggedIn _ _ ->
+                            Card.config []
+                                |> Card.headerH3 [] [ Html.text "Load Existing" ]
+                                |> Card.block []
+                                    [ Block.text [] [ Html.text "Load an existing machine." ] ]
+                                |> Card.footer []
+                                    [ Button.button [ Button.primary, Button.onClick OpenLoadDialog ] [ Html.text "Load" ] ]
 
-            NotLoggedIn ->
-                Card.config []
-                    |> Card.headerH3 [] [ Html.text "Load Existing" ]
-                    |> Card.block []
-                        [ Block.text [] [ Html.text "Log in to load an existing machine." ] ]
-                    |> Card.footer []
-                        [ Button.button [ Button.primary, Button.onClick OpenLoginDialog ] [ Html.text "Login" ] ]
+                        NotLoggedIn ->
+                            Card.config []
+                                |> Card.headerH3 [] [ Html.text "Load Existing" ]
+                                |> Card.block []
+                                    [ Block.text [] [ Html.text "Log in to load an existing machine." ] ]
+                                |> Card.footer []
+                                    [ Button.button [ Button.primary, Button.onClick OpenLoginDialog ] [ Html.text "Login" ] ]
 
-            LoggingIn ->
-                Card.config []
-                    |> Card.headerH3 [] [ Html.text "Load Existing" ]
-                    |> Card.block []
-                        [ Block.text [] [ Html.text "Please finish logging in to load your machines." ] ]
-                    |> Card.footer []
-                        [ Button.button [ Button.primary, Button.onClick OpenLoginDialog ] [ Html.text "Login" ] ]
-        , Card.config []
-            |> Card.headerH3 [] [ Html.text "Get involved!" ]
-            |> Card.block []
-                [ Block.text [] [ Html.text "Check us out on GitHub." ] ]
-            |> Card.footer []
-                [ Button.linkButton [ Button.primary, Button.attrs [ Html.Attributes.href "https://github.com/cschank/finsm" ] ] [ Html.text "Go!" ] ]
+                        LoggingIn ->
+                            Card.config []
+                                |> Card.headerH3 [] [ Html.text "Load Existing" ]
+                                |> Card.block []
+                                    [ Block.text [] [ Html.text "Please finish logging in to load your machines." ] ]
+                                |> Card.footer []
+                                    [ Button.button [ Button.primary, Button.onClick OpenLoginDialog ] [ Html.text "Login" ] ]
+                    ]
+                , Grid.row [ Row.attrs [ style "margin-top" "10px" ] ]
+                    [ Grid.col []
+                        [ Card.deck
+                            [ Card.config []
+                                |> Card.headerH3 [] [ Html.text "Quickstart Guide" ]
+                                |> Card.block []
+                                    [ Block.text [] [ Html.text "Before you start using the site, you may want to read our \"Quickstart\" guide to learn tips & tricks!" ] ]
+                                |> Card.footer []
+                                    [ Button.linkButton [ Button.primary, Button.attrs [ Html.Attributes.href "https://github.com/CSchank/finsm/wiki/QUICKSTART", Html.Attributes.target "_blank" ] ] [ Html.text "Go!" ] ]
+                            , Card.config []
+                                |> Card.headerH3 [] [ Html.text "Get Involved!" ]
+                                |> Card.block []
+                                    [ Block.text [] [ Html.text "Have questions? Comments? Suggestions? Pull requests? We welcome it all! Come visit us on GitHub!" ] ]
+                                |> Card.footer []
+                                    [ Button.linkButton [ Button.primary, Button.attrs [ Html.Attributes.href "https://github.com/cschank/finsm", Html.Attributes.target "_blank" ] ] [ Html.text "Go!" ] ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
         ]
