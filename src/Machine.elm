@@ -190,7 +190,7 @@ type Model
     | MousingOverStateLabel StateID
     | MousingOverTransitionLabel TransitionID
     | EditingStateLabel StateID String
-    | EditingTransitionLabel TransitionID String
+    | EditingTransitionLabel ( StateID, TransitionID, StateID ) String
     | SelectedArrow ( StateID, TransitionID, StateID )
     | DraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
     | CreatingNewArrow StateID
@@ -508,14 +508,14 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                     |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
             , group
                 [ case model of
-                    EditingTransitionLabel tId str ->
+                    EditingTransitionLabel ( _, tId, _ ) str ->
                         if tId == charID then
                             textBox str
                                 (if String.length str == 0 then
-                                    34
+                                    40
 
                                  else
-                                    6 * toFloat (String.length str)
+                                    8 * toFloat (String.length str) + 5
                                 )
                                 20
                                 "LaTeX"
@@ -732,6 +732,13 @@ renderStates currentStates machine model env =
 
                 _ ->
                     ""
+
+        startArrow =
+            group
+                [ arrow ( -15, 0 ) ( -5, 0 ) ( 0, 0 )
+                , latex 25 18 "none" "\\text{start}" AlignRight |> move ( -16, 9 )
+                ]
+                |> move ( -20, 0 )
     in
     group <|
         List.map
@@ -756,10 +763,10 @@ renderStates currentStates machine model env =
                             if st == sId then
                                 textBox str
                                     (if String.length str == 0 then
-                                        34
+                                        40
 
                                      else
-                                        6 * toFloat (String.length str)
+                                        8 * toFloat (String.length str) + 5
                                     )
                                     20
                                     "LaTeX"
@@ -824,6 +831,11 @@ renderStates currentStates machine model env =
 
                         _ ->
                             group []
+                    , if Set.member sId machine.start then
+                        startArrow
+
+                      else
+                        group []
                     ]
                     |> move (getPos sId)
                     |> (case model of
