@@ -4,7 +4,7 @@ import ApplicationModel exposing (ApplicationModel, ApplicationState(..))
 import Array exposing (Array)
 import BetterUndoList exposing (..)
 import Bootstrap.Modal as Modal
-import Browser exposing (UrlRequest)
+import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events exposing (Visibility)
 import Building
@@ -249,7 +249,7 @@ update msg model =
         UrlChange _ ->
             ( model, Cmd.none )
 
-        UrlRequest _ ->
+        UrlRequest url ->
             ( model, Cmd.none )
 
         KeyReleased k ->
