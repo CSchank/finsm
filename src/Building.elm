@@ -9,7 +9,7 @@ import Json.Decode as D
 import Machine exposing (..)
 import Mistakes exposing (..)
 import Set
-import SharedModel exposing (SharedModel)
+import SharedModel exposing (MachineType(..), SharedModel, machineModeButtons)
 import Task
 import Tuple exposing (first, second)
 
@@ -34,6 +34,7 @@ type Msg
     | SaveStateName StateID String
     | SaveTransitionName TransitionID String
     | ToggleStart StateID
+    | ChangeMachine MachineType
     | AddState ( Float, Float )
     | KeyPressed String
     | ToggleSnap
@@ -377,6 +378,46 @@ update env msg ( model, pModel, sModel ) =
                 Reset ->
                     ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
 
+        ChangeMachine mtype ->
+            case mtype of
+                NFA ->
+                    case sModel.machineType of
+                        NFA ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
+
+                        DFA ->
+                            ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
+
+                DFA ->
+                    case sModel.machineType of
+                        DFA ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
+
+                        NFA ->
+                            let
+                                startState =
+                                    if Set.size oldMachine.start > 1 then
+                                        Set.singleton <|
+                                            (\x ->
+                                                case x of
+                                                    Just val ->
+                                                        val
+
+                                                    Nothing ->
+                                                        -1
+                                            )
+                                            <|
+                                                List.head <|
+                                                    Set.toList oldMachine.start
+
+                                    else
+                                        oldMachine.start
+
+                                newSModel =
+                                    { sModel | machine = { oldMachine | start = startState }, machineType = DFA }
+                            in
+                            ( ( model, pModel, newSModel ), True, Cmd.none )
+
         AddState ( x, y ) ->
             case model.machineState of
                 Regular ->
@@ -577,7 +618,7 @@ update env msg ( model, pModel, sModel ) =
 
                 newMachine =
                     case machineType of
-                        SharedModel.NFA ->
+                        NFA ->
                             { oldMachine
                                 | start =
                                     case Set.member sId oldMachine.start of
@@ -588,7 +629,7 @@ update env msg ( model, pModel, sModel ) =
                                             Set.insert sId oldMachine.start
                             }
 
-                        SharedModel.DFA ->
+                        DFA ->
                             { oldMachine
                                 | start = Set.singleton sId
                             }
@@ -701,6 +742,7 @@ view env ( model, pModel, sModel ) =
                 group []
         , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty transMistakes
         , editingButtons model |> move ( winX / 2 - 30, -winY / 2 + 25 )
+        , machineModeButtons sModel.machineType winX winY ChangeMachine
         ]
 
 

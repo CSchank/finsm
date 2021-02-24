@@ -1,4 +1,4 @@
-module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, checkTapesNoStatus, delta, deltaHat, epsTrans, initPModel, inputTapeDecoder, inputTapeDictDecoder, inputTapeEncoder, isAccept, latexKeyboard, machineDefn, machineModeButtons, onEnter, onExit, renderTape, subscriptions, update, view)
+module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, checkTapesNoStatus, delta, deltaHat, epsTrans, initPModel, inputTapeDecoder, inputTapeDictDecoder, inputTapeEncoder, isAccept, latexKeyboard, machineDefn, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
 import Browser.Events
@@ -758,7 +758,7 @@ view env ( model, pModel, sModel ) =
                     ]
                     |> move ( 0, -winY / 3 )
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
-        , machineModeButtons sModel.machineType winX winY
+        , machineModeButtons sModel.machineType winX winY ChangeMachine
         ]
 
 
@@ -984,58 +984,4 @@ latexKeyboard w h chars =
         [ oneRow topRow (fillOutExtras 10 9 chars) |> move ( -keyW / 3, 0 )
         , oneRow homeRow (fillOutExtras 9 0 chars) |> move ( -keyW / 3, -keyH - 2 )
         , oneRow botRow (fillOutExtras 7 19 chars) |> move ( -keyW, -(keyH + 2) * 2 )
-        ]
-
-
-machineModeButtons : MachineType -> Float -> Float -> Shape Msg
-machineModeButtons mtype winX winY =
-    group
-        [ group
-            [ roundedRect 30 15 1
-                |> filled
-                    (if mtype == DFA then
-                        finsmLightBlue
-
-                     else
-                        blank
-                    )
-                |> addOutline (solid 1) darkGray
-            , text "DFA"
-                |> centered
-                |> fixedwidth
-                |> filled
-                    (if mtype == DFA then
-                        white
-
-                     else
-                        darkGray
-                    )
-                |> move ( 0, -4 )
-            ]
-            |> move ( -winX / 2 + 20, winY / 2 - 32 )
-            |> notifyTap (ChangeMachine DFA)
-        , group
-            [ roundedRect 30 15 1
-                |> filled
-                    (if mtype == NFA then
-                        finsmLightBlue
-
-                     else
-                        blank
-                    )
-                |> addOutline (solid 1) darkGray
-            , text "NFA"
-                |> centered
-                |> fixedwidth
-                |> filled
-                    (if mtype == NFA then
-                        white
-
-                     else
-                        darkGray
-                    )
-                |> move ( 0, -4 )
-            ]
-            |> move ( -winX / 2 + 52, winY / 2 - 32 )
-            |> notifyTap (ChangeMachine NFA)
         ]
