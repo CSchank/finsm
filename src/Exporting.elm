@@ -2,6 +2,7 @@ module Exporting exposing (InputTape, Model(..), Msg(..), Output(..), Persistent
 
 import Array exposing (Array)
 import Browser.Events
+import BetterUndoList exposing (UndoAction(..))
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import Error exposing (..)
@@ -55,14 +56,14 @@ type Msg
     | HoverErrorExit
 
 
-onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), UndoAction, Cmd Msg )
 onEnter env ( pModel, sModel ) =
-    ( ( Default, pModel, sModel ), False, Cmd.none )
+    ( ( Default, pModel, sModel ), NoUndo, Cmd.none )
 
 
-onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
+onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), UndoAction )
 onExit env ( model, pModel, sModel ) =
-    ( ( pModel, sModel ), False )
+    ( ( pModel, sModel ), NoUndo )
 
 
 initPModel : PersistentModel
@@ -72,7 +73,7 @@ initPModel =
     }
 
 
-update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), UndoAction, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
     let
         machine =
@@ -80,25 +81,25 @@ update env msg ( model, pModel, sModel ) =
     in
     case msg of
         SelectOutput outputType ->
-            ( ( model, { pModel | outputType = outputType }, sModel ), False, Cmd.none )
+            ( ( model, { pModel | outputType = outputType }, sModel ), NoUndo, Cmd.none )
 
         GenerateOutput ->
-            ( ( ShowingOutput, pModel, sModel ), False, Task.perform (GetTime << Time.posixToMillis) Time.now )
+            ( ( ShowingOutput, pModel, sModel ), NoUndo, Task.perform (GetTime << Time.posixToMillis) Time.now )
 
         CloseOutput ->
-            ( ( Default, pModel, sModel ), False, Cmd.none )
+            ( ( Default, pModel, sModel ), NoUndo, Cmd.none )
 
         MachineMsg mmsg ->
-            ( ( model, pModel, sModel ), False, Cmd.none )
+            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
         GetTime t ->
-            ( ( model, { pModel | time = t }, sModel ), False, Cmd.none )
+            ( ( model, { pModel | time = t }, sModel ), NoUndo, Cmd.none )
 
         HoverErrorEnter ->
-            ( ( HoverError, pModel, sModel ), False, Cmd.none )
+            ( ( HoverError, pModel, sModel ), NoUndo, Cmd.none )
 
         HoverErrorExit ->
-            ( ( Default, pModel, sModel ), False, Cmd.none )
+            ( ( Default, pModel, sModel ), NoUndo, Cmd.none )
 
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg

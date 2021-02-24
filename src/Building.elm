@@ -1,6 +1,7 @@
 module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
 import Browser.Events
+import BetterUndoList exposing (UndoAction(..))
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
@@ -61,17 +62,17 @@ initPModel =
     Empty
 
 
-onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), UndoAction, Cmd Msg )
 onEnter env ( pModel, sModel ) =
-    ( ( init, pModel, sModel ), False, Cmd.none )
+    ( ( init, pModel, sModel ), NoUndo, Cmd.none )
 
 
-onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
+onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), UndoAction )
 onExit env ( model, pModel, sModel ) =
-    ( ( pModel, sModel ), False )
+    ( ( pModel, sModel ), NoUndo )
 
 
-update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), UndoAction, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
     let
         oldMachine =
@@ -92,42 +93,42 @@ update env msg ( model, pModel, sModel ) =
                     in
                     case model.machineState of
                         MousingOverRim sId _ ->
-                            ( ( { model | machineState = AddingArrow sId ( x, y ) }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = AddingArrow sId ( x, y ) }, pModel, sModel ), NoUndo, Cmd.none )
 
                         _ ->
-                            ( ( { model | machineState = DraggingState st ( x - sx, y - sy ) ( x, y ) }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = DraggingState st ( x - sx, y - sy ) ( x, y ) }, pModel, sModel ), NoUndo, Cmd.none )
 
                 StartDraggingArrow ( st1, char, st2 ) pos ->
-                    ( ( { model | machineState = DraggingArrow ( st1, char, st2 ) pos }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = DraggingArrow ( st1, char, st2 ) pos }, pModel, sModel ), NoUndo, Cmd.none )
 
                 StartMouseOverRim stId ( x, y ) ->
                     case model.machineState of
                         Regular ->
-                            ( ( { model | machineState = MousingOverRim stId ( x, y ) }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = MousingOverRim stId ( x, y ) }, pModel, sModel ), NoUndo, Cmd.none )
 
                         _ ->
-                            ( ( model, pModel, sModel ), False, Cmd.none )
+                            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
                 MoveMouseOverRim ( x, y ) ->
                     case model.machineState of
                         MousingOverRim stId _ ->
-                            ( ( { model | machineState = MousingOverRim stId ( x, y ) }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = MousingOverRim stId ( x, y ) }, pModel, sModel ), NoUndo, Cmd.none )
 
                         _ ->
-                            ( ( model, pModel, sModel ), False, Cmd.none )
+                            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
                 StopMouseOverRim ->
                     case model.machineState of
                         MousingOverRim _ _ ->
-                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = Regular }, pModel, sModel ), NoUndo, Cmd.none )
 
                         _ ->
-                            ( ( model, pModel, sModel ), False, Cmd.none )
+                            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
                 StopDragging ->
                     case model.machineState of
                         DraggingState st _ _ ->
-                            ( ( { model | machineState = SelectedState st }, pModel, sModel ), True, Cmd.none )
+                            ( ( { model | machineState = SelectedState st }, pModel, sModel ), UndoRequired, Cmd.none )
 
                         AddingArrowOverOtherState st _ s1 ->
                             let
@@ -186,15 +187,15 @@ update env msg ( model, pModel, sModel ) =
                                         }
                                 }
                               )
-                            , True
+                            , UndoRequired
                             , Cmd.none
                             )
 
                         DraggingArrow tId _ ->
-                            ( ( { model | machineState = Regular }, pModel, sModel ), True, Cmd.none )
+                            ( ( { model | machineState = Regular }, pModel, sModel ), UndoRequired, Cmd.none )
 
                         _ ->
-                            ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = Regular }, pModel, sModel ), NoUndo, Cmd.none )
 
                 SelectArrow ( s0, tId, s1 ) ->
                     let
@@ -207,10 +208,10 @@ update env msg ( model, pModel, sModel ) =
                                     ""
                     in
                     if env.holdingShift then
-                        ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) oldTransName }, pModel, sModel ), False, focusInput NoOp )
+                        ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) oldTransName }, pModel, sModel ), NoUndo, focusInput NoOp )
 
                     else
-                        ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
+                        ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), NoUndo, Cmd.none )
 
                 Drag ( x, y ) ->
                     case model.machineState of
@@ -233,7 +234,7 @@ update env msg ( model, pModel, sModel ) =
                                             ( x - ox, y - oy )
                             in
                             ( ( { model | machineState = DraggingState st ( ox, oy ) ( x, y ) }, pModel, { sModel | machine = { oldMachine | statePositions = updateStatePos st newPos oldMachine.statePositions } } )
-                            , False
+                            , NoUndo
                             , Cmd.none
                             )
 
@@ -275,7 +276,7 @@ update env msg ( model, pModel, sModel ) =
                                 nprot =
                                     ( nx * cos theta - ny * sin theta, nx * sin theta + ny * cos theta )
                             in
-                            ( ( { model | machineState = DraggingArrow ( s1, char, s2 ) ( x, y ) }, pModel, { sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), False, Cmd.none )
+                            ( ( { model | machineState = DraggingArrow ( s1, char, s2 ) ( x, y ) }, pModel, { sModel | machine = { oldMachine | stateTransitions = Dict.insert ( s1, char, s2 ) nprot oldMachine.stateTransitions } } ), NoUndo, Cmd.none )
 
                         AddingArrow st _ ->
                             let
@@ -292,7 +293,7 @@ update env msg ( model, pModel, sModel ) =
                                         _ ->
                                             AddingArrow st ( x, y )
                             in
-                            ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = newState }, pModel, sModel ), NoUndo, Cmd.none )
 
                         AddingArrowOverOtherState st _ s1 ->
                             let
@@ -309,13 +310,13 @@ update env msg ( model, pModel, sModel ) =
                                         _ ->
                                             AddingArrow st ( x, y )
                             in
-                            ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = newState }, pModel, sModel ), NoUndo, Cmd.none )
 
                         _ ->
-                            ( ( { model | machineState = model.machineState }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = model.machineState }, pModel, sModel ), NoUndo, Cmd.none )
 
                 MouseOverStateLabel st ->
-                    ( ( { model | machineState = MousingOverStateLabel st }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = MousingOverStateLabel st }, pModel, sModel ), NoUndo, Cmd.none )
 
                 MouseOverTransitionLabel tr ->
                     let
@@ -327,7 +328,7 @@ update env msg ( model, pModel, sModel ) =
                                 _ ->
                                     model.machineState
                     in
-                    ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = newState }, pModel, sModel ), NoUndo, Cmd.none )
 
                 MouseLeaveLabel ->
                     let
@@ -342,7 +343,7 @@ update env msg ( model, pModel, sModel ) =
                                 _ ->
                                     model.machineState
                     in
-                    ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = newState }, pModel, sModel ), NoUndo, Cmd.none )
 
                 EditLabel _ lbl ->
                     let
@@ -357,7 +358,7 @@ update env msg ( model, pModel, sModel ) =
                                 _ ->
                                     model.machineState
                     in
-                    ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = newState }, pModel, sModel ), NoUndo, Cmd.none )
 
                 TapState sId ->
                     let
@@ -370,28 +371,28 @@ update env msg ( model, pModel, sModel ) =
                                     ""
                     in
                     if env.holdingShift then
-                        ( ( { model | machineState = EditingStateLabel sId oldStateName }, pModel, sModel ), False, focusInput NoOp )
+                        ( ( { model | machineState = EditingStateLabel sId oldStateName }, pModel, sModel ), NoUndo, focusInput NoOp )
 
                     else
-                        ( ( { model | machineState = SelectedState sId }, pModel, sModel ), False, Cmd.none )
+                        ( ( { model | machineState = SelectedState sId }, pModel, sModel ), NoUndo, Cmd.none )
 
                 Reset ->
-                    ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = Regular }, pModel, sModel ), NoUndo, Cmd.none )
 
         ChangeMachine mtype ->
             case mtype of
                 NFA ->
                     case sModel.machineType of
                         NFA ->
-                            ( ( model, pModel, sModel ), False, Cmd.none )
+                            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
                         DFA ->
-                            ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
+                            ( ( model, pModel, { sModel | machineType = NFA } ), NoUndo, Cmd.none )
 
                 DFA ->
                     case sModel.machineType of
                         DFA ->
-                            ( ( model, pModel, sModel ), False, Cmd.none )
+                            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
                         NFA ->
                             let
@@ -416,7 +417,7 @@ update env msg ( model, pModel, sModel ) =
                                 newSModel =
                                     { sModel | machine = { oldMachine | start = startState }, machineType = DFA }
                             in
-                            ( ( model, pModel, newSModel ), True, Cmd.none )
+                            ( ( model, pModel, newSModel ), UndoRequired, Cmd.none )
 
         AddState ( x, y ) ->
             case model.machineState of
@@ -433,10 +434,10 @@ update env msg ( model, pModel, sModel ) =
                                 , stateNames = Dict.insert newId ("q_{" ++ String.fromInt newId ++ "}") oldMachine.stateNames
                             }
                     in
-                    ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                    ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), UndoRequired, Cmd.none )
 
                 _ ->
-                    ( ( { model | machineState = Regular }, pModel, sModel ), False, Cmd.none )
+                    ( ( { model | machineState = Regular }, pModel, sModel ), NoUndo, Cmd.none )
 
         KeyPressed k ->
             let
@@ -457,10 +458,10 @@ update env msg ( model, pModel, sModel ) =
                                         ""
                         in
                         if newLbl == oldStateName || newLbl == "" then
-                            ( ( { model | machineState = SelectedState sId }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = SelectedState sId }, pModel, sModel ), NoUndo, Cmd.none )
 
                         else
-                            ( ( { model | machineState = SelectedState sId }, pModel, sModel ), True, sendMsg <| SaveStateName sId newLbl )
+                            ( ( { model | machineState = SelectedState sId }, pModel, sModel ), UndoRequired, sendMsg <| SaveStateName sId newLbl )
 
                     EditingTransitionLabel ( s0, tId, s1 ) newLbl ->
                         let
@@ -473,10 +474,10 @@ update env msg ( model, pModel, sModel ) =
                                         ""
                         in
                         if newLbl == oldTransitionName || newLbl == "" then
-                            ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), NoUndo, Cmd.none )
 
                         else
-                            ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
+                            ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), UndoRequired, sendMsg <| SaveTransitionName tId newLbl )
 
                     SelectedState sId ->
                         let
@@ -488,7 +489,7 @@ update env msg ( model, pModel, sModel ) =
                                     _ ->
                                         ""
                         in
-                        ( ( { model | machineState = EditingStateLabel sId oldStateName }, pModel, sModel ), False, focusInput NoOp )
+                        ( ( { model | machineState = EditingStateLabel sId oldStateName }, pModel, sModel ), NoUndo, focusInput NoOp )
 
                     SelectedArrow ( s0, tId, s1 ) ->
                         let
@@ -500,18 +501,18 @@ update env msg ( model, pModel, sModel ) =
                                     Nothing ->
                                         ""
                         in
-                        ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) oldTransName }, pModel, sModel ), False, focusInput NoOp )
+                        ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) oldTransName }, pModel, sModel ), NoUndo, focusInput NoOp )
 
                     _ ->
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
             else if normalizedKey == "s" then
                 case model.machineState of
                     SelectedState stId ->
-                        ( ( model, pModel, sModel ), False, sendMsg (ToggleStart stId) )
+                        ( ( model, pModel, sModel ), NoUndo, sendMsg (ToggleStart stId) )
 
                     _ ->
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
             else if normalizedKey == "d" then
                 case model.machineState of
@@ -545,7 +546,7 @@ update env msg ( model, pModel, sModel ) =
                             removedTransitions =
                                 Dict.fromList removedTransitionsLst
                         in
-                        ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                        ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), UndoRequired, Cmd.none )
 
                     SelectedArrow ( _, tId, _ ) ->
                         let
@@ -562,13 +563,13 @@ update env msg ( model, pModel, sModel ) =
                             newStateTransitions =
                                 Dict.filter (\( _, tId0, _ ) _ -> tId /= tId0) oldMachine.stateTransitions
                         in
-                        ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                        ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), UndoRequired, Cmd.none )
 
                     _ ->
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
             else if normalizedKey == "g" then
-                ( ( model, pModel, sModel ), False, sendMsg ToggleSnap )
+                ( ( model, pModel, sModel ), NoUndo, sendMsg ToggleSnap )
 
             else
                 case model.machineState of
@@ -586,7 +587,7 @@ update env msg ( model, pModel, sModel ) =
                                                     Set.insert sId oldMachine.final
                                     }
                             in
-                            ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                            ( ( model, pModel, { sModel | machine = newMachine } ), UndoRequired, Cmd.none )
                             --else if normalizedKey == "s" then
                             --     let
                             --        newMachine =
@@ -600,13 +601,13 @@ update env msg ( model, pModel, sModel ) =
                             --                            Set.insert sId oldMachine.start
                             --            }
                             --    in
-                            --    ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+                            --    ( ( model, pModel, { sModel | machine = newMachine } ), UndoRequired, Cmd.none )
 
                         else
-                            ( ( model, pModel, sModel ), False, Cmd.none )
+                            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
                     _ ->
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
         ToggleStart sId ->
             let
@@ -634,14 +635,14 @@ update env msg ( model, pModel, sModel ) =
                                 | start = Set.singleton sId
                             }
             in
-            ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+            ( ( model, pModel, { sModel | machine = newMachine } ), UndoRequired, Cmd.none )
 
         SaveStateName sId newLbl ->
             let
                 newMachine =
                     { oldMachine | stateNames = Dict.insert sId newLbl oldMachine.stateNames }
             in
-            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), UndoRequired, Cmd.none )
 
         SaveTransitionName tId newLbl ->
             let
@@ -656,7 +657,7 @@ update env msg ( model, pModel, sModel ) =
                         | transitionNames = Dict.insert tId newTransitions oldMachine.transitionNames
                     }
             in
-            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
+            ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), UndoRequired, Cmd.none )
 
         ToggleSnap ->
             ( ( { model
@@ -670,7 +671,7 @@ update env msg ( model, pModel, sModel ) =
               , pModel
               , sModel
               )
-            , False
+            , NoUndo
             , Cmd.none
             )
 
@@ -687,12 +688,12 @@ update env msg ( model, pModel, sModel ) =
               , pModel
               , sModel
               )
-            , False
+            , NoUndo
             , Cmd.none
             )
 
         NoOp ->
-            ( ( model, pModel, sModel ), False, Cmd.none )
+            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
 
 view : Environment -> ( Model, PersistentModel, SharedModel ) -> Shape Msg

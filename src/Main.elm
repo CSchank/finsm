@@ -138,7 +138,7 @@ moduleUpdate :
     -> (mMsg -> Msg)
     -> (mModel -> ApplicationState)
     -> (pModel -> ApplicationModel -> ApplicationModel)
-    -> (Environment -> mMsg -> ( mModel, pModel, SharedModel ) -> ( ( mModel, pModel, SharedModel ), Bool, Cmd mMsg ))
+    -> (Environment -> mMsg -> ( mModel, pModel, SharedModel ) -> ( ( mModel, pModel, SharedModel ), UndoAction, Cmd mMsg ))
     -> ( Model, Cmd Msg )
 moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel mUpdate =
     let
@@ -160,19 +160,22 @@ moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel m
     in
     ( { model
         | appModel =
-            if checkpoint then
-                new newAppState model.appModel
+            case checkpoint of
+                UndoRequired ->
+                    new newAppState model.appModel
 
-            else
-                replace newAppState model.appModel
+                NoUndo ->
+                    replace newAppState model.appModel
+
         , saveModel =
             { sm
                 | unsavedChanges =
-                    if checkpoint then
-                        True
+                    case checkpoint of
+                        NoUndo ->
+                            sm.unsavedChanges
 
-                    else
-                        sm.unsavedChanges
+                        UndoRequired ->
+                            True
             }
       }
     , Cmd.map msgWrapper cmd
@@ -504,7 +507,7 @@ processExit :
     -> pModel
     -> Model
     -> (pModel -> ApplicationModel -> ApplicationModel)
-    -> (Environment -> ( mModel, pModel, SharedModel ) -> ( ( pModel, SharedModel ), Bool ))
+    -> (Environment -> ( mModel, pModel, SharedModel ) -> ( ( pModel, SharedModel ), UndoAction ))
     -> BetterUndoList ApplicationModel
 processExit env m pModel model setpModel onExit =
     let
@@ -518,11 +521,12 @@ processExit env m pModel model setpModel onExit =
             { currentAppState | sharedModel = newSModel }
                 |> setpModel newPModel
     in
-    if checkpoint then
-        new newAppState model.appModel
+    case checkpoint of
+        UndoRequired ->
+            new newAppState model.appModel
 
-    else
-        replace newAppState model.appModel
+        NoUndo ->
+            replace newAppState model.appModel
 
 
 processEnter :
@@ -532,7 +536,7 @@ processEnter :
     -> (mMsg -> Msg)
     -> (mModel -> ApplicationState)
     -> (pModel -> ApplicationModel -> ApplicationModel)
-    -> (Environment -> ( pModel, SharedModel ) -> ( ( mModel, pModel, SharedModel ), Bool, Cmd mMsg ))
+    -> (Environment -> ( pModel, SharedModel ) -> ( ( mModel, pModel, SharedModel ), UndoAction, Cmd mMsg ))
     -> ( BetterUndoList ApplicationModel, Cmd Msg )
 processEnter env pModel exitModel msgWrapper appStateWrapper setpModel onEnter =
     let
@@ -546,11 +550,12 @@ processEnter env pModel exitModel msgWrapper appStateWrapper setpModel onEnter =
             { exitAppState | appState = appStateWrapper newM, sharedModel = newSModel }
                 |> setpModel newPModel
     in
-    ( if checkpoint then
-        new newAppState exitModel
+    ( case checkpoint of
+          UndoRequired ->
+              new newAppState exitModel
 
-      else
-        replace newAppState exitModel
+          NoUndo ->
+              replace newAppState exitModel
     , Cmd.map msgWrapper mCmd
     )
 
