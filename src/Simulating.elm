@@ -1,8 +1,8 @@
 module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, checkTapesNoStatus, delta, deltaHat, epsTrans, initPModel, inputTapeDecoder, inputTapeDictDecoder, inputTapeEncoder, isAccept, latexKeyboard, machineDefn, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
-import Browser.Events
 import BetterUndoList exposing (UndoAction(..))
+import Browser.Events
 import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)

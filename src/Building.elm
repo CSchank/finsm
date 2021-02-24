@@ -1,7 +1,7 @@
 module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
-import Browser.Events
 import BetterUndoList exposing (UndoAction(..))
+import Browser.Events
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)

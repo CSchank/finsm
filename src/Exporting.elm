@@ -1,8 +1,8 @@
 module Exporting exposing (InputTape, Model(..), Msg(..), Output(..), PersistentModel, exportButton, exportTikz, generateTikz, indtBy, initPModel, onEnter, onExit, output, subscriptions, unlines, update, view)
 
 import Array exposing (Array)
-import Browser.Events
 import BetterUndoList exposing (UndoAction(..))
+import Browser.Events
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import Error exposing (..)

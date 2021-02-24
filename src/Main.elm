@@ -166,7 +166,6 @@ moduleUpdate env mMsg mModel pModel model msgWrapper appStateWrapper setpModel m
 
                 NoUndo ->
                     replace newAppState model.appModel
-
         , saveModel =
             { sm
                 | unsavedChanges =
@@ -551,11 +550,11 @@ processEnter env pModel exitModel msgWrapper appStateWrapper setpModel onEnter =
                 |> setpModel newPModel
     in
     ( case checkpoint of
-          UndoRequired ->
-              new newAppState exitModel
+        UndoRequired ->
+            new newAppState exitModel
 
-          NoUndo ->
-              replace newAppState exitModel
+        NoUndo ->
+            replace newAppState exitModel
     , Cmd.map msgWrapper mCmd
     )
 
