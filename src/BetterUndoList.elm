@@ -1,4 +1,4 @@
-module BetterUndoList exposing (BetterUndoList, fresh, new, redo, replace, undo)
+module BetterUndoList exposing (BetterUndoList, UndoAction(..), fresh, new, redo, replace, undo)
 
 import UndoList as U
 
@@ -7,6 +7,11 @@ type alias BetterUndoList state =
     { ul : U.UndoList state
     , present : state
     }
+
+
+type UndoAction
+    = NoUndo
+    | UndoRequired
 
 
 fresh : state -> BetterUndoList state

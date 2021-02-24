@@ -1,6 +1,7 @@
 module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), PersistentModel, TapeStatus(..), checkTape, checkTapes, checkTapesNoStatus, delta, deltaHat, epsTrans, initPModel, inputTapeDecoder, inputTapeDictDecoder, inputTapeEncoder, isAccept, latexKeyboard, machineDefn, onEnter, onExit, renderTape, subscriptions, update, view)
 
 import Array exposing (Array)
+import BetterUndoList exposing (UndoAction(..))
 import Browser.Events
 import Debug
 import Dict exposing (Dict)
@@ -78,7 +79,7 @@ type Msg
     | HoverErrorExit
 
 
-onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), UndoAction, Cmd Msg )
 onEnter env ( pModel, sModel ) =
     ( ( Default 0 -1 Nothing
       , { pModel
@@ -91,14 +92,14 @@ onEnter env ( pModel, sModel ) =
         }
       , sModel
       )
-    , False
+    , NoUndo
     , Cmd.none
     )
 
 
-onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), Bool )
+onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( PersistentModel, SharedModel ), UndoAction )
 onExit env ( model, pModel, sModel ) =
-    ( ( pModel, sModel ), False )
+    ( ( pModel, sModel ), NoUndo )
 
 
 initPModel : PersistentModel
@@ -273,7 +274,7 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                )
 
 
-update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
+update : Environment -> Msg -> ( Model, PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), UndoAction, Cmd Msg )
 update env msg ( model, pModel, sModel ) =
     let
         oldMachine =
@@ -312,18 +313,18 @@ update env msg ( model, pModel, sModel ) =
                             }
                           , sModel
                           )
-                        , False
+                        , NoUndo
                         , Cmd.none
                         )
 
                     else
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
                 _ ->
-                    ( ( model, pModel, sModel ), False, Cmd.none )
+                    ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
         EditTape tId ->
-            ( ( Editing tId, pModel, sModel ), False, Cmd.none )
+            ( ( Editing tId, pModel, sModel ), NoUndo, Cmd.none )
 
         DeleteTape tId ->
             let
@@ -340,7 +341,7 @@ update env msg ( model, pModel, sModel ) =
                         _ ->
                             model
             in
-            ( ( newModel, { pModel | tapes = Dict.remove tId pModel.tapes }, sModel ), True, Cmd.none )
+            ( ( newModel, { pModel | tapes = Dict.remove tId pModel.tapes }, sModel ), UndoRequired, Cmd.none )
 
         AddNewTape ->
             let
@@ -354,10 +355,10 @@ update env msg ( model, pModel, sModel ) =
                     )
                         + 1
             in
-            ( ( model, { pModel | tapes = Dict.insert newId ( Array.empty, Fresh ) pModel.tapes }, sModel ), True, Cmd.none )
+            ( ( model, { pModel | tapes = Dict.insert newId ( Array.empty, Fresh ) pModel.tapes }, sModel ), UndoRequired, Cmd.none )
 
         ChangeTape tId ->
-            ( ( Default tId -1 Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), False, Cmd.none )
+            ( ( Default tId -1 Nothing {- ??? -}, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), NoUndo, Cmd.none )
 
         KeyPressed k ->
             let
@@ -367,10 +368,10 @@ update env msg ( model, pModel, sModel ) =
             if normalizedKey == "enter" then
                 case model of
                     Editing tId ->
-                        ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
+                        ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), UndoRequired, Cmd.none )
 
                     _ ->
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
             else if normalizedKey == "backspace" || normalizedKey == "arrowleft" then
                 case model of
@@ -398,26 +399,26 @@ update env msg ( model, pModel, sModel ) =
                                             pModel.tapes
                                 }
                         in
-                        ( ( model, newPModel, sModel ), False, Cmd.none )
+                        ( ( model, newPModel, sModel ), NoUndo, Cmd.none )
 
                     _ ->
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
             else if normalizedKey == "arrowright" then
                 case model of
                     Default _ _ _ ->
-                        ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
+                        ( ( model, pModel, sModel ), NoUndo, Task.perform identity (Task.succeed <| Step) )
 
                     _ ->
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
             else if normalizedKey == "arrowleft" then
                 case model of
                     Default tId _ hErr ->
-                        ( ( Default tId -1 hErr, { pModel | currentStates = sModel.machine.start }, sModel ), False, Cmd.none )
+                        ( ( Default tId -1 hErr, { pModel | currentStates = sModel.machine.start }, sModel ), NoUndo, Cmd.none )
 
                     _ ->
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
             else
                 case model of
@@ -530,30 +531,30 @@ update env msg ( model, pModel, sModel ) =
                                             pModel.tapes
                                 }
                         in
-                        ( ( model, newPModel, sModel ), False, Cmd.none )
+                        ( ( model, newPModel, sModel ), NoUndo, Cmd.none )
 
                     _ ->
-                        ( ( model, pModel, sModel ), False, Cmd.none )
+                        ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
         ChangeMachine mtype ->
             case mtype of
                 NFA ->
                     case sModel.machineType of
                         NFA ->
-                            ( ( model, pModel, sModel ), False, Cmd.none )
+                            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
                         DFA ->
                             case model of
                                 Editing tId ->
-                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
+                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NFA } ), NoUndo, Cmd.none )
 
                                 _ ->
-                                    ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
+                                    ( ( model, pModel, { sModel | machineType = NFA } ), NoUndo, Cmd.none )
 
                 DFA ->
                     case sModel.machineType of
                         DFA ->
-                            ( ( model, pModel, sModel ), False, Cmd.none )
+                            ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
                         NFA ->
                             let
@@ -583,21 +584,21 @@ update env msg ( model, pModel, sModel ) =
                             in
                             case model of
                                 Editing tId ->
-                                    ( ( Default tId -1 Nothing, newPModel, newSModel ), True, Cmd.none )
+                                    ( ( Default tId -1 Nothing, newPModel, newSModel ), UndoRequired, Cmd.none )
 
                                 _ ->
-                                    ( ( model, newPModel, newSModel ), True, Cmd.none )
+                                    ( ( model, newPModel, newSModel ), UndoRequired, Cmd.none )
 
         MachineMsg mmsg ->
             case mmsg of
                 StartDragging sId _ ->
-                    ( ( model, pModel, sModel ), False, sendMsg (ToggleStart sId) )
+                    ( ( model, pModel, sModel ), NoUndo, sendMsg (ToggleStart sId) )
 
                 TapState sId ->
-                    ( ( model, pModel, sModel ), False, sendMsg (ToggleStart sId) )
+                    ( ( model, pModel, sModel ), NoUndo, sendMsg (ToggleStart sId) )
 
                 _ ->
-                    ( ( model, pModel, sModel ), False, Cmd.none )
+                    ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
         ToggleStart sId ->
             let
@@ -624,26 +625,26 @@ update env msg ( model, pModel, sModel ) =
             in
             case model of
                 Default tId _ _ ->
-                    ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta newMachine.start }, { sModel | machine = newMachine } ), True, Cmd.none )
+                    ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta newMachine.start }, { sModel | machine = newMachine } ), UndoRequired, Cmd.none )
 
                 _ ->
-                    ( ( model, pModel, sModel ), False, Cmd.none )
+                    ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
         HoverErrorEnter tapeId ->
             case model of
                 Default tId pos _ ->
-                    ( ( Default tId pos (Just tapeId), pModel, sModel ), False, Cmd.none )
+                    ( ( Default tId pos (Just tapeId), pModel, sModel ), NoUndo, Cmd.none )
 
                 _ ->
-                    ( ( model, pModel, sModel ), False, Cmd.none )
+                    ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
         HoverErrorExit ->
             case model of
                 Default tId pos _ ->
-                    ( ( Default tId pos Nothing, pModel, sModel ), False, Cmd.none )
+                    ( ( Default tId pos Nothing, pModel, sModel ), NoUndo, Cmd.none )
 
                 _ ->
-                    ( ( model, pModel, sModel ), False, Cmd.none )
+                    ( ( model, pModel, sModel ), NoUndo, Cmd.none )
 
 
 isAccept : Set StateID -> Set StateID -> InputTape -> Int -> Bool
