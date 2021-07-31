@@ -16,6 +16,7 @@ getTransitionMistakes mac =
 
 
 -- Check if an epsilon label is well-typed
+-- TODO: Check if this should be generalized to NPDAs
 
 
 checkEpsilonTransLabel : TransitionNames -> TransitionMistakes
@@ -23,8 +24,8 @@ checkEpsilonTransLabel tNames =
     let
         tMistakes =
             Dict.foldl
-                (\tid tnames tmistakes ->
-                    if not (checkTransitionValid tnames) then
+                (\tid tLabel tmistakes ->
+                    if not (checkTransitionValid tLabel.inputLabel) then
                         Set.insert tid tmistakes
 
                     else

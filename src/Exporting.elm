@@ -141,7 +141,7 @@ view env ( model, pModel, sModel ) =
                 |> move ( winX / 6 - 100, -105 )
     in
     group
-        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine Set.empty transMistakes) |> move ( -winX / 6, 0 )
+        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machineType sModel.machine Set.empty transMistakes) |> move ( -winX / 6, 0 )
         , machineSelected sModel.machineType winX winY
         , text "Choose format:"
             |> size 20
@@ -361,7 +361,7 @@ generateTikz time machine =
                 transitionName =
                     case Dict.get tId machine.transitionNames of
                         Just n ->
-                            renderSet2String n
+                            renderSet2String n.inputLabel
 
                         _ ->
                             ""

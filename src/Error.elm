@@ -8,7 +8,7 @@ import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
-import Machine exposing (Machine, StateID, TransitionID)
+import Machine exposing (Machine, MachineType(..), StateID, TransitionID)
 import Mistakes exposing (..)
 import Set exposing (Set)
 import SharedModel exposing (..)
@@ -61,7 +61,7 @@ machineCheck sModel =
             getTransitionMistakes mac
 
         allTransitionLabels =
-            List.sort <| Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| Dict.values mac.transitionNames
+            List.sort <| Set.toList <| Set.remove "\\epsilon" <| List.foldr Set.union Set.empty <| List.map .inputLabel <| Dict.values mac.transitionNames
 
         catch : Maybe (Set String) -> List String
         catch ms =
@@ -74,7 +74,7 @@ machineCheck sModel =
 
         getTrans : Dict TransitionID StateID -> List String
         getTrans d =
-            (List.concatMap (\e -> Dict.get e mac.transitionNames |> catch) <| Dict.keys d) |> List.sort
+            (List.concatMap (\e -> Dict.get e mac.transitionNames |> Maybe.map .inputLabel |> catch) <| Dict.keys d) |> List.sort
 
         foldingFunc : ( StateID, Dict TransitionID StateID ) -> Error -> Error
         foldingFunc sTuple err =

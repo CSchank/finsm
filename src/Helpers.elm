@@ -1,4 +1,4 @@
-module Helpers exposing (LabelPosition(..), LatexAlign(..), add, dot, editIcon, finsmBlue, finsmLightBlue, focusInput, icon, labelPosition, latex, latexurl, mult, p, parseString2Set, parseTLabel, renderSet2String, renderString, roundPrec, roundTo, sendMsg, setMax, specialSymbols, sub, trashIcon, uncurry, vertex)
+module Helpers exposing (..)
 
 import Browser.Dom as Dom
 import GraphicSVG exposing (..)
@@ -331,3 +331,33 @@ roundTo n m =
 roundPrec : Int -> Float -> Float
 roundPrec n m =
     Basics.toFloat (round (m * Basics.toFloat (10 ^ n))) / Basics.toFloat (10 ^ n)
+
+
+fst : ( a, b, c ) -> a
+fst ( a, b, c ) =
+    a
+
+
+snd : ( a, b, c ) -> b
+snd ( a, b, c ) =
+    b
+
+
+thd : ( a, b, c ) -> c
+thd ( a, b, c ) =
+    c
+
+
+mapFst : (a -> d) -> ( a, b, c ) -> ( d, b, c )
+mapFst f ( a, b, c ) =
+    ( f a, b, c )
+
+
+mapSnd : (b -> d) -> ( a, b, c ) -> ( a, d, c )
+mapSnd f ( a, b, c ) =
+    ( a, f b, c )
+
+
+mapThd : (c -> d) -> ( a, b, c ) -> ( a, b, d )
+mapThd f ( a, b, c ) =
+    ( a, b, f c )
