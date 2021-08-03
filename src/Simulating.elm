@@ -555,6 +555,14 @@ update env msg ( model, pModel, sModel ) =
                                 _ ->
                                     ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
 
+                        NPDA ->
+                            case model of
+                                Editing tId ->
+                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
+                                _ ->
+                                    ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
                 DFA ->
                     case sModel.machineType of
                         DFA ->
@@ -593,6 +601,60 @@ update env msg ( model, pModel, sModel ) =
                                 _ ->
                                     ( ( model, newPModel, newSModel ), True, Cmd.none )
 
+                        NPDA ->
+                            case model of
+                                Editing tId ->
+                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
+                                _ ->
+                                    ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
+                NPDA ->
+                    case sModel.machineType of
+                        DFA ->
+                            case model of
+                                Editing tId ->
+                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
+                                _ ->
+                                    ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
+                        NFA ->
+                            let
+                                startState =
+                                    if Set.size oldMachine.start > 1 then
+                                        Set.singleton <|
+                                            (\x ->
+                                                case x of
+                                                    Just val ->
+                                                        val
+
+                                                    Nothing ->
+                                                        -1
+                                            )
+                                            <|
+                                                List.head <|
+                                                    Set.toList oldMachine.start
+
+                                    else
+                                        oldMachine.start
+
+                                newPModel =
+                                    { pModel | currentStates = startState }
+
+                                newSModel =
+                                    { sModel | machine = { oldMachine | start = startState }, machineType = NPDA }
+                            in
+                            case model of
+                                Editing tId ->
+                                    ( ( Default tId -1 Nothing, newPModel, newSModel ), True, Cmd.none )
+
+                                _ ->
+                                    ( ( model, newPModel, newSModel ), True, Cmd.none )
+
+                        NPDA ->
+                            ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
         MachineMsg mmsg ->
             case mmsg of
                 StartDragging sId _ ->
@@ -614,18 +676,20 @@ update env msg ( model, pModel, sModel ) =
                         NFA ->
                             { oldMachine
                                 | start =
-                                    case Set.member sId oldMachine.start of
-                                        True ->
-                                            Set.remove sId oldMachine.start
+                                    if Set.member sId oldMachine.start then
+                                        Set.remove sId oldMachine.start
 
-                                        False ->
-                                            Set.insert sId oldMachine.start
+                                    else
+                                        Set.insert sId oldMachine.start
                             }
 
                         DFA ->
                             { oldMachine
                                 | start = Set.singleton sId
                             }
+
+                        NPDA ->
+                            { oldMachine | start = Set.singleton sId }
             in
             case model of
                 Default tId _ _ ->
@@ -838,6 +902,42 @@ machineDefn sModel mtype winX winY =
                                     getStateName x
 
                                 x :: xs ->
+                                    "Congratulations,\\ you\\ found\\ a\\ bug!"
+                           )
+                    )
+                    AlignLeft
+                    |> move ( -winX / 2 + 510, winY / 6 - 140 )
+                , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
+                    |> move ( -winX / 2 + 510, winY / 6 - 160 )
+                ]
+
+        NPDA ->
+            group
+                [ machineHeader
+                , latex 500 18 "blank" "let\\ M = (Q,\\Sigma,\\Gamma,\\delta,s,\\bot,F)" AlignLeft
+                    |> move ( -winX / 2 + 500, winY / 6 - 25 )
+                , latex 500 14 "blank" "where" AlignLeft
+                    |> move ( -winX / 2 + 500, winY / 6 - 45 )
+                , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
+                    |> move ( -winX / 2 + 510, winY / 6 - 65 )
+                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl (Set.union << .inputLabel) Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
+                    |> move ( -winX / 2 + 510, winY / 6 - 90 )
+                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| List.foldl (\t s -> Set.insert t.stackTop (Set.insert t.stackPush s)) Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
+                    |> move ( -winX / 2 + 510, winY / 6 - 90 )
+                , latex 500 18 "blank" "\\delta = (above)" AlignLeft
+                    |> move ( -winX / 2 + 510, winY / 6 - 115 )
+                , latex 500
+                    14
+                    "blank"
+                    ("s = "
+                        ++ (case Set.toList machine.start of
+                                [] ->
+                                    "Please\\ select\\ a\\ start\\ state"
+
+                                x :: [] ->
+                                    getStateName x
+
+                                _ :: _ ->
                                     "Congratulations,\\ you\\ found\\ a\\ bug!"
                            )
                     )

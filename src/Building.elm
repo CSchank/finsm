@@ -356,14 +356,25 @@ update env msg ( model, pModel, sModel ) =
                     in
                     ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
 
-                -- FIXME: EditLabel doesn't work well with NPDA label type
-                EditLabel _ lbl ->
+                EditStateLabel st lbl ->
                     let
                         newState =
                             case model.machineState of
-                                EditingStateLabel st _ ->
+                                EditingStateLabel _ _ ->
                                     EditingStateLabel st lbl
 
+                                EditingTransitionLabel tr _ ->
+                                    EditingTransitionLabel tr ( lbl, "", "" )
+
+                                _ ->
+                                    model.machineState
+                    in
+                    ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+
+                EditTransitionLabel _ lbl ->
+                    let
+                        newState =
+                            case model.machineState of
                                 EditingTransitionLabel tr _ ->
                                     EditingTransitionLabel tr ( lbl, "", "" )
 
@@ -401,6 +412,9 @@ update env msg ( model, pModel, sModel ) =
                         DFA ->
                             ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
 
+                        NPDA ->
+                            ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
+
                 DFA ->
                     case sModel.machineType of
                         DFA ->
@@ -430,6 +444,20 @@ update env msg ( model, pModel, sModel ) =
                                     { sModel | machine = { oldMachine | start = startState }, machineType = DFA }
                             in
                             ( ( model, pModel, newSModel ), True, Cmd.none )
+
+                        NPDA ->
+                            ( ( model, pModel, { sModel | machineType = DFA } ), False, Cmd.none )
+
+                NPDA ->
+                    case sModel.machineType of
+                        DFA ->
+                            ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
+                        NFA ->
+                            ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
+                        NPDA ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
 
         AddState ( x, y ) ->
             case model.machineState of
@@ -480,21 +508,32 @@ update env msg ( model, pModel, sModel ) =
                             oldTransitionName =
                                 case Dict.get tId oldMachine.transitionNames of
                                     Just n ->
-                                        renderSet2String n.inputLabel
+                                        ( renderSet2String n.inputLabel, n.stackTop, n.stackPush )
 
                                     _ ->
-                                        ""
+                                        ( "", "", "" )
                         in
                         case sModel.machineType of
                             DFA ->
-                                if fst newLbl == oldTransitionName || fst newLbl == "" then
+                                if fst newLbl == fst oldTransitionName || fst newLbl == "" then
                                     ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
 
                                 else
                                     ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
 
                             NFA ->
-                                if fst newLbl == oldTransitionName || fst newLbl == "" then
+                                if fst newLbl == fst oldTransitionName || fst newLbl == "" then
+                                    ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
+
+                                else
+                                    ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
+
+                            NPDA ->
+                                if
+                                    (fst newLbl == fst oldTransitionName || fst newLbl == "")
+                                        && (snd newLbl == snd oldTransitionName || snd newLbl == "")
+                                        && (thd newLbl == thd oldTransitionName || thd newLbl == "")
+                                then
                                     ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
 
                                 else
@@ -652,6 +691,11 @@ update env msg ( model, pModel, sModel ) =
                             }
 
                         DFA ->
+                            { oldMachine
+                                | start = Set.singleton sId
+                            }
+
+                        NPDA ->
                             { oldMachine
                                 | start = Set.singleton sId
                             }

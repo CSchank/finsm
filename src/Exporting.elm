@@ -181,6 +181,9 @@ machineSelected mtype winX winY =
 
                 NFA ->
                     "NFA"
+
+                NPDA ->
+                    "NPDA"
     in
     text ("Your exported machine type: " ++ mtypeStr)
         |> centered

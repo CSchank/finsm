@@ -72,6 +72,7 @@ type alias Machine =
 type MachineType
     = DFA
     | NFA
+    | NPDA
 
 
 type Model
@@ -100,7 +101,8 @@ type Msg
     | MouseOverStateLabel StateID
     | MouseOverTransitionLabel TransitionID
     | MouseLeaveLabel
-    | EditLabel StateID String
+    | EditTransitionLabel TransitionID String
+    | EditStateLabel StateID String
     | Drag ( Float, Float )
     | TapState StateID
     | StopDragging
@@ -332,6 +334,14 @@ view env model macType machine currentStates tMistakes =
                                     Nothing ->
                                         " "
 
+                            NPDA ->
+                                case List.head <| Dict.values machine.transitionNames of
+                                    Just tLabel ->
+                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackPush ++ ";" ++ tLabel.stackTop
+
+                                    Nothing ->
+                                        " "
+
                     newTransID =
                         case List.head <| Dict.keys machine.transitionNames of
                             Just char ->
@@ -374,6 +384,14 @@ view env model macType machine currentStates tMistakes =
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
                                         Set.toList tLabel.inputLabel |> renderString
+
+                                    Nothing ->
+                                        " "
+
+                            NPDA ->
+                                case List.head <| Dict.values machine.transitionNames of
+                                    Just tLabel ->
+                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackPush ++ ";" ++ tLabel.stackTop
 
                                     Nothing ->
                                         " "
@@ -573,7 +591,7 @@ renderArrow macType ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mista
                                         )
                                         20
                                         "LaTeX"
-                                        (EditLabel tId)
+                                        (EditTransitionLabel tId)
 
                                 NFA ->
                                     textBox lab
@@ -585,7 +603,10 @@ renderArrow macType ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mista
                                         )
                                         20
                                         "LaTeX"
-                                        (EditLabel tId)
+                                        (EditTransitionLabel tId)
+
+                                NPDA ->
+                                    Debug.todo "TODO"
 
                         else
                             latex tLblW
@@ -726,6 +747,9 @@ renderArrows macType machine model tMistakes =
                                                             NFA ->
                                                                 Set.toList tLabel.inputLabel |> renderString
 
+                                                            NPDA ->
+                                                                (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackPush ++ ";" ++ tLabel.stackTop
+
                                                     Nothing ->
                                                         ""
 
@@ -841,7 +865,7 @@ renderStates currentStates machine model env =
                                     )
                                     20
                                     "LaTeX"
-                                    (EditLabel sId)
+                                    (EditStateLabel sId)
 
                             else
                                 group

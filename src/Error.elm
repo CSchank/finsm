@@ -50,6 +50,13 @@ contextHasError err mtype =
                 _ ->
                     False
 
+        NPDA ->
+            if err == NoError then
+                False
+
+            else
+                True
+
 
 machineCheck : SharedModel -> Error
 machineCheck sModel =
