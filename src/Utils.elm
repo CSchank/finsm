@@ -76,17 +76,17 @@ textBox txt w h place msg =
                 []
 
 
-textBox3 : ( String, String, String ) -> Float -> Float -> ( String, String, String ) -> (String -> msg) -> Shape msg
-textBox3 ( t1, t2, t3 ) w h ( p1, p2, p3 ) msg =
+textBox3 : ( String, String, String ) -> Float -> Float -> ( String, String, String ) -> (String -> msg) -> (String -> msg) -> (String -> msg) -> Shape msg
+textBox3 ( t1, t2, t3 ) w h ( p1, p2, p3 ) msg1 msg2 msg3 =
     let
         box1 =
-            textBox t1 w h p1 msg |> move ( 0, h )
+            textBox t1 w h p1 msg1 |> move ( 0, h )
 
         box2 =
-            textBox t2 w h p2 msg
+            textBox t2 w h p2 msg2
 
         box3 =
-            textBox t3 w h p3 msg |> move ( 0, -h )
+            textBox t3 w h p3 msg3 |> move ( 0, -h )
     in
     group [ box1, box2, box3 ]
 

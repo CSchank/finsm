@@ -1,6 +1,5 @@
 module Machine exposing (..)
 
-import Debug exposing (todo)
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
@@ -11,7 +10,7 @@ import Html.Events exposing (onInput)
 import Json.Decode as D
 import Json.Encode as E
 import Set exposing (Set)
-import Utils exposing (decodeDict, decodePair, decodeSet, decodeTriple, encodeDict, encodePair, encodeSet, encodeTriple, textBox)
+import Utils exposing (decodeDict, decodePair, decodeSet, decodeTriple, encodeDict, encodePair, encodeSet, encodeTriple, textBox, textBox3)
 
 
 type alias StateID =
@@ -39,6 +38,12 @@ type alias TransitionLabel =
     , stackTop : String
     , stackPush : String
     }
+
+
+type LabelEditType
+    = InputLabel
+    | StackTop
+    | StackPush
 
 
 type alias StateTransitions =
@@ -101,7 +106,7 @@ type Msg
     | MouseOverStateLabel StateID
     | MouseOverTransitionLabel TransitionID
     | MouseLeaveLabel
-    | EditTransitionLabel TransitionID String
+    | EditTransitionLabel TransitionID LabelEditType String
     | EditStateLabel StateID String
     | Drag ( Float, Float )
     | TapState StateID
@@ -337,7 +342,7 @@ view env model macType machine currentStates tMistakes =
                             NPDA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackPush ++ ";" ++ tLabel.stackTop
+                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ tLabel.stackPush
 
                                     Nothing ->
                                         " "
@@ -391,7 +396,7 @@ view env model macType machine currentStates tMistakes =
                             NPDA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackPush ++ ";" ++ tLabel.stackTop
+                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ tLabel.stackPush
 
                                     Nothing ->
                                         " "
@@ -591,7 +596,7 @@ renderArrow macType ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mista
                                         )
                                         20
                                         "LaTeX"
-                                        (EditTransitionLabel tId)
+                                        (EditTransitionLabel tId InputLabel)
 
                                 NFA ->
                                     textBox lab
@@ -603,10 +608,21 @@ renderArrow macType ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mista
                                         )
                                         20
                                         "LaTeX"
-                                        (EditTransitionLabel tId)
+                                        (EditTransitionLabel tId InputLabel)
 
                                 NPDA ->
-                                    Debug.todo "TODO"
+                                    textBox3 ( lab, stkTop, stkPush )
+                                        (if List.any ((==) 0) <| List.map String.length [ lab, stkTop, stkPush ] then
+                                            80
+
+                                         else
+                                            8 * toFloat (String.length lab) + 5
+                                        )
+                                        20
+                                        ( "inputLabel", "stackTop", "stackPush" )
+                                        (EditTransitionLabel tId InputLabel)
+                                        (EditTransitionLabel tId StackTop)
+                                        (EditTransitionLabel tId StackPush)
 
                         else
                             latex tLblW
@@ -748,7 +764,7 @@ renderArrows macType machine model tMistakes =
                                                                 Set.toList tLabel.inputLabel |> renderString
 
                                                             NPDA ->
-                                                                (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackPush ++ ";" ++ tLabel.stackTop
+                                                                (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ tLabel.stackPush
 
                                                     Nothing ->
                                                         ""

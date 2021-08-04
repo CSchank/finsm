@@ -1,5 +1,6 @@
 module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
+import Bootstrap.Form.InputGroup exposing (Input)
 import Browser.Events
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -79,7 +80,7 @@ update env msg ( model, pModel, sModel ) =
     in
     case msg of
         MachineMsg mmsg ->
-            case mmsg of
+            case Debug.log "Build msg" mmsg of
                 StartDragging st ( x, y ) ->
                     let
                         ( sx, sy ) =
@@ -210,13 +211,13 @@ update env msg ( model, pModel, sModel ) =
                         newInpLabel =
                             case Dict.get tId sModel.machine.transitionNames of
                                 Just n ->
-                                    renderSet2String n.inputLabel
+                                    ( renderSet2String n.inputLabel, n.stackTop, n.stackPush )
 
                                 Nothing ->
-                                    ""
+                                    ( "", "", "" )
 
                         newLab =
-                            ( newInpLabel, "", "" )
+                            newInpLabel
                     in
                     if env.holdingShift then
                         ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) newLab }, pModel, sModel ), False, focusInput NoOp )
@@ -363,20 +364,25 @@ update env msg ( model, pModel, sModel ) =
                                 EditingStateLabel _ _ ->
                                     EditingStateLabel st lbl
 
-                                EditingTransitionLabel tr _ ->
-                                    EditingTransitionLabel tr ( lbl, "", "" )
-
                                 _ ->
                                     model.machineState
                     in
                     ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
 
-                EditTransitionLabel _ lbl ->
+                EditTransitionLabel tr0 lblTy lbl ->
                     let
                         newState =
                             case model.machineState of
-                                EditingTransitionLabel tr _ ->
-                                    EditingTransitionLabel tr ( lbl, "", "" )
+                                EditingTransitionLabel tr ( oldInpLbl, oldStkTop, oldStkPush ) ->
+                                    case lblTy of
+                                        InputLabel ->
+                                            EditingTransitionLabel tr ( lbl, oldStkTop, oldStkPush )
+
+                                        StackTop ->
+                                            EditingTransitionLabel tr ( oldInpLbl, lbl, oldStkPush )
+
+                                        StackPush ->
+                                            EditingTransitionLabel tr ( oldInpLbl, oldStkTop, lbl )
 
                                 _ ->
                                     model.machineState
