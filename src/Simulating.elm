@@ -27,6 +27,7 @@ subscriptions model =
 type alias PersistentModel =
     { tapes : Dict Int ( InputTape, TapeStatus )
     , currentStates : Set StateID
+    , currentStacks : Maybe (List ( Stack, StateID ))
     }
 
 
@@ -59,8 +60,13 @@ type alias HoverError =
     Maybe Int
 
 
+type alias Stack =
+    List Char
+
+
 type Model
     = Default Int {- tapeID -} Int {- charID -} HoverError
+    | Running Int {- tapeID -} Int {- charID -}
     | Editing Int
 
 
@@ -101,14 +107,30 @@ onExit env ( model, pModel, sModel ) =
     ( ( pModel, sModel ), False )
 
 
-initPModel : PersistentModel
-initPModel =
+initPModel : MachineType -> PersistentModel
+initPModel macType =
+    let
+        designatedStart =
+            case Set.toList test.start of
+                [] ->
+                    0
+
+                -- This should not happen
+                startState :: _ ->
+                    startState
+    in
     { tapes =
         Dict.fromList
             [ ( 0, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ], Fresh ) )
             , ( 1, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0", "1", "1", "1", "1", "0" ], Fresh ) )
             ]
     , currentStates = test.start
+    , currentStacks =
+        if macType == NPDA then
+            Just [ ( [ 'Z' ], designatedStart ) ]
+
+        else
+            Nothing
     }
 
 
@@ -838,6 +860,9 @@ view env ( model, pModel, sModel ) =
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
+
+            Running _ _ ->
+                Debug.todo "Running state"
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machineType sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
         , machineModeButtons sModel.machineType winX winY ChangeMachine
         ]
@@ -1048,6 +1073,34 @@ deltaHat tNames d ch states =
             Set.foldl (\curr ss -> Set.union ss (delta tNames d ch curr)) Set.empty states
     in
     epsTrans tNames d newStates
+
+
+
+-- NPDA functions
+
+
+updateStack : TransitionLabel -> Stack -> Stack
+updateStack { stackTop, stackPush } stk =
+    case stk of
+        [] ->
+            []
+
+        _ ->
+            let
+                stackTopList =
+                    String.toList stackTop
+
+                stackPushList =
+                    String.toList stackPush
+
+                newStack =
+                    stackPushList ++ List.drop (List.length stackTopList) stk
+            in
+            if isPrefixOf stackTopList stk then
+                newStack
+
+            else
+                stk
 
 
 latexKeyboard : Float -> Float -> List Character -> Shape Msg

@@ -334,6 +334,19 @@ labelPosition y1 theta =
         Above
 
 
+isPrefixOf : List a -> List a -> Bool
+isPrefixOf xs ys =
+    case ( xs, ys ) of
+        ( [], _ ) ->
+            True
+
+        ( _, [] ) ->
+            False
+
+        ( x :: xs1, y :: ys1 ) ->
+            x == y && isPrefixOf xs1 ys1
+
+
 roundTo : Float -> Float -> Float
 roundTo n m =
     Basics.toFloat (round (m + n / 2) // round n * round n)
