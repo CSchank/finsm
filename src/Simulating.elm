@@ -246,6 +246,13 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                         ]
                         |> move ( toFloat <| (Array.length input + 1) * xpad, 3 )
                         |> notifyTap (DeleteTape tapeId)
+                    , group
+                        [ roundedRect 15 15 2
+                            |> filled white
+                            |> addOutline (solid 1) darkGray
+                        , thickRightArrowIcon |> scale 0.2 |> move ( 0, -1 )
+                        ]
+                        |> move ( toFloat <| (Array.length input + 2) * xpad, 2 )
                     , if not (tapeSt == Fresh) then
                         group
                             ([ triangle 20 |> filled red |> rotate 22.5
@@ -558,10 +565,10 @@ update env msg ( model, pModel, sModel ) =
                         NPDA ->
                             case model of
                                 Editing tId ->
-                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
 
                                 _ ->
-                                    ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+                                    ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
 
                 DFA ->
                     case sModel.machineType of
@@ -604,10 +611,10 @@ update env msg ( model, pModel, sModel ) =
                         NPDA ->
                             case model of
                                 Editing tId ->
-                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+                                    ( ( Default tId -1 Nothing, pModel, { sModel | machineType = DFA } ), False, Cmd.none )
 
                                 _ ->
-                                    ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+                                    ( ( model, pModel, { sModel | machineType = DFA } ), False, Cmd.none )
 
                 NPDA ->
                     case sModel.machineType of
@@ -861,9 +868,9 @@ machineDefn sModel mtype winX winY =
         NFA ->
             group
                 [ machineHeader
-                , latex 500 18 "blank" "let\\ N = (Q,\\Sigma,\\Delta,S,F)" AlignLeft
+                , latex 500 18 "blank" "\\textrm{let}\\ N = (Q,\\Sigma,\\Delta,S,F)" AlignLeft
                     |> move ( -winX / 2 + 500, winY / 6 - 25 )
-                , latex 500 14 "blank" "where" AlignLeft
+                , latex 500 14 "blank" "\\textrm{where}" AlignLeft
                     |> move ( -winX / 2 + 500, winY / 6 - 45 )
                 , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
@@ -880,9 +887,9 @@ machineDefn sModel mtype winX winY =
         DFA ->
             group
                 [ machineHeader
-                , latex 500 18 "blank" "let\\ M = (Q,\\Sigma,\\delta,s,F)" AlignLeft
+                , latex 500 18 "blank" "\\textrm{let}\\ M = (Q,\\Sigma,\\delta,s,F)" AlignLeft
                     |> move ( -winX / 2 + 500, winY / 6 - 25 )
-                , latex 500 14 "blank" "where" AlignLeft
+                , latex 500 14 "blank" "\\textrm{where}" AlignLeft
                     |> move ( -winX / 2 + 500, winY / 6 - 45 )
                 , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
@@ -914,18 +921,18 @@ machineDefn sModel mtype winX winY =
         NPDA ->
             group
                 [ machineHeader
-                , latex 500 18 "blank" "let\\ M = (Q,\\Sigma,\\Gamma,\\delta,s,\\bot,F)" AlignLeft
+                , latex 500 18 "blank" "\\textrm{let}\\ M = (Q,\\Sigma,\\Gamma,\\delta,s,\\bot,F)" AlignLeft
                     |> move ( -winX / 2 + 500, winY / 6 - 25 )
-                , latex 500 14 "blank" "where" AlignLeft
+                , latex 500 14 "blank" "\\textrm{where}" AlignLeft
                     |> move ( -winX / 2 + 500, winY / 6 - 45 )
                 , latex 500 18 "blank" ("Q = \\{ " ++ String.join "," (Dict.values machine.stateNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
                 , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl (Set.union << .inputLabel) Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 90 )
-                , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| List.foldl (\t s -> Set.insert t.stackTop (Set.insert t.stackPush s)) Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 90 )
-                , latex 500 18 "blank" "\\delta = (above)" AlignLeft
+                , latex 500 18 "blank" ("\\Gamma = \\{ " ++ String.join "," (Set.toList <| List.foldl (\t s -> Set.insert t.stackTop (Set.insert t.stackPush s)) Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 115 )
+                , latex 500 18 "blank" "\\delta = (above)" AlignLeft
+                    |> move ( -winX / 2 + 510, winY / 6 - 135 )
                 , latex 500
                     14
                     "blank"
@@ -942,9 +949,11 @@ machineDefn sModel mtype winX winY =
                            )
                     )
                     AlignLeft
-                    |> move ( -winX / 2 + 510, winY / 6 - 140 )
-                , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 160 )
+                , latex 500 14 "blank" "\\bot = \\bot" AlignLeft
+                    |> move ( -winX / 2 + 510, winY / 6 - 180 )
+                , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
+                    |> move ( -winX / 2 + 510, winY / 6 - 200 )
                 ]
 
 

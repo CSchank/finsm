@@ -89,6 +89,17 @@ trashIcon =
         ]
 
 
+thickRightArrowIcon =
+    group
+        [ rect 30 25
+            |> filled black
+            |> move ( -10, 0 )
+        , triangle 25
+            |> filled black
+            |> move ( 10, 0 )
+        ]
+
+
 type LatexAlign
     = AlignLeft
     | AlignRight
