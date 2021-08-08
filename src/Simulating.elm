@@ -10,10 +10,12 @@ import GraphicSVG exposing (..)
 import Helpers exposing (..)
 import Json.Decode as D
 import Json.Encode as E
+import List exposing (..)
 import Machine exposing (..)
 import Mistakes exposing (..)
 import Set exposing (Set)
 import SharedModel exposing (..)
+import String exposing (replace)
 import Task
 import Tuple exposing (first, second)
 import Utils exposing (decodeDict, encodeDict)
@@ -1077,6 +1079,60 @@ deltaHat tNames d ch states =
 
 
 -- NPDA functions
+
+
+nextConfigRel : TransitionNames -> Delta -> Character -> List ( Stack, StateID ) -> List ( Stack, StateID )
+nextConfigRel tNames d ch stacks =
+    List.concatMap (nextConfig tNames d ch) stacks
+
+
+nextConfig : TransitionNames -> Delta -> Character -> ( Stack, StateID ) -> List ( Stack, StateID )
+nextConfig tNames d ch ( stk, stateID ) =
+    let
+        getName trans =
+            case Dict.get trans tNames of
+                Just n ->
+                    n
+
+                _ ->
+                    emptyLabel
+
+        matchStackTop pat =
+            case String.uncons pat of
+                Nothing ->
+                    False
+
+                Just ( c, _ ) ->
+                    Just c == List.head stk
+
+        replaceStackTop old new inpStk =
+            if isPrefixOf old inpStk then
+                new ++ drop (length old) inpStk
+
+            else
+                inpStk
+    in
+    case Dict.get stateID d of
+        Just transMap ->
+            Dict.toList transMap
+                |> List.filterMap
+                    (\( tId, sId ) ->
+                        let
+                            tLabel =
+                                getName tId
+                        in
+                        if
+                            (renderSet2String tLabel.inputLabel == ch || renderSet2String tLabel.inputLabel == "\\epsilon")
+                                && matchStackTop tLabel.stackTop
+                        then
+                            Just ( updateStack tLabel stk, sId )
+
+                        else
+                            Nothing
+                    )
+
+        Nothing ->
+            []
 
 
 updateStack : TransitionLabel -> Stack -> Stack
