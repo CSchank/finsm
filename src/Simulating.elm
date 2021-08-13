@@ -29,7 +29,7 @@ subscriptions model =
 type alias PersistentModel =
     { tapes : Dict Int ( InputTape, TapeStatus )
     , currentStates : Set StateID
-    , currentStacks : Maybe (List ( Stack, StateID ))
+    , currentStacks : Maybe (List Configuration)
     }
 
 
@@ -52,11 +52,21 @@ inputTapeDictDecoder =
 type alias InputTape =
     Array Character
 
-
 type TapeStatus
     = Fresh
     | Stale (Set String)
 
+type alias Configuration =
+    { stack : Stack
+    , state : StateID
+    , status : ConfigStatus
+    , tapePos : Int
+    }
+
+type ConfigStatus
+    = Alive
+    | Deadend
+    | RemoveMe
 
 type alias HoverError =
     Maybe Int
@@ -129,7 +139,7 @@ initPModel macType =
     , currentStates = test.start
     , currentStacks =
         if macType == NPDA then
-            Just [ ( [ 'Z' ], designatedStart ) ]
+            Just [ { stack = [ 'Z' ], state = designatedStart, status = Alive, tapePos = -1 } ]
 
         else
             Nothing
@@ -1079,15 +1089,14 @@ deltaHat tNames d ch states =
 
 
 -- NPDA functions
-
-
-nextConfigRel : TransitionNames -> Delta -> Character -> List ( Stack, StateID ) -> List ( Stack, StateID )
+            
+nextConfigRel : TransitionNames -> Delta -> Character -> List Configuration -> List Configuration
 nextConfigRel tNames d ch stacks =
     List.concatMap (nextConfig tNames d ch) stacks
 
 
-nextConfig : TransitionNames -> Delta -> Character -> ( Stack, StateID ) -> List ( Stack, StateID )
-nextConfig tNames d ch ( stk, stateID ) =
+nextConfig : TransitionNames -> Delta -> Character -> Configuration -> List Configuration
+nextConfig tNames d ch ({ stack, state, status, tapePos } as config) =
     let
         getName trans =
             case Dict.get trans tNames of
@@ -1103,7 +1112,7 @@ nextConfig tNames d ch ( stk, stateID ) =
                     False
 
                 Just ( c, _ ) ->
-                    Just c == List.head stk
+                    Just c == List.head stack
 
         replaceStackTop old new inpStk =
             if isPrefixOf old inpStk then
@@ -1111,29 +1120,49 @@ nextConfig tNames d ch ( stk, stateID ) =
 
             else
                 inpStk
+
+        nextTape cond =
+            if cond then 0 else 1
     in
-    case Dict.get stateID d of
-        Just transMap ->
-            Dict.toList transMap
-                |> List.filterMap
-                    (\( tId, sId ) ->
-                        let
-                            tLabel =
-                                getName tId
-                        in
-                        if
-                            (renderSet2String tLabel.inputLabel == ch || renderSet2String tLabel.inputLabel == "\\epsilon")
-                                && matchStackTop tLabel.stackTop
-                        then
-                            Just ( updateStack tLabel stk, sId )
+    case status of
+        Alive ->
+            let 
+                newConfigs =
+                    case Dict.get state d of
+                        Just transMap ->
+                            Dict.toList transMap
+                                |> List.filterMap
+                                    (\( tId, sId ) ->
+                                        let
+                                            tLabel =
+                                                getName tId
+                                        in
+                                        if
+                                            (renderSet2String tLabel.inputLabel == ch || renderSet2String tLabel.inputLabel == "\\epsilon")
+                                                && matchStackTop tLabel.stackTop
+                                        then
+                                            Just 
+                                                { stack = updateStack tLabel stack
+                                                , state = sId
+                                                , status = Alive
+                                                , tapePos = tapePos + nextTape (renderSet2String tLabel.inputLabel == "\\epsilon") 
+                                                }
+                                        else
+                                            Nothing                        
+                                    )
 
-                        else
-                            Nothing
-                    )
+                        Nothing ->
+                            []
+            in
+            if newConfigs == []
+                then [ { config | status = Deadend } ]
+                else newConfigs
 
-        Nothing ->
+        Deadend ->
+            [ { config | status = RemoveMe } ]
+
+        RemoveMe ->
             []
-
 
 updateStack : TransitionLabel -> Stack -> Stack
 updateStack { stackTop, stackPush } stk =
