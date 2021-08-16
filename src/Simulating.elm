@@ -29,7 +29,7 @@ subscriptions model =
 type alias PersistentModel =
     { tapes : Dict Int ( InputTape, TapeStatus )
     , currentStates : Set StateID
-    , currentStacks : Maybe (List Configuration)
+    , npdaAcceptCond : AcceptCond
     }
 
 
@@ -65,8 +65,12 @@ type alias Configuration =
 
 type ConfigStatus
     = Alive
+    | Success
     | Deadend
-    | RemoveMe
+
+type AcceptCond
+    = EmptyStack
+    | FinalState
 
 type alias HoverError =
     Maybe Int
@@ -79,11 +83,13 @@ type alias Stack =
 type Model
     = Default Int {- tapeID -} Int {- charID -} HoverError
     | Running Int {- tapeID -} Int {- charID -}
+    | RunningNPDA (List Configuration) Int {- tapeID -}
     | Editing Int
 
 
 type Msg
     = Step
+    | RunTape Int
     | EditTape Int
     | DeleteTape Int
     | AddNewTape
@@ -118,31 +124,24 @@ onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( Persisten
 onExit env ( model, pModel, sModel ) =
     ( ( pModel, sModel ), False )
 
+designatedStart : Set StateID -> StateID
+designatedStart setStart =
+    case Set.toList setStart of
+        [] ->
+            0
+
+        startState :: _ ->
+            startState
 
 initPModel : MachineType -> PersistentModel
 initPModel macType =
-    let
-        designatedStart =
-            case Set.toList test.start of
-                [] ->
-                    0
-
-                -- This should not happen
-                startState :: _ ->
-                    startState
-    in
     { tapes =
         Dict.fromList
             [ ( 0, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0" ], Fresh ) )
             , ( 1, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0", "1", "1", "1", "1", "0" ], Fresh ) )
             ]
     , currentStates = test.start
-    , currentStacks =
-        if macType == NPDA then
-            Just [ { stack = [ 'Z' ], state = designatedStart, status = Alive, tapePos = -1 } ]
-
-        else
-            Nothing
+    , npdaAcceptCond = FinalState
     }
 
 
@@ -175,6 +174,85 @@ checkTape sModel inp =
         False ->
             Stale <| Set.fromList <| Array.toList arrFilter
 
+-- TODO: Add size-aware resizing and horizontal scroll
+renderConfigs : Machine -> Model -> Array String -> Int -> Float -> List Configuration -> Shape Msg
+renderConfigs machine model input tapeId winX cfgs = 
+    let
+        xPos idx = (winX / 6) * (idx - 3) + (winX / 3)
+
+    in
+    group <| List.indexedMap (\idx cfg -> renderConfig machine model input tapeId cfg |> move (xPos (toFloat idx), 0) ) cfgs
+        
+renderConfig : Machine -> Model -> Array String -> Int -> Configuration -> Shape Msg
+renderConfig machine model input tapeId cfg =
+    let
+        xpad = 200
+
+        stateName =
+            case Dict.get cfg.state machine.stateNames of
+                Just n ->
+                    n
+
+                _ ->
+                    ""
+
+        statusColour =
+            case cfg.status of
+                Success -> green
+                Deadend -> red
+                _ -> blank
+
+        renderedState = group
+            [ circle 20
+                |> filled statusColour
+                |> addOutline (solid 1) black
+            , latex 25 18 "none" stateName AlignCentre
+                |> move ( 0, 9 )
+            ]
+
+        stackLength = toFloat (xpad*(List.length cfg.stack))
+        renderedStack = renderStack cfg.stack
+        renderedTape  = renderTape model input Fresh tapeId tapeId cfg.tapePos False
+        
+        outerBox =
+            rectangle (100 + stackLength) 150
+                |> outlined (solid 5) black
+                |> move (stackLength / 2, -10)
+    in
+    group
+        [ outerBox
+        , renderedState
+        , renderedStack |> move (0, -50)
+        , renderedTape |> move (25, 0)
+        ]    
+
+renderStack : Stack -> Shape Msg
+renderStack stk =
+    let
+        xpad = 20
+    in
+    group 
+        (List.indexedMap
+            (\n st ->
+                group
+                    [ square xpad
+                        |> filled white
+                        |> addOutline
+                            (solid 1)
+                            black
+                        |> move ( 0, 3 )
+                    , latex (xpad * 0.9) (xpad * 0.7) "white" (String.fromChar st) AlignCentre
+                        |> move ( 0, 10.25 )
+                    ]
+                    |> move
+                        ( toFloat n
+                            * xpad
+                        , 0
+                        )
+            )
+            stk
+        )
+            
 
 renderTape : Model -> Array String -> TapeStatus -> Int -> Int -> Int -> Bool -> Shape Msg
 renderTape model input tapeSt tapeId selectedId inputAt showButtons =
@@ -193,6 +271,15 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
 
         xpad =
             20
+
+        -- TODO: Figure out why this is necessary when renderTape is used in RunningNPDA mode
+        displaceTapePointer =
+            case model of
+                RunningNPDA _ _ ->
+                    xpad
+
+                _ ->
+                    xpad / 2
 
         errWindow =
             group
@@ -254,7 +341,7 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                             |> filled black
                             |> move ( 0, 3 )
                         ]
-                        |> move ( xpad / 2 + xpad * toFloat inputAt, 0 )
+                        |> move ( displaceTapePointer + xpad * toFloat inputAt, 0 )
                     ]
 
                 else
@@ -287,6 +374,7 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                         , thickRightArrowIcon |> scale 0.2 |> move ( 0, -1 )
                         ]
                         |> move ( toFloat <| (Array.length input + 2) * xpad, 2 )
+                        |> notifyTap (RunTape tapeId)
                     , if not (tapeSt == Fresh) then
                         group
                             ([ triangle 20 |> filled red |> rotate 22.5
@@ -301,7 +389,7 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                                    )
                             )
                             |> scale 0.5
-                            |> move ( toFloat <| (Array.length input + 2) * xpad, 1 )
+                            |> move ( toFloat <| (Array.length input + 3) * xpad, 1 )
                             |> notifyEnter (HoverErrorEnter tapeId)
                             |> notifyLeave HoverErrorExit
 
@@ -322,6 +410,7 @@ update env msg ( model, pModel, sModel ) =
 
         machineType =
             sModel.machineType
+
     in
     case msg of
         Step ->
@@ -360,8 +449,29 @@ update env msg ( model, pModel, sModel ) =
                     else
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
+                RunningNPDA cfgs tId ->
+                    let
+                        tape =
+                            Dict.get tId pModel.tapes
+                                |> Maybe.map first
+                                |> Maybe.withDefault Array.empty
+
+                        newCfgs = nextConfigRel oldMachine.transitionNames oldMachine.delta tape pModel.npdaAcceptCond sModel.machine.final cfgs
+                    in
+                        ( ( RunningNPDA newCfgs tId, pModel, sModel), False, Cmd.none )
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
+
+        RunTape tId ->
+            case machineType of
+                DFA ->
+                    ( ( Running tId (-1), pModel, sModel), False, Cmd.none )
+                
+                NFA ->
+                    ( ( Running tId (-1), pModel, sModel), False, Cmd.none )
+
+                NPDA ->
+                    ( (RunningNPDA [ { stack = [ 'Z' ], state = designatedStart test.start, status = Alive, tapePos = -1 } ] tId, pModel, sModel), False, Cmd.none) 
 
         EditTape tId ->
             ( ( Editing tId, pModel, sModel ), False, Cmd.none )
@@ -447,6 +557,9 @@ update env msg ( model, pModel, sModel ) =
             else if normalizedKey == "arrowright" then
                 case model of
                     Default _ _ _ ->
+                        ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
+
+                    RunningNPDA _ _ ->
                         ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
 
                     _ ->
@@ -827,6 +940,14 @@ view env ( model, pModel, sModel ) =
 
         validCheck =
             machineCheck sModel
+
+        selectTape tapeId =
+            case Dict.get tapeId tapes of
+                Just ( t, st ) ->
+                    ( t, st )
+
+                Nothing ->
+                    ( Array.empty, Fresh )
     in
     group
         [ case model of
@@ -846,12 +967,7 @@ view env ( model, pModel, sModel ) =
             Editing tapeId ->
                 let
                     ( tape, tapeSt ) =
-                        case Dict.get tapeId pModel.tapes of
-                            Just ( t, st ) ->
-                                ( t, st )
-
-                            Nothing ->
-                                ( Array.empty, Fresh )
+                        selectTape tapeId
                 in
                 group
                     [ rect winX (winY / 3)
@@ -875,6 +991,23 @@ view env ( model, pModel, sModel ) =
 
             Running _ _ ->
                 Debug.todo "Running state"
+            RunningNPDA cfgs tId ->
+                group
+                    [ rect winX (winY / 3)
+                        |> filled lightGray
+                    , text "Simulate NPDA"
+                        |> size 16
+                        |> fixedwidth
+                        |> filled black
+                        |> move ( -winX / 2 + 2, winY / 6 - 15 )
+                    , text "(Press Right Arrow to step, Enter to exit simulation)"
+                        |> size 6
+                        |> fixedwidth
+                        |> filled black
+                        |> move ( -winX / 2 + 120, winY / 6 - 15 )
+                    , renderConfigs oldMachine model (first (selectTape tId)) tId winX cfgs
+                    ]
+                    |> move ( 0, -winY / 3 )
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machineType sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
         , machineModeButtons sModel.machineType winX winY ChangeMachine
         ]
@@ -1090,13 +1223,13 @@ deltaHat tNames d ch states =
 
 -- NPDA functions
             
-nextConfigRel : TransitionNames -> Delta -> Character -> List Configuration -> List Configuration
-nextConfigRel tNames d ch stacks =
-    List.concatMap (nextConfig tNames d ch) stacks
+nextConfigRel : TransitionNames -> Delta -> InputTape -> AcceptCond -> Set StateID -> List Configuration -> List Configuration
+nextConfigRel tNames d tape acceptCond finals cfgs =
+    List.concatMap (nextConfig tNames d tape acceptCond finals) cfgs
 
 
-nextConfig : TransitionNames -> Delta -> Character -> Configuration -> List Configuration
-nextConfig tNames d ch ({ stack, state, status, tapePos } as config) =
+nextConfig : TransitionNames -> Delta -> InputTape -> AcceptCond -> Set StateID -> Configuration -> List Configuration
+nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as config) =
     let
         getName trans =
             case Dict.get trans tNames of
@@ -1123,6 +1256,8 @@ nextConfig tNames d ch ({ stack, state, status, tapePos } as config) =
 
         nextTape cond =
             if cond then 0 else 1
+
+        ch = Maybe.withDefault "" (Array.get (tapePos + 1) tape)
     in
     case status of
         Alive ->
@@ -1134,8 +1269,13 @@ nextConfig tNames d ch ({ stack, state, status, tapePos } as config) =
                                 |> List.filterMap
                                     (\( tId, sId ) ->
                                         let
-                                            tLabel =
-                                                getName tId
+                                            tLabel = getName tId
+                                            newStack = updateStack tLabel stack
+                                            newTapePos = tapePos + nextTape (renderSet2String tLabel.inputLabel == "\\epsilon")
+                                            newStatus = 
+                                                case acceptCond of
+                                                    EmptyStack -> if newStack == [] then Success else Alive
+                                                    FinalState -> if Set.member sId finals && newTapePos == Array.length tape then Success else Alive
                                         in
                                         if
                                             (renderSet2String tLabel.inputLabel == ch || renderSet2String tLabel.inputLabel == "\\epsilon")
@@ -1158,10 +1298,10 @@ nextConfig tNames d ch ({ stack, state, status, tapePos } as config) =
                 then [ { config | status = Deadend } ]
                 else newConfigs
 
-        Deadend ->
-            [ { config | status = RemoveMe } ]
+        Success ->
+            []
 
-        RemoveMe ->
+        Deadend ->
             []
 
 updateStack : TransitionLabel -> Stack -> Stack
