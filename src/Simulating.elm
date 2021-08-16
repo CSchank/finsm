@@ -457,10 +457,12 @@ update env msg ( model, pModel, sModel ) =
                                 |> Maybe.withDefault Array.empty
 
                         newCfgs = nextConfigRel oldMachine.transitionNames oldMachine.delta tape pModel.npdaAcceptCond sModel.machine.final cfgs
+
+                        newStates = configToStates newCfgs
                     in
-                        ( ( RunningNPDA newCfgs tId, pModel, sModel), False, Cmd.none )
+                        ( ( RunningNPDA newCfgs tId, { pModel | currentStates = newStates }, sModel), False, Cmd.none )
                 _ ->
-                    ( ( model, pModel, sModel ), False, Cmd.none )
+                    ( ( model, pModel , sModel ), False, Cmd.none )
 
         RunTape tId ->
             case machineType of
@@ -1223,6 +1225,9 @@ deltaHat tNames d ch states =
 
 -- NPDA functions
             
+configToStates : List Configuration -> Set StateID
+configToStates = List.filter (\cfg -> cfg.status == Alive || cfg.status == Success) >> List.map .state >> Set.fromList 
+
 nextConfigRel : TransitionNames -> Delta -> InputTape -> AcceptCond -> Set StateID -> List Configuration -> List Configuration
 nextConfigRel tNames d tape acceptCond finals cfgs =
     List.concatMap (nextConfig tNames d tape acceptCond finals) cfgs
