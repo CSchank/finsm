@@ -52,9 +52,11 @@ inputTapeDictDecoder =
 type alias InputTape =
     Array Character
 
+
 type TapeStatus
     = Fresh
     | Stale (Set String)
+
 
 type alias Configuration =
     { stack : Stack
@@ -63,14 +65,17 @@ type alias Configuration =
     , tapePos : Int
     }
 
+
 type ConfigStatus
     = Alive
     | Success
     | Deadend
 
+
 type AcceptCond
     = EmptyStack
     | FinalState
+
 
 type alias HoverError =
     Maybe Int
@@ -124,6 +129,7 @@ onExit : Environment -> ( Model, PersistentModel, SharedModel ) -> ( ( Persisten
 onExit env ( model, pModel, sModel ) =
     ( ( pModel, sModel ), False )
 
+
 designatedStart : Set StateID -> StateID
 designatedStart setStart =
     case Set.toList setStart of
@@ -132,6 +138,7 @@ designatedStart setStart =
 
         startState :: _ ->
             startState
+
 
 initPModel : MachineType -> PersistentModel
 initPModel macType =
@@ -174,19 +181,25 @@ checkTape sModel inp =
         False ->
             Stale <| Set.fromList <| Array.toList arrFilter
 
--- TODO: Add size-aware resizing and horizontal scroll
-renderConfigs : Machine -> Model -> Array String -> Int -> Float -> List Configuration -> Shape Msg
-renderConfigs machine model input tapeId winX cfgs = 
-    let
-        xPos idx = (winX / 6) * (idx - 3) + (winX / 3)
 
+
+-- TODO: Add size-aware resizing and horizontal scroll
+
+
+renderConfigs : Machine -> Model -> Array String -> Int -> Float -> List Configuration -> Shape Msg
+renderConfigs machine model input tapeId winX cfgs =
+    let
+        xPos idx =
+            (winX / 6) * (idx - 3) + (winX / 3)
     in
-    group <| List.indexedMap (\idx cfg -> renderConfig machine model input tapeId cfg |> move (xPos (toFloat idx), 0) ) cfgs
-        
+    group <| List.indexedMap (\idx cfg -> renderConfig machine model input tapeId cfg |> move ( xPos (toFloat idx), 0 )) cfgs
+
+
 renderConfig : Machine -> Model -> Array String -> Int -> Configuration -> Shape Msg
 renderConfig machine model input tapeId cfg =
     let
-        xpad = 200
+        xpad =
+            200
 
         stateName =
             case Dict.get cfg.state machine.stateNames of
@@ -198,40 +211,53 @@ renderConfig machine model input tapeId cfg =
 
         statusColour =
             case cfg.status of
-                Success -> green
-                Deadend -> red
-                _ -> blank
+                Success ->
+                    green
 
-        renderedState = group
-            [ circle 20
-                |> filled statusColour
-                |> addOutline (solid 1) black
-            , latex 25 18 "none" stateName AlignCentre
-                |> move ( 0, 9 )
-            ]
+                Deadend ->
+                    red
 
-        stackLength = toFloat (xpad*(List.length cfg.stack))
-        renderedStack = renderStack cfg.stack
-        renderedTape  = renderTape model input Fresh tapeId tapeId cfg.tapePos False
-        
+                _ ->
+                    blank
+
+        renderedState =
+            group
+                [ circle 20
+                    |> filled statusColour
+                    |> addOutline (solid 1) black
+                , latex 25 18 "none" stateName AlignCentre
+                    |> move ( 0, 9 )
+                ]
+
+        stackLength =
+            toFloat (xpad * List.length cfg.stack)
+
+        renderedStack =
+            renderStack cfg.stack
+
+        renderedTape =
+            renderTape model input Fresh tapeId tapeId cfg.tapePos False
+
         outerBox =
             rectangle (100 + stackLength) 150
                 |> outlined (solid 5) black
-                |> move (stackLength / 2, -10)
+                |> move ( stackLength / 2, -10 )
     in
     group
         [ outerBox
         , renderedState
-        , renderedStack |> move (0, -50)
-        , renderedTape |> move (25, 0)
-        ]    
+        , renderedStack |> move ( 0, -50 )
+        , renderedTape |> move ( 25, 0 )
+        ]
+
 
 renderStack : Stack -> Shape Msg
 renderStack stk =
     let
-        xpad = 20
+        xpad =
+            20
     in
-    group 
+    group
         (List.indexedMap
             (\n st ->
                 group
@@ -252,7 +278,7 @@ renderStack stk =
             )
             stk
         )
-            
+
 
 renderTape : Model -> Array String -> TapeStatus -> Int -> Int -> Int -> Bool -> Shape Msg
 renderTape model input tapeSt tapeId selectedId inputAt showButtons =
@@ -410,7 +436,6 @@ update env msg ( model, pModel, sModel ) =
 
         machineType =
             sModel.machineType
-
     in
     case msg of
         Step ->
@@ -456,24 +481,27 @@ update env msg ( model, pModel, sModel ) =
                                 |> Maybe.map first
                                 |> Maybe.withDefault Array.empty
 
-                        newCfgs = nextConfigRel oldMachine.transitionNames oldMachine.delta tape pModel.npdaAcceptCond sModel.machine.final cfgs
+                        newCfgs =
+                            nextConfigRel oldMachine.transitionNames oldMachine.delta tape pModel.npdaAcceptCond sModel.machine.final cfgs
 
-                        newStates = configToStates newCfgs
+                        newStates =
+                            configToStates newCfgs
                     in
-                        ( ( RunningNPDA newCfgs tId, { pModel | currentStates = newStates }, sModel), False, Cmd.none )
+                    ( ( RunningNPDA newCfgs tId, { pModel | currentStates = newStates }, sModel ), False, Cmd.none )
+
                 _ ->
-                    ( ( model, pModel , sModel ), False, Cmd.none )
+                    ( ( model, pModel, sModel ), False, Cmd.none )
 
         RunTape tId ->
             case machineType of
                 DFA ->
-                    ( ( Running tId (-1), pModel, sModel), False, Cmd.none )
-                
+                    ( ( Running tId -1, pModel, sModel ), False, Cmd.none )
+
                 NFA ->
-                    ( ( Running tId (-1), pModel, sModel), False, Cmd.none )
+                    ( ( Running tId -1, pModel, sModel ), False, Cmd.none )
 
                 NPDA ->
-                    ( (RunningNPDA [ { stack = [ 'Z' ], state = designatedStart test.start, status = Alive, tapePos = -1 } ] tId, pModel, sModel), False, Cmd.none) 
+                    ( ( RunningNPDA [ { stack = [ 'Z' ], state = designatedStart test.start, status = Alive, tapePos = -1 } ] tId, pModel, sModel ), False, Cmd.none )
 
         EditTape tId ->
             ( ( Editing tId, pModel, sModel ), False, Cmd.none )
@@ -993,6 +1021,7 @@ view env ( model, pModel, sModel ) =
 
             Running _ _ ->
                 Debug.todo "Running state"
+
             RunningNPDA cfgs tId ->
                 group
                     [ rect winX (winY / 3)
@@ -1224,9 +1253,12 @@ deltaHat tNames d ch states =
 
 
 -- NPDA functions
-            
+
+
 configToStates : List Configuration -> Set StateID
-configToStates = List.filter (\cfg -> cfg.status == Alive || cfg.status == Success) >> List.map .state >> Set.fromList 
+configToStates =
+    List.filter (\cfg -> cfg.status == Alive || cfg.status == Success) >> List.map .state >> Set.fromList
+
 
 nextConfigRel : TransitionNames -> Delta -> InputTape -> AcceptCond -> Set StateID -> List Configuration -> List Configuration
 nextConfigRel tNames d tape acceptCond finals cfgs =
@@ -1260,13 +1292,18 @@ nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as
                 inpStk
 
         nextTape cond =
-            if cond then 0 else 1
+            if cond then
+                0
 
-        ch = Maybe.withDefault "" (Array.get (tapePos + 1) tape)
+            else
+                1
+
+        ch =
+            Maybe.withDefault "" (Array.get (tapePos + 1) tape)
     in
     case status of
         Alive ->
-            let 
+            let
                 newConfigs =
                     case Dict.get state d of
                         Just transMap ->
@@ -1274,40 +1311,61 @@ nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as
                                 |> List.filterMap
                                     (\( tId, sId ) ->
                                         let
-                                            tLabel = getName tId
-                                            newStack = updateStack tLabel stack
-                                            newTapePos = tapePos + nextTape (renderSet2String tLabel.inputLabel == "\\epsilon")
-                                            newStatus = 
+                                            tLabel =
+                                                getName tId
+
+                                            newStack =
+                                                updateStack tLabel stack
+
+                                            newTapePos =
+                                                tapePos + nextTape (renderSet2String tLabel.inputLabel == "\\epsilon")
+
+                                            newStatus =
                                                 case acceptCond of
-                                                    EmptyStack -> if newStack == [] then Success else Alive
-                                                    FinalState -> if Set.member sId finals && newTapePos == Array.length tape then Success else Alive
+                                                    EmptyStack ->
+                                                        if newStack == [] then
+                                                            Success
+
+                                                        else
+                                                            Alive
+
+                                                    FinalState ->
+                                                        if Set.member sId finals && newTapePos == Array.length tape then
+                                                            Success
+
+                                                        else
+                                                            Alive
                                         in
                                         if
                                             (renderSet2String tLabel.inputLabel == ch || renderSet2String tLabel.inputLabel == "\\epsilon")
                                                 && matchStackTop tLabel.stackTop
                                         then
-                                            Just 
+                                            Just
                                                 { stack = updateStack tLabel stack
                                                 , state = sId
                                                 , status = Alive
-                                                , tapePos = tapePos + nextTape (renderSet2String tLabel.inputLabel == "\\epsilon") 
+                                                , tapePos = tapePos + nextTape (renderSet2String tLabel.inputLabel == "\\epsilon")
                                                 }
+
                                         else
-                                            Nothing                        
+                                            Nothing
                                     )
 
                         Nothing ->
                             []
             in
-            if newConfigs == []
-                then [ { config | status = Deadend } ]
-                else newConfigs
+            if newConfigs == [] then
+                [ { config | status = Deadend } ]
+
+            else
+                newConfigs
 
         Success ->
             []
 
         Deadend ->
             []
+
 
 updateStack : TransitionLabel -> Stack -> Stack
 updateStack { stackTop, stackPush } stk =
