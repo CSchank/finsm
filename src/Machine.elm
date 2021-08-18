@@ -294,16 +294,19 @@ test =
     in
     Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
 
+
+
 {-
-machine: { delta = Dict.fromList [(1,Dict.fromList [(0,1),(1,1),(2,1),(3,1)])], 
-            final = Set.fromList [], 
-            q = Set.fromList [1], 
-            start = Set.fromList [], 
-            stateNames = Dict.fromList [(1,"q_{1}")], 
-            statePositions = Dict.fromList [(1,(18,-53))], 
-            stateTransitions = Dict.fromList [((1,0,1),(-86,0)),((1,1,1),(-2,-61)),((1,2,1),(79,4)),((1,3,1),(0,50))], 
-            transitionNames = Dict.fromList [(0,{ inputLabel = Set.fromList ["]"], stackPush = "", stackTop = "[" }),(1,{ inputLabel = Set.fromList [], stackPush = "", stackTop = "Z" }),(2,{ inputLabel = Set.fromList ["["], stackPush = "[[", stackTop = "[" }),(3,{ inputLabel = Set.fromList ["["], stackPush = "Z[", stackTop = "Z" })] }
+   machine: { delta = Dict.fromList [(1,Dict.fromList [(0,1),(1,1),(2,1),(3,1)])],
+               final = Set.fromList [],
+               q = Set.fromList [1],
+               start = Set.fromList [],
+               stateNames = Dict.fromList [(1,"q_{1}")],
+               statePositions = Dict.fromList [(1,(18,-53))],
+               stateTransitions = Dict.fromList [((1,0,1),(-86,0)),((1,1,1),(-2,-61)),((1,2,1),(79,4)),((1,3,1),(0,50))],
+               transitionNames = Dict.fromList [(0,{ inputLabel = Set.fromList ["]"], stackPush = "", stackTop = "[" }),(1,{ inputLabel = Set.fromList [], stackPush = "", stackTop = "Z" }),(2,{ inputLabel = Set.fromList ["["], stackPush = "[[", stackTop = "[" }),(3,{ inputLabel = Set.fromList ["["], stackPush = "Z[", stackTop = "Z" })] }
 -}
+
 
 testNPDA : Machine
 testNPDA =
@@ -319,10 +322,10 @@ testNPDA =
             Set.fromList [ 0 ]
 
         final =
-            Set.fromList [ ]
+            Set.fromList []
 
         statePositions =
-            Dict.fromList [ ( 0, (  0, 0 ) ) ]
+            Dict.fromList [ ( 0, ( 0, 0 ) ) ]
 
         stateNames =
             Dict.fromList [ ( 0, "q_0" ) ]
@@ -344,7 +347,6 @@ testNPDA =
                 ]
     in
     Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
-
 
 
 view : Environment -> Model -> MachineType -> Machine -> Set StateID -> TransitionMistakes -> Shape Msg

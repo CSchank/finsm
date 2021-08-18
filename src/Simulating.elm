@@ -102,6 +102,7 @@ type Msg
     | ToggleStart StateID
     | KeyPressed String
     | ChangeMachine MachineType
+    | ChangeNPDAAcceptCond AcceptCond
     | MachineMsg Machine.Msg
     | HoverErrorEnter Int
     | HoverErrorExit
@@ -190,7 +191,9 @@ renderConfigs : Machine -> Model -> Array String -> Int -> Float -> List Configu
 renderConfigs machine model input tapeId winX cfgs =
     let
         xPos idx =
-            (winX / 6) * (idx - 3) + (winX / 3)
+            (winX / 7) * (idx - 3)
+
+        -- + (winX / 3)
     in
     group <| List.indexedMap (\idx cfg -> renderConfig machine model input tapeId cfg |> move ( xPos (toFloat idx), 0 )) cfgs
 
@@ -201,7 +204,7 @@ renderConfig machine model input tapeId cfg =
         xpad =
             50
 
-        tapeLength = 
+        tapeLength =
             Array.length input
 
         stateName =
@@ -233,7 +236,7 @@ renderConfig machine model input tapeId cfg =
                 ]
 
         stackLength =
-            clamp 100 300 <| toFloat (xpad * tapeLength)/2
+            clamp 100 300 <| toFloat (xpad * tapeLength) / 2
 
         renderedStack =
             renderStack cfg.stack
@@ -504,7 +507,16 @@ update env msg ( model, pModel, sModel ) =
                     ( ( Running tId -1, pModel, sModel ), False, Cmd.none )
 
                 NPDA ->
-                    ( ( RunningNPDA [ { stack = [ 'Z' ], state = designatedStart test.start, status = Alive, tapePos = -1 } ] tId, pModel, sModel ), False, Cmd.none )
+                    case Dict.get tId pModel.tapes of
+                        Just ( ar, tapeStatus ) ->
+                            if tapeStatus == Fresh then
+                                ( ( RunningNPDA [ { stack = [ 'Z' ], state = designatedStart test.start, status = Alive, tapePos = -1 } ] tId, pModel, sModel ), False, Cmd.none )
+
+                            else
+                                ( ( model, pModel, sModel ), False, Cmd.none )
+
+                        Nothing ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
 
         EditTape tId ->
             ( ( Editing tId, pModel, sModel ), False, Cmd.none )
@@ -850,6 +862,9 @@ update env msg ( model, pModel, sModel ) =
                         NPDA ->
                             ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
 
+        ChangeNPDAAcceptCond newCond ->
+            ( ( model, { pModel | npdaAcceptCond = newCond }, sModel ), True, Cmd.none )
+
         MachineMsg mmsg ->
             case mmsg of
                 StartDragging sId _ ->
@@ -1051,8 +1066,34 @@ view env ( model, pModel, sModel ) =
                     ]
                     |> move ( 0, -winY / 3 )
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machineType sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
-        , machineModeButtons sModel.machineType winX winY ChangeMachine
+        , buttonRender ( model, pModel, sModel ) winX winY
         ]
+
+
+buttonRender : ( Model, PersistentModel, SharedModel ) -> Float -> Float -> Shape Msg
+buttonRender ( model, pModel, sModel ) winX winY =
+    let
+        condMachineModeButtons =
+            case model of
+                RunningNPDA _ _ ->
+                    group []
+
+                _ ->
+                    machineModeButtons sModel.machineType winX winY ChangeMachine
+
+        condNPDAAcceptButtons =
+            case model of
+                RunningNPDA _ _ ->
+                    group []
+
+                _ ->
+                    if sModel.machineType == NPDA then
+                        npdaAcceptCondButtons pModel winX winY
+
+                    else
+                        group []
+    in
+    group [ condMachineModeButtons, condNPDAAcceptButtons ]
 
 
 machineDefn : SharedModel -> MachineType -> Float -> Float -> Shape Msg
@@ -1333,7 +1374,8 @@ nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as
 
                                             newStatus =
                                                 case acceptCond of
-                                                    EmptyStack -> -- This is handled below, only when the config has an empty stack and no transitions to take
+                                                    EmptyStack ->
+                                                        -- This is handled below, only when the config has an empty stack and no transitions to take
                                                         Alive
 
                                                     FinalState ->
@@ -1362,11 +1404,11 @@ nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as
                             []
             in
             if newConfigs == [] then
-                if acceptCond == EmptyStack && stack == [] && tapePos == (Array.length tape - 1)
-                    then
-                        [ { config | status = Success } ]
-                    else
-                        [ { config | status = Deadend } ]
+                if acceptCond == EmptyStack && stack == [] && tapePos == (Array.length tape - 1) then
+                    [ { config | status = Success } ]
+
+                else
+                    [ { config | status = Deadend } ]
 
             else
                 newConfigs
@@ -1455,4 +1497,58 @@ latexKeyboard w h chars =
         [ oneRow topRow (fillOutExtras 10 9 chars) |> move ( -keyW / 3, 0 )
         , oneRow homeRow (fillOutExtras 9 0 chars) |> move ( -keyW / 3, -keyH - 2 )
         , oneRow botRow (fillOutExtras 7 19 chars) |> move ( -keyW, -(keyH + 2) * 2 )
+        ]
+
+
+npdaAcceptCondButtons : PersistentModel -> Float -> Float -> Shape Msg
+npdaAcceptCondButtons pModel winX winY =
+    group
+        [ group
+            [ roundedRect 100 15 1
+                |> filled
+                    (if pModel.npdaAcceptCond == EmptyStack then
+                        finsmLightBlue
+
+                     else
+                        blank
+                    )
+                |> addOutline (solid 1) darkGray
+            , text "Empty Stack"
+                |> centered
+                |> fixedwidth
+                |> filled
+                    (if pModel.npdaAcceptCond == EmptyStack then
+                        white
+
+                     else
+                        darkGray
+                    )
+                |> move ( 0, -4 )
+            ]
+            |> move ( -winX / 2 + 55, winY / 2 - 52 )
+            |> notifyTap (ChangeNPDAAcceptCond EmptyStack)
+        , group
+            [ roundedRect 100 15 1
+                |> filled
+                    (if pModel.npdaAcceptCond == FinalState then
+                        finsmLightBlue
+
+                     else
+                        blank
+                    )
+                |> addOutline (solid 1) darkGray
+            , text "Final State"
+                |> centered
+                |> fixedwidth
+                |> filled
+                    (if pModel.npdaAcceptCond == FinalState then
+                        white
+
+                     else
+                        darkGray
+                    )
+                |> move ( 0, -4 )
+            ]
+            |> move ( -winX / 2 + 157, winY / 2 - 52 )
+            |> notifyTap (ChangeNPDAAcceptCond FinalState)
         ]
