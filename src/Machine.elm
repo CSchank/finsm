@@ -294,6 +294,58 @@ test =
     in
     Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
 
+{-
+machine: { delta = Dict.fromList [(1,Dict.fromList [(0,1),(1,1),(2,1),(3,1)])], 
+            final = Set.fromList [], 
+            q = Set.fromList [1], 
+            start = Set.fromList [], 
+            stateNames = Dict.fromList [(1,"q_{1}")], 
+            statePositions = Dict.fromList [(1,(18,-53))], 
+            stateTransitions = Dict.fromList [((1,0,1),(-86,0)),((1,1,1),(-2,-61)),((1,2,1),(79,4)),((1,3,1),(0,50))], 
+            transitionNames = Dict.fromList [(0,{ inputLabel = Set.fromList ["]"], stackPush = "", stackTop = "[" }),(1,{ inputLabel = Set.fromList [], stackPush = "", stackTop = "Z" }),(2,{ inputLabel = Set.fromList ["["], stackPush = "[[", stackTop = "[" }),(3,{ inputLabel = Set.fromList ["["], stackPush = "Z[", stackTop = "Z" })] }
+-}
+
+testNPDA : Machine
+testNPDA =
+    let
+        q =
+            Set.fromList [ 0 ]
+
+        delta0 =
+            Dict.fromList
+                [ ( 0, Dict.fromList [ ( 0, 0 ), ( 1, 0 ), ( 2, 0 ), ( 3, 0 ) ] ) ]
+
+        start =
+            Set.fromList [ 0 ]
+
+        final =
+            Set.fromList [ ]
+
+        statePositions =
+            Dict.fromList [ ( 0, (  0, 0 ) ) ]
+
+        stateNames =
+            Dict.fromList [ ( 0, "q_0" ) ]
+
+        transitionNames =
+            Dict.fromList <|
+                [ ( 0, { inputLabel = Set.singleton "[", stackTop = "Z", stackPush = "[Z" } )
+                , ( 1, { inputLabel = Set.singleton "[", stackTop = "[", stackPush = "[[" } )
+                , ( 2, { inputLabel = Set.singleton "]", stackTop = "[", stackPush = "" } )
+                , ( 3, { inputLabel = Set.singleton "\\epsilon", stackTop = "Z", stackPush = "" } )
+                ]
+
+        stateTransitions =
+            Dict.fromList
+                [ ( ( 0, 0, 0 ), ( 0, 70 ) )
+                , ( ( 0, 1, 0 ), ( 0, -70 ) )
+                , ( ( 0, 2, 0 ), ( 70, 0 ) )
+                , ( ( 0, 3, 0 ), ( -70, 0 ) )
+                ]
+    in
+    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
+
+
 
 view : Environment -> Model -> MachineType -> Machine -> Set StateID -> TransitionMistakes -> Shape Msg
 view env model macType machine currentStates tMistakes =

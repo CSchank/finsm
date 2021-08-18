@@ -51,11 +51,15 @@ contextHasError err mtype =
                     False
 
         NPDA ->
-            if err == NoError then
-                False
+            case err of
+                EpsTransError ->
+                    True
 
-            else
-                True
+                DuplicateStates _ ->
+                    True
+
+                _ ->
+                    False
 
 
 machineCheck : SharedModel -> Error

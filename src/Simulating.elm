@@ -148,7 +148,7 @@ initPModel macType =
             , ( 1, ( Array.fromList [ "0", "0", "0", "1", "1", "0", "1", "0", "1", "0", "1", "1", "1", "1", "0" ], Fresh ) )
             ]
     , currentStates = test.start
-    , npdaAcceptCond = FinalState
+    , npdaAcceptCond = EmptyStack
     }
 
 
@@ -199,7 +199,10 @@ renderConfig : Machine -> Model -> Array String -> Int -> Configuration -> Shape
 renderConfig machine model input tapeId cfg =
     let
         xpad =
-            200
+            50
+
+        tapeLength = 
+            Array.length input
 
         stateName =
             case Dict.get cfg.state machine.stateNames of
@@ -230,7 +233,7 @@ renderConfig machine model input tapeId cfg =
                 ]
 
         stackLength =
-            toFloat (xpad * List.length cfg.stack)
+            clamp 100 300 <| toFloat (xpad * tapeLength)/2
 
         renderedStack =
             renderStack cfg.stack
@@ -548,6 +551,14 @@ update env msg ( model, pModel, sModel ) =
             if normalizedKey == "enter" then
                 case model of
                     Editing tId ->
+                        ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
+
+                    _ ->
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
+            else if normalizedKey == "escape" then
+                case model of
+                    RunningNPDA _ tId ->
                         ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
 
                     _ ->
@@ -1031,7 +1042,7 @@ view env ( model, pModel, sModel ) =
                         |> fixedwidth
                         |> filled black
                         |> move ( -winX / 2 + 2, winY / 6 - 15 )
-                    , text "(Press Right Arrow to step, Enter to exit simulation)"
+                    , text "(Press Right Arrow to step, Esc to exit simulation)"
                         |> size 6
                         |> fixedwidth
                         |> filled black
@@ -1322,12 +1333,8 @@ nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as
 
                                             newStatus =
                                                 case acceptCond of
-                                                    EmptyStack ->
-                                                        if newStack == [] then
-                                                            Success
-
-                                                        else
-                                                            Alive
+                                                    EmptyStack -> -- This is handled below, only when the config has an empty stack and no transitions to take
+                                                        Alive
 
                                                     FinalState ->
                                                         if Set.member sId finals && newTapePos == Array.length tape then
@@ -1343,7 +1350,7 @@ nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as
                                             Just
                                                 { stack = updateStack tLabel stack
                                                 , state = sId
-                                                , status = Alive
+                                                , status = newStatus
                                                 , tapePos = tapePos + nextTape (renderSet2String tLabel.inputLabel == "\\epsilon")
                                                 }
 
@@ -1355,7 +1362,11 @@ nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as
                             []
             in
             if newConfigs == [] then
-                [ { config | status = Deadend } ]
+                if acceptCond == EmptyStack && stack == [] && tapePos == (Array.length tape - 1)
+                    then
+                        [ { config | status = Success } ]
+                    else
+                        [ { config | status = Deadend } ]
 
             else
                 newConfigs
