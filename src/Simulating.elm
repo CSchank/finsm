@@ -82,7 +82,7 @@ type alias HoverError =
 
 
 type alias Stack =
-    List Char
+    List String
 
 
 type Model
@@ -273,7 +273,7 @@ renderStack stk =
                             (solid 1)
                             black
                         |> move ( 0, 3 )
-                    , latex (xpad * 0.9) (xpad * 0.7) "white" (String.fromChar st) AlignCentre
+                    , latex (xpad * 0.9) (xpad * 0.7) "white" st AlignCentre
                         |> move ( 0, 10.25 )
                     ]
                     |> move
@@ -510,7 +510,7 @@ update env msg ( model, pModel, sModel ) =
                     case Dict.get tId pModel.tapes of
                         Just ( ar, tapeStatus ) ->
                             if tapeStatus == Fresh then
-                                ( ( RunningNPDA [ { stack = [ 'Z' ], state = designatedStart test.start, status = Alive, tapePos = -1 } ] tId, pModel, sModel ), False, Cmd.none )
+                                ( ( RunningNPDA [ { stack = [ "\\bot" ], state = designatedStart test.start, status = Alive, tapePos = -1 } ] tId, pModel, sModel ), False, Cmd.none )
 
                             else
                                 ( ( model, pModel, sModel ), False, Cmd.none )
@@ -1182,7 +1182,7 @@ machineDefn sModel mtype winX winY =
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
                 , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl (Set.union << .inputLabel) Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 90 )
-                , latex 500 18 "blank" ("\\Gamma = \\{ " ++ String.join "," (Set.toList <| List.foldl (\t s -> Set.insert t.stackTop (Set.insert t.stackPush s)) Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("\\Gamma = \\{ " ++ String.join "," (Set.toList <| Set.fromList <| List.concatMap (\lab -> lab.stackTop :: lab.stackPush) <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 115 )
                 , latex 500 18 "blank" "\\delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 135 )
@@ -1329,12 +1329,7 @@ nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as
                     emptyLabel
 
         matchStackTop pat =
-            case String.uncons pat of
-                Nothing ->
-                    False
-
-                Just ( c, _ ) ->
-                    Just c == List.head stack
+            Just pat == List.head stack || pat == "\\epsilon"
 
         replaceStackTop old new inpStk =
             if isPrefixOf old inpStk then
@@ -1428,17 +1423,15 @@ updateStack { stackTop, stackPush } stk =
 
         _ ->
             let
-                stackTopList =
-                    String.toList stackTop
+                pushed =
+                    if stackPush == [ "\\epsilon" ] then
+                        []
 
-                stackPushList =
-                    String.toList stackPush
-
-                newStack =
-                    stackPushList ++ List.drop (List.length stackTopList) stk
+                    else
+                        stackPush
             in
-            if isPrefixOf stackTopList stk then
-                newStack
+            if Just stackTop == head stk then
+                pushed ++ List.drop 1 stk
 
             else
                 stk

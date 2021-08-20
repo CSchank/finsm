@@ -145,8 +145,8 @@ update env msg ( model, pModel, sModel ) =
 
                                 newTrans =
                                     { inputLabel = newInputLabel
-                                    , stackTop = ""
-                                    , stackPush = ""
+                                    , stackTop = "\\epsilon"
+                                    , stackPush = [ "\\epsilon" ]
                                     }
 
                                 newTransID =
@@ -211,10 +211,10 @@ update env msg ( model, pModel, sModel ) =
                         newInpLabel =
                             case Dict.get tId sModel.machine.transitionNames of
                                 Just n ->
-                                    ( renderSet2String n.inputLabel, n.stackTop, n.stackPush )
+                                    ( renderSet2String n.inputLabel, n.stackTop, showStackPush n.stackPush )
 
                                 Nothing ->
-                                    ( "", "", "" )
+                                    ( "", "\\epsilon", "\\epsilon" )
 
                         newLab =
                             newInpLabel
@@ -514,10 +514,10 @@ update env msg ( model, pModel, sModel ) =
                             oldTransitionName =
                                 case Dict.get tId oldMachine.transitionNames of
                                     Just n ->
-                                        ( renderSet2String n.inputLabel, n.stackTop, n.stackPush )
+                                        ( renderSet2String n.inputLabel, n.stackTop, showStackPush n.stackPush )
 
                                     _ ->
-                                        ( "", "", "" )
+                                        ( "", "\\epsilon", "\\epsilon" )
                         in
                         case sModel.machineType of
                             DFA ->
@@ -537,8 +537,8 @@ update env msg ( model, pModel, sModel ) =
                             NPDA ->
                                 if
                                     (fst newLbl == fst oldTransitionName || fst newLbl == "")
-                                        && (snd newLbl == snd oldTransitionName || snd newLbl == "")
-                                        && (thd newLbl == thd oldTransitionName || thd newLbl == "")
+                                        && (snd newLbl == snd oldTransitionName || snd newLbl == "\\epsilon")
+                                        && (thd newLbl == thd oldTransitionName || thd newLbl == "\\epsilon")
                                 then
                                     ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
 
@@ -562,10 +562,10 @@ update env msg ( model, pModel, sModel ) =
                             oldTransName =
                                 case Dict.get tId sModel.machine.transitionNames of
                                     Just label ->
-                                        ( renderSet2String label.inputLabel, label.stackTop, label.stackPush )
+                                        ( renderSet2String label.inputLabel, label.stackTop, String.concat label.stackPush )
 
                                     Nothing ->
-                                        ( "", "", "" )
+                                        ( "", "\\epsilon", "\\epsilon" )
                         in
                         ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) oldTransName }, pModel, sModel ), False, focusInput NoOp )
 
@@ -722,8 +722,18 @@ update env msg ( model, pModel, sModel ) =
 
                 newLabel =
                     { inputLabel = newTransitions
-                    , stackTop = stkTop
-                    , stackPush = stkPush
+                    , stackTop =
+                        if stkTop == "" then
+                            "\\epsilon"
+
+                        else
+                            stkTop
+                    , stackPush =
+                        if stkPush == "" then
+                            [ "\\epsilon" ]
+
+                        else
+                            parseStackPush stkPush
                     }
 
                 newMachine =
@@ -913,3 +923,13 @@ snapIcon =
             ]
             |> move ( 5, -10 )
         ]
+
+
+parseStackPush : String -> List String
+parseStackPush =
+    String.split " "
+
+
+showStackPush : List String -> String
+showStackPush =
+    String.join " "

@@ -36,7 +36,7 @@ type alias TransitionNames =
 type alias TransitionLabel =
     { inputLabel : Set String
     , stackTop : String
-    , stackPush : String
+    , stackPush : List String
     }
 
 
@@ -158,7 +158,7 @@ machineEncoderV1 machine =
             E.object
                 [ ( "inputLabel", encodeSet E.string tLabel.inputLabel )
                 , ( "stackTop", E.string tLabel.stackTop )
-                , ( "stackPush", E.string tLabel.stackPush )
+                , ( "stackPush", E.list E.string tLabel.stackPush )
                 ]
 
         transNamesEncoder : TransitionNames -> E.Value
@@ -228,7 +228,7 @@ machineDecoderV1 =
 
         transNamesDecoder : D.Decoder TransitionNames
         transNamesDecoder =
-            D.field "transNames" <| decodeDict D.int (D.map3 TransitionLabel (decodeSet D.string) D.string D.string)
+            D.field "transNames" <| decodeDict D.int (D.map3 TransitionLabel (decodeSet D.string) D.string (D.list D.string))
     in
     D.map8 Machine
         qDecoder
@@ -269,7 +269,7 @@ test =
 
         transitionNames =
             Dict.fromList <|
-                List.map (\( k, str ) -> ( k, { inputLabel = Set.singleton str, stackTop = "", stackPush = "" } ))
+                List.map (\( k, str ) -> ( k, { inputLabel = Set.singleton str, stackTop = "\\epsilon", stackPush = [ "\\epsilon" ] } ))
                     [ ( 0, "1" )
                     , ( 1, "0" )
                     , ( 2, "1" )
@@ -332,10 +332,10 @@ testNPDA =
 
         transitionNames =
             Dict.fromList <|
-                [ ( 0, { inputLabel = Set.singleton "[", stackTop = "Z", stackPush = "[Z" } )
-                , ( 1, { inputLabel = Set.singleton "[", stackTop = "[", stackPush = "[[" } )
-                , ( 2, { inputLabel = Set.singleton "]", stackTop = "[", stackPush = "" } )
-                , ( 3, { inputLabel = Set.singleton "\\epsilon", stackTop = "Z", stackPush = "" } )
+                [ ( 0, { inputLabel = Set.singleton "[", stackTop = "\\bot", stackPush = [ "[", "\\bot" ] } )
+                , ( 1, { inputLabel = Set.singleton "[", stackTop = "[", stackPush = [ "[", "[" ] } )
+                , ( 2, { inputLabel = Set.singleton "]", stackTop = "[", stackPush = [ "\\epsilon" ] } )
+                , ( 3, { inputLabel = Set.singleton "\\epsilon", stackTop = "\\bot", stackPush = [ "\\epsilon" ] } )
                 ]
 
         stateTransitions =
@@ -396,7 +396,7 @@ view env model macType machine currentStates tMistakes =
                             NPDA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ tLabel.stackPush
+                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
 
                                     Nothing ->
                                         " "
@@ -450,7 +450,7 @@ view env model macType machine currentStates tMistakes =
                             NPDA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ tLabel.stackPush
+                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
 
                                     Nothing ->
                                         " "
@@ -818,7 +818,7 @@ renderArrows macType machine model tMistakes =
                                                                 Set.toList tLabel.inputLabel |> renderString
 
                                                             NPDA ->
-                                                                (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ tLabel.stackPush
+                                                                (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
 
                                                     Nothing ->
                                                         ""
@@ -1021,6 +1021,6 @@ renderStates currentStates machine model env =
 emptyLabel : TransitionLabel
 emptyLabel =
     { inputLabel = Set.empty
-    , stackTop = ""
-    , stackPush = ""
+    , stackTop = "\\epsilon"
+    , stackPush = [ "\\epsilon" ]
     }
