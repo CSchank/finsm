@@ -2,7 +2,6 @@ module Simulating exposing (HoverError, InputTape, Model(..), Msg(..), Persisten
 
 import Array exposing (Array)
 import Browser.Events
-import Debug
 import Dict exposing (Dict)
 import Environment exposing (Environment)
 import Error exposing (..)
@@ -1182,7 +1181,17 @@ machineDefn sModel mtype winX winY =
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
                 , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl (Set.union << .inputLabel) Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 90 )
-                , latex 500 18 "blank" ("\\Gamma = \\{ " ++ String.join "," (Set.toList <| Set.fromList <| List.concatMap (\lab -> lab.stackTop :: lab.stackPush) <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
+                , latex 500 18 "blank" ("\\Gamma = \\{ " 
+                        ++ String.join "," 
+                            (Dict.values machine.transitionNames
+                                |> List.concatMap (\lab -> lab.stackTop :: lab.stackPush) 
+                                |> Set.fromList 
+                                |> Set.remove "\\bot" 
+                                |> Set.remove "\\epsilon"
+                                |> Set.remove " "
+                                |> Set.toList)
+                             ++ " \\}")
+                        AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 115 )
                 , latex 500 18 "blank" "\\delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 135 )

@@ -733,7 +733,7 @@ update env msg ( model, pModel, sModel ) =
                             [ "\\epsilon" ]
 
                         else
-                            parseStackPush stkPush
+                            (parseStackPush stkPush)
                     }
 
                 newMachine =

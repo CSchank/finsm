@@ -818,7 +818,7 @@ renderArrows macType machine model tMistakes =
                                                                 Set.toList tLabel.inputLabel |> renderString
 
                                                             NPDA ->
-                                                                (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
+                                                                (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ String.join " " tLabel.stackPush
 
                                                     Nothing ->
                                                         ""

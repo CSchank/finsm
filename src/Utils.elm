@@ -64,7 +64,7 @@ textBox txt w h place msg =
     move ( -w / 2, h / 2 ) <|
         html (w * 1.5) (h * 1.5) <|
             input
-                [ id "input"
+                [ id <| "input" ++ place
                 , placeholder place
                 , onInput msg
                 , value txt
