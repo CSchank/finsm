@@ -670,7 +670,7 @@ renderArrow macType ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mista
                                             80
 
                                          else
-                                            8 * toFloat (String.length lab) + 5
+                                            8 * toFloat (List.foldl max 0 <| List.map String.length [ lab, stkTop, stkPush ]) + 5
                                         )
                                         20
                                         ( "inputLabel", "stackTop", "stackPush" )
