@@ -10,7 +10,7 @@ import Html.Events exposing (onInput)
 import Json.Decode as D
 import Json.Encode as E
 import Set exposing (Set)
-import Utils exposing (decodeDict, decodePair, decodeSet, decodeTriple, encodeDict, encodePair, encodeSet, encodeTriple, textBox)
+import Utils exposing (decodeDict, decodePair, decodeSet, decodeTriple, encodeDict, encodePair, encodeSet, encodeTriple, textBox, textBox3)
 
 
 type alias StateID =
@@ -30,7 +30,20 @@ type alias StateNames =
 
 
 type alias TransitionNames =
-    Dict TransitionID (Set String)
+    Dict TransitionID TransitionLabel
+
+
+type alias TransitionLabel =
+    { inputLabel : Set String
+    , stackTop : String
+    , stackPush : List String
+    }
+
+
+type LabelEditType
+    = InputLabel
+    | StackTop
+    | StackPush
 
 
 type alias StateTransitions =
@@ -47,6 +60,58 @@ type alias Character =
 
 type alias TransitionMistakes =
     Maybe (Set TransitionID)
+
+
+type alias Machine =
+    { q : Set StateID
+    , delta : Delta
+    , start : Set StateID
+    , final : Set StateID
+    , statePositions : StatePositions
+    , stateTransitions : StateTransitions
+    , stateNames : StateNames
+    , transitionNames : TransitionNames
+    }
+
+
+type MachineType
+    = DFA
+    | NFA
+    | NPDA
+
+
+type Model
+    = Regular
+    | DraggingState StateID ( Float, Float ) ( Float, Float )
+    | SelectedState StateID
+    | MousingOverRim StateID ( Float, Float )
+    | AddingArrow StateID ( Float, Float )
+    | AddingArrowOverOtherState StateID ( Float, Float ) StateID
+    | MousingOverStateLabel StateID
+    | MousingOverTransitionLabel TransitionID
+    | EditingStateLabel StateID String
+    | EditingTransitionLabel ( StateID, TransitionID, StateID ) ( String, String, String )
+    | SelectedArrow ( StateID, TransitionID, StateID )
+    | DraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
+    | CreatingNewArrow StateID
+
+
+type Msg
+    = StartDragging StateID ( Float, Float )
+    | StartDraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
+    | StartMouseOverRim StateID ( Float, Float )
+    | MoveMouseOverRim ( Float, Float )
+    | StopMouseOverRim
+    | SelectArrow ( StateID, TransitionID, StateID )
+    | MouseOverStateLabel StateID
+    | MouseOverTransitionLabel TransitionID
+    | MouseLeaveLabel
+    | EditTransitionLabel TransitionID LabelEditType String
+    | EditStateLabel StateID String
+    | Drag ( Float, Float )
+    | TapState StateID
+    | StopDragging
+    | Reset
 
 
 machineEncoder : Machine -> E.Value
@@ -88,9 +153,17 @@ machineEncoderV1 machine =
         stateNamesEncoder =
             encodeDict E.int E.string
 
+        transitionLabelEncoder : TransitionLabel -> E.Value
+        transitionLabelEncoder tLabel =
+            E.object
+                [ ( "inputLabel", encodeSet E.string tLabel.inputLabel )
+                , ( "stackTop", E.string tLabel.stackTop )
+                , ( "stackPush", E.list E.string tLabel.stackPush )
+                ]
+
         transNamesEncoder : TransitionNames -> E.Value
         transNamesEncoder =
-            encodeDict E.int (encodeSet E.string)
+            encodeDict E.int transitionLabelEncoder
     in
     E.object
         [ ( "q", qEncoder machine.q )
@@ -155,7 +228,7 @@ machineDecoderV1 =
 
         transNamesDecoder : D.Decoder TransitionNames
         transNamesDecoder =
-            D.field "transNames" <| decodeDict D.int (decodeSet D.string)
+            D.field "transNames" <| decodeDict D.int (D.map3 TransitionLabel (decodeSet D.string) D.string (D.list D.string))
     in
     D.map8 Machine
         qDecoder
@@ -166,51 +239,6 @@ machineDecoderV1 =
         transPosDecoder
         stateNamesDecoder
         transNamesDecoder
-
-
-type alias Machine =
-    { q : Set StateID
-    , delta : Delta
-    , start : Set StateID
-    , final : Set StateID
-    , statePositions : StatePositions
-    , stateTransitions : StateTransitions
-    , stateNames : StateNames
-    , transitionNames : TransitionNames
-    }
-
-
-type Model
-    = Regular
-    | DraggingState StateID ( Float, Float ) ( Float, Float )
-    | SelectedState StateID
-    | MousingOverRim StateID ( Float, Float )
-    | AddingArrow StateID ( Float, Float )
-    | AddingArrowOverOtherState StateID ( Float, Float ) StateID
-    | MousingOverStateLabel StateID
-    | MousingOverTransitionLabel TransitionID
-    | EditingStateLabel StateID String
-    | EditingTransitionLabel ( StateID, TransitionID, StateID ) String
-    | SelectedArrow ( StateID, TransitionID, StateID )
-    | DraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
-    | CreatingNewArrow StateID
-
-
-type Msg
-    = StartDragging StateID ( Float, Float )
-    | StartDraggingArrow ( StateID, TransitionID, StateID ) ( Float, Float )
-    | StartMouseOverRim StateID ( Float, Float )
-    | MoveMouseOverRim ( Float, Float )
-    | StopMouseOverRim
-    | SelectArrow ( StateID, TransitionID, StateID )
-    | MouseOverStateLabel StateID
-    | MouseOverTransitionLabel TransitionID
-    | MouseLeaveLabel
-    | EditLabel StateID String
-    | Drag ( Float, Float )
-    | TapState StateID
-    | StopDragging
-    | Reset
 
 
 test : Machine
@@ -240,7 +268,17 @@ test =
             Dict.fromList [ ( 0, "q_0" ), ( 1, "q_1" ), ( 2, "q_2" ), ( 3, "q_3" ) ]
 
         transitionNames =
-            Dict.fromList <| List.map (\( k, str ) -> ( k, Set.singleton str )) [ ( 0, "1" ), ( 1, "0" ), ( 2, "1" ), ( 3, "0" ), ( 4, "1" ), ( 5, "0" ), ( 6, "1" ), ( 7, "0" ) ]
+            Dict.fromList <|
+                List.map (\( k, str ) -> ( k, { inputLabel = Set.singleton str, stackTop = "\\epsilon", stackPush = [ "\\epsilon" ] } ))
+                    [ ( 0, "1" )
+                    , ( 1, "0" )
+                    , ( 2, "1" )
+                    , ( 3, "0" )
+                    , ( 4, "1" )
+                    , ( 5, "0" )
+                    , ( 6, "1" )
+                    , ( 7, "0" )
+                    ]
 
         stateTransitions =
             Dict.fromList
@@ -257,8 +295,62 @@ test =
     Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
 
 
-view : Environment -> Model -> Machine -> Set StateID -> TransitionMistakes -> Shape Msg
-view env model machine currentStates tMistakes =
+
+{-
+   machine: { delta = Dict.fromList [(1,Dict.fromList [(0,1),(1,1),(2,1),(3,1)])],
+               final = Set.fromList [],
+               q = Set.fromList [1],
+               start = Set.fromList [],
+               stateNames = Dict.fromList [(1,"q_{1}")],
+               statePositions = Dict.fromList [(1,(18,-53))],
+               stateTransitions = Dict.fromList [((1,0,1),(-86,0)),((1,1,1),(-2,-61)),((1,2,1),(79,4)),((1,3,1),(0,50))],
+               transitionNames = Dict.fromList [(0,{ inputLabel = Set.fromList ["]"], stackPush = "", stackTop = "[" }),(1,{ inputLabel = Set.fromList [], stackPush = "", stackTop = "Z" }),(2,{ inputLabel = Set.fromList ["["], stackPush = "[[", stackTop = "[" }),(3,{ inputLabel = Set.fromList ["["], stackPush = "Z[", stackTop = "Z" })] }
+-}
+
+
+testNPDA : Machine
+testNPDA =
+    let
+        q =
+            Set.fromList [ 0 ]
+
+        delta0 =
+            Dict.fromList
+                [ ( 0, Dict.fromList [ ( 0, 0 ), ( 1, 0 ), ( 2, 0 ), ( 3, 0 ) ] ) ]
+
+        start =
+            Set.fromList [ 0 ]
+
+        final =
+            Set.fromList []
+
+        statePositions =
+            Dict.fromList [ ( 0, ( 0, 0 ) ) ]
+
+        stateNames =
+            Dict.fromList [ ( 0, "q_0" ) ]
+
+        transitionNames =
+            Dict.fromList <|
+                [ ( 0, { inputLabel = Set.singleton "[", stackTop = "\\bot", stackPush = [ "[", "\\bot" ] } )
+                , ( 1, { inputLabel = Set.singleton "[", stackTop = "[", stackPush = [ "[", "[" ] } )
+                , ( 2, { inputLabel = Set.singleton "]", stackTop = "[", stackPush = [ "\\epsilon" ] } )
+                , ( 3, { inputLabel = Set.singleton "\\epsilon", stackTop = "\\bot", stackPush = [ "\\epsilon" ] } )
+                ]
+
+        stateTransitions =
+            Dict.fromList
+                [ ( ( 0, 0, 0 ), ( 0, 70 ) )
+                , ( ( 0, 1, 0 ), ( 0, -70 ) )
+                , ( ( 0, 2, 0 ), ( 70, 0 ) )
+                , ( ( 0, 3, 0 ), ( -70, 0 ) )
+                ]
+    in
+    Machine q delta0 start final statePositions stateTransitions stateNames transitionNames
+
+
+view : Environment -> Model -> MachineType -> Machine -> Set StateID -> TransitionMistakes -> Shape Msg
+view env model macType machine currentStates tMistakes =
     let
         ( winX, winY ) =
             env.windowSize
@@ -270,7 +362,7 @@ view env model machine currentStates tMistakes =
                 |> notifyMouseUp StopDragging
     in
     group
-        [ renderArrows machine model tMistakes
+        [ renderArrows macType machine model tMistakes
         , renderStates currentStates machine model env
         , case model of
             AddingArrow s ( x, y ) ->
@@ -284,12 +376,30 @@ view env model machine currentStates tMistakes =
                                 ( 0, 0 )
 
                     newTrans =
-                        case List.head <| Dict.values machine.transitionNames of
-                            Just schar ->
-                                Set.toList schar |> renderString
+                        case macType of
+                            DFA ->
+                                case List.head <| Dict.values machine.transitionNames of
+                                    Just tLabel ->
+                                        renderSet2String tLabel.inputLabel
 
-                            Nothing ->
-                                " "
+                                    Nothing ->
+                                        " "
+
+                            NFA ->
+                                case List.head <| Dict.values machine.transitionNames of
+                                    Just tLabel ->
+                                        renderSet2String tLabel.inputLabel
+
+                                    Nothing ->
+                                        " "
+
+                            NPDA ->
+                                case List.head <| Dict.values machine.transitionNames of
+                                    Just tLabel ->
+                                        renderSet2String tLabel.inputLabel ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
+
+                                    Nothing ->
+                                        " "
 
                     newTransID =
                         case List.head <| Dict.keys machine.transitionNames of
@@ -299,7 +409,7 @@ view env model machine currentStates tMistakes =
                             Nothing ->
                                 0
                 in
-                renderArrow s0Pos ( 0, 0 ) ( x, y ) 20 0 newTrans newTransID False False s -1 model
+                renderArrow macType s0Pos ( 0, 0 ) ( x, y ) 20 0 newTrans newTransID False False s -1 model
 
             AddingArrowOverOtherState s ( x, y ) s1 ->
                 let
@@ -320,12 +430,30 @@ view env model machine currentStates tMistakes =
                                 ( 0, 0 )
 
                     newTrans =
-                        case List.head <| Dict.values machine.transitionNames of
-                            Just schar ->
-                                Set.toList schar |> renderString
+                        case macType of
+                            DFA ->
+                                case List.head <| Dict.values machine.transitionNames of
+                                    Just tLabel ->
+                                        renderSet2String tLabel.inputLabel
 
-                            Nothing ->
-                                " "
+                                    Nothing ->
+                                        " "
+
+                            NFA ->
+                                case List.head <| Dict.values machine.transitionNames of
+                                    Just tLabel ->
+                                        renderSet2String tLabel.inputLabel
+
+                                    Nothing ->
+                                        " "
+
+                            NPDA ->
+                                case List.head <| Dict.values machine.transitionNames of
+                                    Just tLabel ->
+                                        renderSet2String tLabel.inputLabel ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
+
+                                    Nothing ->
+                                        " "
 
                     newTransID =
                         case List.head <| Dict.keys machine.transitionNames of
@@ -342,7 +470,7 @@ view env model machine currentStates tMistakes =
                         else
                             ( 0, 0 )
                 in
-                renderArrow s0Pos pullPos s1Pos 20 20 newTrans newTransID False False s s1 model
+                renderArrow macType s0Pos pullPos s1Pos 20 20 newTrans newTransID False False s s1 model
 
             _ ->
                 group []
@@ -389,7 +517,8 @@ arrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) =
 
 
 renderArrow :
-    ( Float, Float )
+    MachineType
+    -> ( Float, Float )
     -> ( Float, Float )
     -> ( Float, Float )
     -> Float
@@ -402,7 +531,7 @@ renderArrow :
     -> StateID
     -> Model
     -> Shape Msg
-renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2 model =
+renderArrow macType ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2 model =
     let
         ( tx, ty ) =
             --tangent between to and from states
@@ -508,18 +637,46 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
                     |> notifyMouseDown (SelectArrow ( s1, charID, s2 ))
             , group
                 [ case model of
-                    EditingTransitionLabel ( _, tId, _ ) str ->
+                    EditingTransitionLabel ( _, tId, _ ) ( lab, stkTop, stkPush ) ->
                         if tId == charID then
-                            textBox str
-                                (if String.length str == 0 then
-                                    40
+                            case macType of
+                                DFA ->
+                                    textBox lab
+                                        (if String.length lab == 0 then
+                                            40
 
-                                 else
-                                    8 * toFloat (String.length str) + 5
-                                )
-                                20
-                                "LaTeX"
-                                (EditLabel tId)
+                                         else
+                                            8 * toFloat (String.length lab) + 5
+                                        )
+                                        20
+                                        "LaTeX"
+                                        (EditTransitionLabel tId InputLabel)
+
+                                NFA ->
+                                    textBox lab
+                                        (if String.length lab == 0 then
+                                            40
+
+                                         else
+                                            8 * toFloat (String.length lab) + 5
+                                        )
+                                        20
+                                        "LaTeX"
+                                        (EditTransitionLabel tId InputLabel)
+
+                                NPDA ->
+                                    textBox3 ( lab, stkTop, stkPush )
+                                        (if List.any ((==) 0) <| List.map String.length [ lab, stkTop, stkPush ] then
+                                            80
+
+                                         else
+                                            8 * toFloat (List.foldl max 0 <| List.map String.length [ lab, stkTop, stkPush ]) + 5
+                                        )
+                                        20
+                                        ( "inputLabel", "stackTop", "stackPush" )
+                                        (EditTransitionLabel tId InputLabel)
+                                        (EditTransitionLabel tId StackTop)
+                                        (EditTransitionLabel tId StackPush)
 
                         else
                             latex tLblW
@@ -587,8 +744,8 @@ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) r0 r1 char charID sel mistake s1 s2
         ]
 
 
-renderArrows : Machine -> Model -> TransitionMistakes -> Shape Msg
-renderArrows machine model tMistakes =
+renderArrows : MachineType -> Machine -> Model -> TransitionMistakes -> Shape Msg
+renderArrows macType machine model tMistakes =
     let
         states =
             machine.q
@@ -652,10 +809,18 @@ renderArrows machine model tMistakes =
 
                                             ch =
                                                 case Dict.get chId machine.transitionNames of
-                                                    Just setc ->
-                                                        Set.toList setc |> renderString
+                                                    Just tLabel ->
+                                                        case macType of
+                                                            DFA ->
+                                                                renderSet2String tLabel.inputLabel
 
-                                                    _ ->
+                                                            NFA ->
+                                                                renderSet2String tLabel.inputLabel
+
+                                                            NPDA ->
+                                                                renderSet2String tLabel.inputLabel ++ ";" ++ tLabel.stackTop ++ ";" ++ String.join " " tLabel.stackPush
+
+                                                    Nothing ->
                                                         ""
 
                                             sel =
@@ -683,7 +848,7 @@ renderArrows machine model tMistakes =
                                                 getTransMistake tMistakes chId
                                         in
                                         group
-                                            [ renderArrow ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel mistake s1 s2 model
+                                            [ renderArrow macType ( x0, y0 ) ( x1, y1 ) ( x2, y2 ) 20 20 ch chId sel mistake s1 s2 model
                                             ]
                                     )
                                     [ ss ]
@@ -770,7 +935,7 @@ renderStates currentStates machine model env =
                                     )
                                     20
                                     "LaTeX"
-                                    (EditLabel sId)
+                                    (EditStateLabel sId)
 
                             else
                                 group
@@ -851,3 +1016,11 @@ renderStates currentStates machine model env =
                        )
             )
             stateList
+
+
+emptyLabel : TransitionLabel
+emptyLabel =
+    { inputLabel = Set.empty
+    , stackTop = "\\epsilon"
+    , stackPush = [ "\\epsilon" ]
+    }

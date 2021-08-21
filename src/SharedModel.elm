@@ -1,13 +1,8 @@
-module SharedModel exposing (MachineType(..), SharedModel, init, machineModeButtons)
+module SharedModel exposing (SharedModel, init, machineModeButtons)
 
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
-import Machine exposing (Machine)
-
-
-type MachineType
-    = DFA
-    | NFA
+import Machine exposing (Machine, MachineType(..))
 
 
 type alias SharedModel =
@@ -74,4 +69,28 @@ machineModeButtons mtype winX winY changeMsg =
             ]
             |> move ( -winX / 2 + 52, winY / 2 - 32 )
             |> notifyTap (changeMsg NFA)
+        , group
+            [ roundedRect 40 15 1
+                |> filled
+                    (if mtype == NPDA then
+                        finsmLightBlue
+
+                     else
+                        blank
+                    )
+                |> addOutline (solid 1) darkGray
+            , text "NPDA"
+                |> centered
+                |> fixedwidth
+                |> filled
+                    (if mtype == NPDA then
+                        white
+
+                     else
+                        darkGray
+                    )
+                |> move ( 0, -4 )
+            ]
+            |> move ( -winX / 2 + 89, winY / 2 - 32 )
+            |> notifyTap (changeMsg NPDA)
         ]

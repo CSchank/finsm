@@ -1,5 +1,6 @@
 module Building exposing (Model, Msg(..), PersistentModel(..), editingButtons, init, initPModel, onEnter, onExit, subscriptions, update, updateArrowPos, updateStatePos, view)
 
+import Bootstrap.Form.InputGroup exposing (Input)
 import Browser.Events
 import Dict exposing (Dict)
 import Environment exposing (Environment)
@@ -9,7 +10,7 @@ import Json.Decode as D
 import Machine exposing (..)
 import Mistakes exposing (..)
 import Set
-import SharedModel exposing (MachineType(..), SharedModel, machineModeButtons)
+import SharedModel exposing (SharedModel, machineModeButtons)
 import Task
 import Tuple exposing (first, second)
 
@@ -32,7 +33,7 @@ type PersistentModel
 type Msg
     = MachineMsg Machine.Msg
     | SaveStateName StateID String
-    | SaveTransitionName TransitionID String
+    | SaveTransitionName TransitionID ( String, String, String )
     | ToggleStart StateID
     | ChangeMachine MachineType
     | AddState ( Float, Float )
@@ -131,16 +132,25 @@ update env msg ( model, pModel, sModel ) =
 
                         AddingArrowOverOtherState st _ s1 ->
                             let
-                                newTrans =
-                                    case List.head <| Dict.values oldMachine.transitionNames of
+                                oldTransitionNames =
+                                    oldMachine.transitionNames
+
+                                newInputLabel =
+                                    case List.head <| Dict.values oldTransitionNames of
                                         Just setchar ->
-                                            setchar
+                                            setchar.inputLabel
 
                                         Nothing ->
                                             Set.singleton "x"
 
+                                newTrans =
+                                    { inputLabel = newInputLabel
+                                    , stackTop = "\\epsilon"
+                                    , stackPush = [ "\\epsilon" ]
+                                    }
+
                                 newTransID =
-                                    case List.maximum <| Dict.keys oldMachine.transitionNames of
+                                    case List.maximum <| Dict.keys oldTransitionNames of
                                         Just n ->
                                             n + 1
 
@@ -148,7 +158,7 @@ update env msg ( model, pModel, sModel ) =
                                             0
 
                                 isValidTransition =
-                                    checkTransitionValid newTrans
+                                    checkTransitionValid newInputLabel
 
                                 newDelta : Delta
                                 newDelta =
@@ -198,16 +208,19 @@ update env msg ( model, pModel, sModel ) =
 
                 SelectArrow ( s0, tId, s1 ) ->
                     let
-                        oldTransName =
+                        newInpLabel =
                             case Dict.get tId sModel.machine.transitionNames of
                                 Just n ->
-                                    renderSet2String n
+                                    ( renderSet2String n.inputLabel, n.stackTop, showStackPush n.stackPush )
 
                                 Nothing ->
-                                    ""
+                                    ( "", "\\epsilon", "\\epsilon" )
+
+                        newLab =
+                            newInpLabel
                     in
                     if env.holdingShift then
-                        ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) oldTransName }, pModel, sModel ), False, focusInput NoOp )
+                        ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) newLab }, pModel, sModel ), False, focusInput NoOp )
 
                     else
                         ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
@@ -344,15 +357,32 @@ update env msg ( model, pModel, sModel ) =
                     in
                     ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
 
-                EditLabel _ lbl ->
+                EditStateLabel st lbl ->
                     let
                         newState =
                             case model.machineState of
-                                EditingStateLabel st _ ->
+                                EditingStateLabel _ _ ->
                                     EditingStateLabel st lbl
 
-                                EditingTransitionLabel tr _ ->
-                                    EditingTransitionLabel tr lbl
+                                _ ->
+                                    model.machineState
+                    in
+                    ( ( { model | machineState = newState }, pModel, sModel ), False, Cmd.none )
+
+                EditTransitionLabel tr0 lblTy lbl ->
+                    let
+                        newState =
+                            case model.machineState of
+                                EditingTransitionLabel tr ( oldInpLbl, oldStkTop, oldStkPush ) ->
+                                    case lblTy of
+                                        InputLabel ->
+                                            EditingTransitionLabel tr ( lbl, oldStkTop, oldStkPush )
+
+                                        StackTop ->
+                                            EditingTransitionLabel tr ( oldInpLbl, lbl, oldStkPush )
+
+                                        StackPush ->
+                                            EditingTransitionLabel tr ( oldInpLbl, oldStkTop, lbl )
 
                                 _ ->
                                     model.machineState
@@ -388,6 +418,9 @@ update env msg ( model, pModel, sModel ) =
                         DFA ->
                             ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
 
+                        NPDA ->
+                            ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
+
                 DFA ->
                     case sModel.machineType of
                         DFA ->
@@ -417,6 +450,20 @@ update env msg ( model, pModel, sModel ) =
                                     { sModel | machine = { oldMachine | start = startState }, machineType = DFA }
                             in
                             ( ( model, pModel, newSModel ), True, Cmd.none )
+
+                        NPDA ->
+                            ( ( model, pModel, { sModel | machineType = DFA } ), False, Cmd.none )
+
+                NPDA ->
+                    case sModel.machineType of
+                        DFA ->
+                            ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
+                        NFA ->
+                            ( ( model, pModel, { sModel | machineType = NPDA } ), False, Cmd.none )
+
+                        NPDA ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
 
         AddState ( x, y ) ->
             case model.machineState of
@@ -467,16 +514,36 @@ update env msg ( model, pModel, sModel ) =
                             oldTransitionName =
                                 case Dict.get tId oldMachine.transitionNames of
                                     Just n ->
-                                        renderSet2String n
+                                        ( renderSet2String n.inputLabel, n.stackTop, showStackPush n.stackPush )
 
                                     _ ->
-                                        ""
+                                        ( "", "\\epsilon", "\\epsilon" )
                         in
-                        if newLbl == oldTransitionName || newLbl == "" then
-                            ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
+                        case sModel.machineType of
+                            DFA ->
+                                if fst newLbl == fst oldTransitionName || fst newLbl == "" then
+                                    ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
 
-                        else
-                            ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
+                                else
+                                    ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
+
+                            NFA ->
+                                if fst newLbl == fst oldTransitionName || fst newLbl == "" then
+                                    ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
+
+                                else
+                                    ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
+
+                            NPDA ->
+                                if
+                                    (fst newLbl == fst oldTransitionName || fst newLbl == "")
+                                        && (snd newLbl == snd oldTransitionName || snd newLbl == "\\epsilon")
+                                        && (thd newLbl == thd oldTransitionName || thd newLbl == "\\epsilon")
+                                then
+                                    ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), False, Cmd.none )
+
+                                else
+                                    ( ( { model | machineState = SelectedArrow ( s0, tId, s1 ) }, pModel, sModel ), True, sendMsg <| SaveTransitionName tId newLbl )
 
                     SelectedState sId ->
                         let
@@ -494,11 +561,11 @@ update env msg ( model, pModel, sModel ) =
                         let
                             oldTransName =
                                 case Dict.get tId sModel.machine.transitionNames of
-                                    Just n ->
-                                        renderSet2String n
+                                    Just label ->
+                                        ( renderSet2String label.inputLabel, label.stackTop, String.concat label.stackPush )
 
                                     Nothing ->
-                                        ""
+                                        ( "", "\\epsilon", "\\epsilon" )
                         in
                         ( ( { model | machineState = EditingTransitionLabel ( s0, tId, s1 ) oldTransName }, pModel, sModel ), False, focusInput NoOp )
 
@@ -633,6 +700,11 @@ update env msg ( model, pModel, sModel ) =
                             { oldMachine
                                 | start = Set.singleton sId
                             }
+
+                        NPDA ->
+                            { oldMachine
+                                | start = Set.singleton sId
+                            }
             in
             ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
@@ -643,17 +715,30 @@ update env msg ( model, pModel, sModel ) =
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
-        SaveTransitionName tId newLbl ->
+        SaveTransitionName tId ( inpLabel, stkTop, stkPush ) ->
             let
                 newTransitions =
-                    parseString2Set newLbl
+                    parseString2Set inpLabel
 
-                isValidTransition =
-                    checkTransitionValid newTransitions
+                newLabel =
+                    { inputLabel = newTransitions
+                    , stackTop =
+                        if stkTop == "" then
+                            "\\epsilon"
+
+                        else
+                            stkTop
+                    , stackPush =
+                        if stkPush == "" then
+                            [ "\\epsilon" ]
+
+                        else
+                            parseStackPush stkPush
+                    }
 
                 newMachine =
                     { oldMachine
-                        | transitionNames = Dict.insert tId newTransitions oldMachine.transitionNames
+                        | transitionNames = Dict.insert tId newLabel oldMachine.transitionNames
                     }
             in
             ( ( { model | machineState = Regular }, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
@@ -740,7 +825,7 @@ view env ( model, pModel, sModel ) =
 
             _ ->
                 group []
-        , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machine Set.empty transMistakes
+        , GraphicSVG.map MachineMsg <| Machine.view env model.machineState sModel.machineType sModel.machine Set.empty transMistakes
         , editingButtons model |> move ( winX / 2 - 30, -winY / 2 + 25 )
         , machineModeButtons sModel.machineType winX winY ChangeMachine
         ]
@@ -838,3 +923,13 @@ snapIcon =
             ]
             |> move ( 5, -10 )
         ]
+
+
+parseStackPush : String -> List String
+parseStackPush =
+    String.split " "
+
+
+showStackPush : List String -> String
+showStackPush =
+    String.join " "

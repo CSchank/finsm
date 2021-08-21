@@ -70,7 +70,7 @@ initAppModel =
 initAppRecord =
     { appState = Building Building.init
     , sharedModel = SharedModel.init
-    , simulatingData = Simulating.initPModel
+    , simulatingData = Simulating.initPModel SharedModel.init.machineType
     , buildingData = Building.initPModel
     , exportingData = Exporting.initPModel
     }
@@ -416,7 +416,7 @@ update msg model =
                                     { initSharedModel | machine = loadPayload.machine }
 
                                 initSimModel =
-                                    Simulating.initPModel
+                                    Simulating.initPModel initSharedModel.machineType
 
                                 --{ appState = Building Building.init
                                 --, sharedModel = SharedModel.init
@@ -467,7 +467,7 @@ update msg model =
                             fresh
                                 { initAppRecord
                                     | sharedModel = newSharedModel
-                                    , simulatingData = initSimModel
+                                    , simulatingData = initSimModel newSharedModel.machineType
                                 }
                     in
                     ( { model

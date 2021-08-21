@@ -141,7 +141,7 @@ view env ( model, pModel, sModel ) =
                 |> move ( winX / 6 - 100, -105 )
     in
     group
-        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machine Set.empty transMistakes) |> move ( -winX / 6, 0 )
+        [ (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machineType sModel.machine Set.empty transMistakes) |> move ( -winX / 6, 0 )
         , machineSelected sModel.machineType winX winY
         , text "Choose format:"
             |> size 20
@@ -164,7 +164,7 @@ view env ( model, pModel, sModel ) =
             group []
         , case ( model, pModel.outputType ) of
             ( ShowingOutput, Tikz ) ->
-                output (winX / 2) (winY / 2) (generateTikz pModel.time sModel.machine)
+                output (winX / 2) (winY / 2) (generateTikz pModel.time sModel.machine sModel.machineType)
 
             _ ->
                 group []
@@ -181,6 +181,9 @@ machineSelected mtype winX winY =
 
                 NFA ->
                     "NFA"
+
+                NPDA ->
+                    "NPDA"
     in
     text ("Your exported machine type: " ++ mtypeStr)
         |> centered
@@ -296,8 +299,8 @@ output w h txt =
         ]
 
 
-generateTikz : Int -> Machine -> String
-generateTikz time machine =
+generateTikz : Int -> Machine -> MachineType -> String
+generateTikz time machine macType =
     let
         scale =
             40
@@ -361,7 +364,12 @@ generateTikz time machine =
                 transitionName =
                     case Dict.get tId machine.transitionNames of
                         Just n ->
-                            renderSet2String n
+                            case macType of
+                                NPDA ->
+                                    renderSet2String n.inputLabel ++ ";" ++ n.stackTop ++ ";" ++ String.join " " n.stackPush
+
+                                _ ->
+                                    renderSet2String n.inputLabel
 
                         _ ->
                             ""
