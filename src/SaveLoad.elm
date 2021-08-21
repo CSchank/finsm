@@ -1045,7 +1045,7 @@ renderNew loginStatus =
             [ Grid.col []
                 [ Card.deck
                     [ Card.config []
-                        |> Card.headerH3 [] [ Html.text "DFA / NFA" ]
+                        |> Card.headerH3 [] [ Html.text "DFA / NFA / NPDA" ]
                         |> Card.block []
                             [ Block.text [] [ Html.text "Create a new Finite State Machine." ] ]
                         |> Card.footer []

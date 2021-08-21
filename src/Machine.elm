@@ -334,7 +334,7 @@ testNPDA =
             Dict.fromList <|
                 [ ( 0, { inputLabel = Set.singleton "[", stackTop = "\\bot", stackPush = [ "[", "\\bot" ] } )
                 , ( 1, { inputLabel = Set.singleton "[", stackTop = "[", stackPush = [ "[", "[" ] } )
-                , ( 2, { inputLabel = Set.singleton "\\epsilon", stackTop = "\\epsilon", stackPush = [ "[" ] } ) -- { inputLabel = Set.singleton "]", stackTop = "[", stackPush = [ "\\epsilon" ] } )
+                , ( 2, { inputLabel = Set.singleton "]", stackTop = "[", stackPush = [ "\\epsilon" ] } )
                 , ( 3, { inputLabel = Set.singleton "\\epsilon", stackTop = "\\bot", stackPush = [ "\\epsilon" ] } )
                 ]
 
@@ -380,7 +380,7 @@ view env model macType machine currentStates tMistakes =
                             DFA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        Set.toList tLabel.inputLabel |> renderString
+                                        renderSet2String tLabel.inputLabel
 
                                     Nothing ->
                                         " "
@@ -388,7 +388,7 @@ view env model macType machine currentStates tMistakes =
                             NFA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        Set.toList tLabel.inputLabel |> renderString
+                                        renderSet2String tLabel.inputLabel
 
                                     Nothing ->
                                         " "
@@ -396,7 +396,7 @@ view env model macType machine currentStates tMistakes =
                             NPDA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
+                                        renderSet2String tLabel.inputLabel ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
 
                                     Nothing ->
                                         " "
@@ -434,7 +434,7 @@ view env model macType machine currentStates tMistakes =
                             DFA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        Set.toList tLabel.inputLabel |> renderString
+                                        renderSet2String tLabel.inputLabel
 
                                     Nothing ->
                                         " "
@@ -442,7 +442,7 @@ view env model macType machine currentStates tMistakes =
                             NFA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        Set.toList tLabel.inputLabel |> renderString
+                                        renderSet2String tLabel.inputLabel
 
                                     Nothing ->
                                         " "
@@ -450,7 +450,7 @@ view env model macType machine currentStates tMistakes =
                             NPDA ->
                                 case List.head <| Dict.values machine.transitionNames of
                                     Just tLabel ->
-                                        (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
+                                        renderSet2String tLabel.inputLabel ++ ";" ++ tLabel.stackTop ++ ";" ++ String.concat tLabel.stackPush
 
                                     Nothing ->
                                         " "
@@ -812,13 +812,13 @@ renderArrows macType machine model tMistakes =
                                                     Just tLabel ->
                                                         case macType of
                                                             DFA ->
-                                                                Set.toList tLabel.inputLabel |> renderString
+                                                                renderSet2String tLabel.inputLabel
 
                                                             NFA ->
-                                                                Set.toList tLabel.inputLabel |> renderString
+                                                                renderSet2String tLabel.inputLabel
 
                                                             NPDA ->
-                                                                (Set.toList tLabel.inputLabel |> renderString) ++ ";" ++ tLabel.stackTop ++ ";" ++ String.join " " tLabel.stackPush
+                                                                renderSet2String tLabel.inputLabel ++ ";" ++ tLabel.stackTop ++ ";" ++ String.join " " tLabel.stackPush
 
                                                     Nothing ->
                                                         ""

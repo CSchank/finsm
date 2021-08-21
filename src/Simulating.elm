@@ -86,7 +86,7 @@ type alias Stack =
 
 type Model
     = Default Int {- tapeID -} Int {- charID -} HoverError
-    | Running Int {- tapeID -} Int {- charID -}
+      -- | Running Int {- tapeID -} Int {- charID -} -- TODO: Decide if want to standardize simulation to a separate bottom menu screen
     | RunningNPDA (List Configuration) Int {- tapeID -} Int {- paginate start point -}
     | Editing Int
 
@@ -316,7 +316,7 @@ renderConfig machine model input tapeId cfg =
             renderStack cfg.stack
 
         renderedTape =
-            renderTape model input Fresh tapeId tapeId cfg.tapePos False
+            renderTape model NPDA input Fresh tapeId tapeId cfg.tapePos False
 
         cfgLength =
             50 + configLength
@@ -365,8 +365,8 @@ renderStack stk =
         )
 
 
-renderTape : Model -> Array String -> TapeStatus -> Int -> Int -> Int -> Bool -> Shape Msg
-renderTape model input tapeSt tapeId selectedId inputAt showButtons =
+renderTape : Model -> MachineType -> Array String -> TapeStatus -> Int -> Int -> Int -> Bool -> Shape Msg
+renderTape model macType input tapeSt tapeId selectedId inputAt showButtons =
     let
         hoverOn =
             case model of
@@ -403,6 +403,14 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                     |> fixedwidth
                     |> filled red
                 ]
+
+        disableInDefaultNPDA =
+            case ( model, macType ) of
+                ( Default _ _ _, NPDA ) ->
+                    False
+
+                _ ->
+                    True
     in
     group <|
         Array.toList
@@ -438,7 +446,7 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                 )
                 input
             )
-            ++ (if tapeId == selectedId then
+            ++ (if tapeId == selectedId && disableInDefaultNPDA then
                     [ group
                         [ triangle 2.25
                             |> filled black
@@ -478,14 +486,18 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                         ]
                         |> move ( toFloat <| (Array.length input + 1) * xpad, 3 )
                         |> notifyTap (DeleteTape tapeId)
-                    , group
-                        [ roundedRect 15 15 2
-                            |> filled white
-                            |> addOutline (solid 1) darkGray
-                        , thickRightArrowIcon |> scale 0.2 |> move ( 0, -1 )
-                        ]
-                        |> move ( toFloat <| (Array.length input + 2) * xpad, 2 )
-                        |> notifyTap (RunTape tapeId)
+                    , if macType /= NPDA then
+                        group []
+
+                      else
+                        group
+                            [ roundedRect 15 15 2
+                                |> filled white
+                                |> addOutline (solid 1) darkGray
+                            , thickRightArrowIcon |> scale 0.2 |> move ( 0, -1 )
+                            ]
+                            |> move ( toFloat <| (Array.length input + 2) * xpad, 2 )
+                            |> notifyTap (RunTape tapeId)
                     , if not (tapeSt == Fresh) then
                         group
                             ([ triangle 20 |> filled red |> rotate 22.5
@@ -500,7 +512,19 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
                                    )
                             )
                             |> scale 0.5
-                            |> move ( toFloat <| (Array.length input + 3) * xpad, 1 )
+                            |> move
+                                ( toFloat <|
+                                    (Array.length input
+                                        + (if macType /= NPDA then
+                                            2
+
+                                           else
+                                            3
+                                          )
+                                    )
+                                        * xpad
+                                , 1
+                                )
                             |> notifyEnter (HoverErrorEnter tapeId)
                             |> notifyLeave HoverErrorExit
 
@@ -580,10 +604,10 @@ update env msg ( model, pModel, sModel ) =
         RunTape tId ->
             case machineType of
                 DFA ->
-                    ( ( Running tId -1, pModel, sModel ), False, Cmd.none )
+                    ( ( model, pModel, sModel ), False, Cmd.none )
 
                 NFA ->
-                    ( ( Running tId -1, pModel, sModel ), False, Cmd.none )
+                    ( ( model, pModel, sModel ), False, Cmd.none )
 
                 NPDA ->
                     case Dict.get tId pModel.tapes of
@@ -1079,7 +1103,7 @@ view env ( model, pModel, sModel ) =
                     |> move ( -winX / 2 + 20, winY / 6 - 35 - 25 * (toFloat <| Dict.size pModel.tapes) )
                 , case model of
                     Default tapeId charId _ ->
-                        group (List.indexedMap (\x ( chId, ( ch, tapeSt ) ) -> renderTape model ch tapeSt chId tapeId charId True |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList tapes)
+                        group (List.indexedMap (\x ( chId, ( ch, tapeSt ) ) -> renderTape model sModel.machineType ch tapeSt chId tapeId charId True |> move ( 0, -(toFloat x) * 25 )) <| Dict.toList tapes)
                             |> move ( -winX / 2 + 20, winY / 6 - 40 )
 
                     _ ->
@@ -1135,13 +1159,10 @@ view env ( model, pModel, sModel ) =
                         |> move ( -winX / 2 + 95, winY / 6 - 15 )
                     , latexKeyboard winX winY chars
                         |> move ( 0, 0 )
-                    , renderTape model tape tapeSt tapeId -1 -1 False
+                    , renderTape model sModel.machineType tape tapeSt tapeId -1 -1 False
                         |> move ( -10 * toFloat (Array.length tape), winY / 6 - 65 )
                     ]
                     |> move ( 0, -winY / 3 )
-
-            Running _ _ ->
-                Debug.todo "Running state"
 
             RunningNPDA cfgs tId pagStart ->
                 group

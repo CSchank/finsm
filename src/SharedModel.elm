@@ -13,7 +13,7 @@ type alias SharedModel =
 
 init : SharedModel
 init =
-    { machine = Machine.testNPDA
+    { machine = Machine.test
     , machineType = DFA
     }
 
