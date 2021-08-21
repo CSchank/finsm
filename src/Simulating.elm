@@ -183,21 +183,32 @@ checkTape sModel inp =
 
 
 
--- TODO: Add size-aware resizing and horizontal scroll
-
-
 renderConfigs : Machine -> Model -> Array String -> Int -> Float -> List Configuration -> Shape Msg
 renderConfigs machine model input tapeId winX cfgs =
+    paginateConfigs winX <| List.map (renderConfig machine model input tapeId) cfgs
+
+paginateConfigs : Float -> List (Shape Msg, Float) -> Shape Msg
+paginateConfigs winX cfgWithLengths =
     let
-        xPos idx =
-            (winX / 7) * (idx - 3)
+        ( cfgs, lengths ) = List.unzip cfgWithLengths
 
-        -- + (winX / 3)
+        spacing = 10
+
+        totalSpacing = toFloat <| spacing * List.length lengths
+
+        totalCfgLength = List.sum lengths + totalSpacing
+
+        initLeftPos = winX/2 - 50
+
+        (shiftAmountByIdx, _) =
+            List.foldl (\a acc -> (second acc :: first acc, a + second acc + spacing) ) ([], 0) lengths
+
     in
-    group <| List.indexedMap (\idx cfg -> renderConfig machine model input tapeId cfg |> move ( xPos (toFloat idx), 0 )) cfgs
-
-
-renderConfig : Machine -> Model -> Array String -> Int -> Configuration -> Shape Msg
+    if totalCfgLength <= winX
+        then group <| List.map2 (\cfg moveAmt -> cfg |> move (-initLeftPos + moveAmt, 0)) cfgs shiftAmountByIdx
+        else Debug.todo "paginate"
+        
+renderConfig : Machine -> Model -> Array String -> Int -> Configuration -> (Shape Msg, Float)
 renderConfig machine model input tapeId cfg =
     let
         xpad =
@@ -205,6 +216,9 @@ renderConfig machine model input tapeId cfg =
 
         tapeLength =
             Array.length input
+
+        stackLength =
+            List.length cfg.stack
 
         stateName =
             case Dict.get cfg.state machine.stateNames of
@@ -234,8 +248,8 @@ renderConfig machine model input tapeId cfg =
                     |> move ( 0, 9 )
                 ]
 
-        stackLength =
-            clamp 100 300 <| toFloat (xpad * tapeLength) / 2
+        configLength =
+            max 100 <| toFloat (max (xpad * tapeLength) (xpad * stackLength)) / 2
 
         renderedStack =
             renderStack cfg.stack
@@ -243,18 +257,22 @@ renderConfig machine model input tapeId cfg =
         renderedTape =
             renderTape model input Fresh tapeId tapeId cfg.tapePos False
 
+        cfgLength =
+            50 + configLength
+
         outerBox =
-            rectangle (100 + stackLength) 150
+            rectangle (50 + configLength) 150
                 |> outlined (solid 5) black
-                |> move ( stackLength / 2, -10 )
+                |> move ( configLength / 2, -25 )
     in
-    group
+    ( group
         [ outerBox
         , renderedState
         , renderedStack |> move ( 0, -50 )
         , renderedTape |> move ( 25, 0 )
         ]
-
+    , cfgLength
+    )
 
 renderStack : Stack -> Shape Msg
 renderStack stk =
