@@ -263,7 +263,7 @@ paginateConfigs paginateStart winX cfgWithLengths =
             [ group <|
                 List.map2 (\cfg moveAmt -> cfg |> move ( -initLeftPos + moveAmt, 0 ))
                     (Array.toList <| Array.slice paginateStart paginateEnd cfgArr)
-                    (Debug.log "shiftAmountByIdx" <| shiftAmountByIdx <| Array.toList <| Array.slice paginateStart paginateEnd lengthArr)
+                    (shiftAmountByIdx <| Array.toList <| Array.slice paginateStart paginateEnd lengthArr)
             , paginateButtons
             , paginateInfo
             ]
@@ -1505,7 +1505,7 @@ nextConfig tNames d tape acceptCond finals ({ stack, state, status, tapePos } as
                                                         Alive
 
                                                     FinalState ->
-                                                        if Set.member sId finals && newTapePos == Array.length tape then
+                                                        if Set.member sId finals && newTapePos == (Array.length tape - 1) then
                                                             Success
 
                                                         else
