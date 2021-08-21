@@ -334,7 +334,7 @@ testNPDA =
             Dict.fromList <|
                 [ ( 0, { inputLabel = Set.singleton "[", stackTop = "\\bot", stackPush = [ "[", "\\bot" ] } )
                 , ( 1, { inputLabel = Set.singleton "[", stackTop = "[", stackPush = [ "[", "[" ] } )
-                , ( 2, { inputLabel = Set.singleton "]", stackTop = "[", stackPush = [ "\\epsilon" ] } )
+                , ( 2, { inputLabel = Set.singleton "\\epsilon", stackTop = "\\epsilon", stackPush = [ "[" ] } ) -- { inputLabel = Set.singleton "]", stackTop = "[", stackPush = [ "\\epsilon" ] } )
                 , ( 3, { inputLabel = Set.singleton "\\epsilon", stackTop = "\\bot", stackPush = [ "\\epsilon" ] } )
                 ]
 

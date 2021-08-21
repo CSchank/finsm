@@ -87,7 +87,7 @@ type alias Stack =
 type Model
     = Default Int {- tapeID -} Int {- charID -} HoverError
     | Running Int {- tapeID -} Int {- charID -}
-    | RunningNPDA (List Configuration) Int {- tapeID -}
+    | RunningNPDA (List Configuration) Int {- tapeID -} Int {- paginate start point -}
     | Editing Int
 
 
@@ -105,6 +105,8 @@ type Msg
     | MachineMsg Machine.Msg
     | HoverErrorEnter Int
     | HoverErrorExit
+    | IncrementPaginateCounter
+    | DecrementPaginateCounter
 
 
 onEnter : Environment -> ( PersistentModel, SharedModel ) -> ( ( Model, PersistentModel, SharedModel ), Bool, Cmd Msg )
@@ -182,33 +184,92 @@ checkTape sModel inp =
             Stale <| Set.fromList <| Array.toList arrFilter
 
 
+renderConfigs : Machine -> Model -> Array String -> Int -> Int -> Float -> List Configuration -> Shape Msg
+renderConfigs machine model input paginateStart tapeId winX cfgs =
+    paginateConfigs paginateStart winX <| List.map (renderConfig machine model input tapeId) cfgs
 
-renderConfigs : Machine -> Model -> Array String -> Int -> Float -> List Configuration -> Shape Msg
-renderConfigs machine model input tapeId winX cfgs =
-    paginateConfigs winX <| List.map (renderConfig machine model input tapeId) cfgs
 
-paginateConfigs : Float -> List (Shape Msg, Float) -> Shape Msg
-paginateConfigs winX cfgWithLengths =
+paginateConfigs : Int -> Float -> List ( Shape Msg, Float ) -> Shape Msg
+paginateConfigs paginateStart winX cfgWithLengths =
     let
-        ( cfgs, lengths ) = List.unzip cfgWithLengths
+        ( cfgs, lengths ) =
+            List.unzip cfgWithLengths
 
-        spacing = 10
+        totalConfigs =
+            List.length cfgs
 
-        totalSpacing = toFloat <| spacing * List.length lengths
+        ( cfgArr, lengthArr ) =
+            ( Array.fromList cfgs, Array.fromList lengths )
 
-        totalCfgLength = List.sum lengths + totalSpacing
+        spacing =
+            10
 
-        initLeftPos = winX/2 - 50
+        totalSpacing =
+            toFloat <| spacing * totalConfigs
 
-        (shiftAmountByIdx, _) =
-            List.foldl (\a acc -> (second acc :: first acc, a + second acc + spacing) ) ([], 0) lengths
+        totalCfgLength =
+            List.sum lengths + totalSpacing
 
+        initLeftPos =
+            winX / 2 - 50
+
+        shiftAmountByIdx lengthList =
+            first <| List.foldl (\a acc -> ( second acc :: first acc, a + second acc + spacing )) ( [], 0 ) (List.reverse lengthList)
+
+        findEndPaginateIndex start curLength =
+            case Array.get start lengthArr of
+                Nothing ->
+                    start
+
+                Just cfgLen ->
+                    if curLength + cfgLen + spacing > winX then
+                        start
+
+                    else
+                        findEndPaginateIndex (start + 1) (curLength + cfgLen + spacing)
+
+        paginateEnd =
+            findEndPaginateIndex paginateStart 0
+
+        paginateLeftButton =
+            if paginateStart <= 0 then
+                group [ circle 20 |> filled darkGrey, triangle 10 |> filled black |> rotate (degrees 180) ]
+
+            else
+                group [ circle 20 |> filled white, triangle 10 |> filled black |> rotate (degrees 180) ] |> notifyTap DecrementPaginateCounter
+
+        paginateRightButton =
+            if paginateEnd == totalConfigs then
+                group [ circle 20 |> filled darkGrey, triangle 10 |> filled black ] |> move ( 50, 0 )
+
+            else
+                group [ circle 20 |> filled white, triangle 10 |> filled black ] |> move ( 50, 0 ) |> notifyTap IncrementPaginateCounter
+
+        paginateButtons =
+            group [ paginateLeftButton, paginateRightButton ] |> move ( -initLeftPos, 100 )
+
+        paginateInfo =
+            text ("Showing (" ++ String.fromInt paginateStart ++ ", " ++ String.fromInt paginateEnd ++ ") from a total of " ++ String.fromInt (List.length cfgs) ++ " configurations")
+                |> size 12
+                |> fixedwidth
+                |> filled black
+                |> move ( -initLeftPos - 20, 140 )
     in
-    if totalCfgLength <= winX
-        then group <| List.map2 (\cfg moveAmt -> cfg |> move (-initLeftPos + moveAmt, 0)) cfgs shiftAmountByIdx
-        else Debug.todo "paginate"
-        
-renderConfig : Machine -> Model -> Array String -> Int -> Configuration -> (Shape Msg, Float)
+    if totalCfgLength <= winX then
+        group <| List.map2 (\cfg moveAmt -> cfg |> move ( -initLeftPos + moveAmt, 0 )) cfgs (shiftAmountByIdx lengths)
+
+    else
+        group
+            [ group <|
+                List.map2 (\cfg moveAmt -> cfg |> move ( -initLeftPos + moveAmt, 0 ))
+                    (Array.toList <| Array.slice paginateStart paginateEnd cfgArr)
+                    (Debug.log "shiftAmountByIdx" <| shiftAmountByIdx <| Array.toList <| Array.slice paginateStart paginateEnd lengthArr)
+            , paginateButtons
+            , paginateInfo
+            ]
+
+
+renderConfig : Machine -> Model -> Array String -> Int -> Configuration -> ( Shape Msg, Float )
 renderConfig machine model input tapeId cfg =
     let
         xpad =
@@ -274,6 +335,7 @@ renderConfig machine model input tapeId cfg =
     , cfgLength
     )
 
+
 renderStack : Stack -> Shape Msg
 renderStack stk =
     let
@@ -324,7 +386,7 @@ renderTape model input tapeSt tapeId selectedId inputAt showButtons =
         -- TODO: Figure out why this is necessary when renderTape is used in RunningNPDA mode
         displaceTapePointer =
             case model of
-                RunningNPDA _ _ ->
+                RunningNPDA _ _ _ ->
                     xpad
 
                 _ ->
@@ -497,7 +559,7 @@ update env msg ( model, pModel, sModel ) =
                     else
                         ( ( model, pModel, sModel ), False, Cmd.none )
 
-                RunningNPDA cfgs tId ->
+                RunningNPDA cfgs tId _ ->
                     let
                         tape =
                             Dict.get tId pModel.tapes
@@ -510,7 +572,7 @@ update env msg ( model, pModel, sModel ) =
                         newStates =
                             configToStates newCfgs
                     in
-                    ( ( RunningNPDA newCfgs tId, { pModel | currentStates = newStates }, sModel ), False, Cmd.none )
+                    ( ( RunningNPDA newCfgs tId 0, { pModel | currentStates = newStates }, sModel ), False, Cmd.none )
 
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
@@ -527,7 +589,7 @@ update env msg ( model, pModel, sModel ) =
                     case Dict.get tId pModel.tapes of
                         Just ( ar, tapeStatus ) ->
                             if tapeStatus == Fresh then
-                                ( ( RunningNPDA [ { stack = [ "\\bot" ], state = designatedStart test.start, status = Alive, tapePos = -1 } ] tId, pModel, sModel ), False, Cmd.none )
+                                ( ( RunningNPDA [ { stack = [ "\\bot" ], state = designatedStart test.start, status = Alive, tapePos = -1 } ] tId 0, pModel, sModel ), False, Cmd.none )
 
                             else
                                 ( ( model, pModel, sModel ), False, Cmd.none )
@@ -587,7 +649,7 @@ update env msg ( model, pModel, sModel ) =
 
             else if normalizedKey == "escape" then
                 case model of
-                    RunningNPDA _ tId ->
+                    RunningNPDA _ tId _ ->
                         ( ( Default tId -1 Nothing, { pModel | currentStates = epsTrans oldMachine.transitionNames oldMachine.delta oldMachine.start }, sModel ), True, Cmd.none )
 
                     _ ->
@@ -629,7 +691,7 @@ update env msg ( model, pModel, sModel ) =
                     Default _ _ _ ->
                         ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
 
-                    RunningNPDA _ _ ->
+                    RunningNPDA _ _ _ ->
                         ( ( model, pModel, sModel ), False, Task.perform identity (Task.succeed <| Step) )
 
                     _ ->
@@ -941,6 +1003,22 @@ update env msg ( model, pModel, sModel ) =
                 _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
 
+        IncrementPaginateCounter ->
+            case model of
+                RunningNPDA cfgs tId pagCount ->
+                    ( ( RunningNPDA cfgs tId (pagCount + 1), pModel, sModel ), False, Cmd.none )
+
+                _ ->
+                    ( ( model, pModel, sModel ), False, Cmd.none )
+
+        DecrementPaginateCounter ->
+            case model of
+                RunningNPDA cfgs tId pagCount ->
+                    ( ( RunningNPDA cfgs tId (pagCount - 1), pModel, sModel ), False, Cmd.none )
+
+                _ ->
+                    ( ( model, pModel, sModel ), False, Cmd.none )
+
 
 isAccept : Set StateID -> Set StateID -> InputTape -> Int -> Bool
 isAccept states finals input inputAt =
@@ -1065,7 +1143,7 @@ view env ( model, pModel, sModel ) =
             Running _ _ ->
                 Debug.todo "Running state"
 
-            RunningNPDA cfgs tId ->
+            RunningNPDA cfgs tId pagStart ->
                 group
                     [ rect winX (winY / 3)
                         |> filled lightGray
@@ -1079,7 +1157,7 @@ view env ( model, pModel, sModel ) =
                         |> fixedwidth
                         |> filled black
                         |> move ( -winX / 2 + 120, winY / 6 - 15 )
-                    , renderConfigs oldMachine model (first (selectTape tId)) tId winX cfgs
+                    , renderConfigs oldMachine model (first (selectTape tId)) pagStart tId winX cfgs
                     ]
                     |> move ( 0, -winY / 3 )
         , (GraphicSVG.map MachineMsg <| Machine.view env Regular sModel.machineType sModel.machine pModel.currentStates transMistakes) |> move ( 0, winY / 6 )
@@ -1092,7 +1170,7 @@ buttonRender ( model, pModel, sModel ) winX winY =
     let
         condMachineModeButtons =
             case model of
-                RunningNPDA _ _ ->
+                RunningNPDA _ _ _ ->
                     group []
 
                 _ ->
@@ -1100,7 +1178,7 @@ buttonRender ( model, pModel, sModel ) winX winY =
 
         condNPDAAcceptButtons =
             case model of
-                RunningNPDA _ _ ->
+                RunningNPDA _ _ _ ->
                     group []
 
                 _ ->
@@ -1199,17 +1277,22 @@ machineDefn sModel mtype winX winY =
                     |> move ( -winX / 2 + 510, winY / 6 - 65 )
                 , latex 500 18 "blank" ("\\Sigma = \\{ " ++ String.join "," (Set.toList <| Set.remove "\\epsilon" <| List.foldl (Set.union << .inputLabel) Set.empty <| Dict.values machine.transitionNames) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 90 )
-                , latex 500 18 "blank" ("\\Gamma = \\{ " 
-                        ++ String.join "," 
+                , latex 500
+                    18
+                    "blank"
+                    ("\\Gamma = \\{ "
+                        ++ String.join ","
                             (Dict.values machine.transitionNames
-                                |> List.concatMap (\lab -> lab.stackTop :: lab.stackPush) 
-                                |> Set.fromList 
-                                |> Set.remove "\\bot" 
+                                |> List.concatMap (\lab -> lab.stackTop :: lab.stackPush)
+                                |> Set.fromList
+                                |> Set.remove "\\bot"
                                 |> Set.remove "\\epsilon"
                                 |> Set.remove " "
-                                |> Set.toList)
-                             ++ " \\}")
-                        AlignLeft
+                                |> Set.toList
+                            )
+                        ++ " \\}"
+                    )
+                    AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 115 )
                 , latex 500 18 "blank" "\\delta = (above)" AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 135 )
