@@ -744,7 +744,7 @@ renderStates currentStates machine model env =
         List.map
             (\sId ->
                 group
-                    [ circle 21
+                    [ circle 30
                         |> filled blank
                         |> notifyEnterAt (StartMouseOverRim sId)
                         |> notifyMouseMoveAt (StartMouseOverRim sId)
