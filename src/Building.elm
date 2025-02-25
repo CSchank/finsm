@@ -37,6 +37,7 @@ type Msg
     | ChangeMachine MachineType
     | AddState ( Float, Float )
     | KeyPressed String
+    | KeyReleased String
     | ToggleSnap
     | ChangeSnap Int
     | NoOp
@@ -46,6 +47,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Browser.Events.onKeyDown (D.map KeyPressed (D.field "key" D.string))
+        , Browser.Events.onKeyUp (D.map KeyReleased (D.field "key" D.string))
         ]
 
 
@@ -602,11 +604,30 @@ update env msg ( model, pModel, sModel ) =
                             --    in
                             --    ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
+                        else if normalizedKey == "c" then
+                            ( ( { model | machineState = AddingArrow sId env.mousePos }, pModel, sModel ), False, Cmd.none )
+
                         else
                             ( ( model, pModel, sModel ), False, Cmd.none )
 
                     _ ->
                         ( ( model, pModel, sModel ), False, Cmd.none )
+
+        KeyReleased k ->
+            let
+                normalizedKey =
+                    String.toLower k
+            in
+            case model.machineState of
+                AddingArrow sId _ ->
+                    if normalizedKey == "c" then
+                        ( ( { model | machineState = SelectedState sId  }, pModel, sModel ), False, Cmd.none )
+
+                    else
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
+                _ ->
+                    ( ( model, pModel, sModel ), False, Cmd.none )
 
         ToggleStart sId ->
             let

@@ -46,6 +46,7 @@ type Msg
     | VisibilityChanged Visibility
     | GetTime Time.Posix
     | GetTZ Time.Zone
+    | MouseMoved ( Float, Float )
     | NoOp
 
 
@@ -116,12 +117,17 @@ main =
                             Sub.map EMsg (Exporting.subscriptions m)
                     , Time.every 5000 GetTime -- get the new time every 10 seconds
                     , Sub.map SaveMsg (SaveLoad.subscriptions model.saveModel)
+                    , Browser.Events.onMouseMove (decodeMousePosition model.environment.windowSize)
                     ]
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
         }
 
-
+decodeMousePosition : ( Int , Int ) -> D.Decoder Msg
+decodeMousePosition ( w, h ) =
+  D.map2 (\x y -> MouseMoved ( -(toFloat w)/2 + x, (toFloat h)/2 - y ))
+    (D.field "pageX" D.float)
+    (D.field "pageY" D.float)
 
 {- replace : state -> UndoList state -> UndoList state
    replace st stul =
@@ -493,6 +499,9 @@ update msg model =
 
         GetTZ zone ->
             ( { model | environment = { oldEnvironment | timeZone = zone } }, Cmd.none )
+
+        MouseMoved ( x, y ) ->
+            ( { model | environment = { oldEnvironment | mousePos = ( x, y ) } }, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
