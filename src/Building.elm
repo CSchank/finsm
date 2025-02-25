@@ -618,10 +618,17 @@ update env msg ( model, pModel, sModel ) =
                 normalizedKey =
                     String.toLower k
             in
-                if normalizedKey == "c" then
-                    ( ( model, pModel, sModel ), False, sendMsg (MachineMsg StopDragging) )
-                else
+            case model.machineState of
+                AddingArrow sId _ ->
+                    if normalizedKey == "c" then
+                        ( ( { model | machineState = SelectedState sId  }, pModel, sModel ), False, Cmd.none )
+
+                    else
+                        ( ( model, pModel, sModel ), False, Cmd.none )
+
+                _ ->
                     ( ( model, pModel, sModel ), False, Cmd.none )
+
         ToggleStart sId ->
             let
                 machineType =
