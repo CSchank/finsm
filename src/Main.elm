@@ -413,7 +413,7 @@ update msg model =
                                     SharedModel.init
 
                                 newSharedModel =
-                                    { initSharedModel | machine = loadPayload.machine }
+                                    { initSharedModel | machine = loadPayload.machine, machineType = loadPayload.machine_type }
 
                                 initSimModel =
                                     Simulating.initPModel

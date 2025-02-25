@@ -8,7 +8,7 @@ import Dict exposing (Dict)
 import Environment exposing (Environment)
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
-import Machine exposing (Machine, StateID, TransitionID)
+import Machine exposing (Machine, MachineType(..), StateID, TransitionID)
 import Mistakes exposing (..)
 import Set exposing (Set)
 import SharedModel exposing (..)
@@ -49,6 +49,9 @@ contextHasError err mtype =
 
                 _ ->
                     False
+
+        _ ->
+            False
 
 
 machineCheck : SharedModel -> Error

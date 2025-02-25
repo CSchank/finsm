@@ -27,18 +27,23 @@ import Html.Events exposing (onInput)
 import Http
 import Json.Decode as D
 import Json.Encode as E
-import Machine exposing (Machine)
+import Machine exposing (Machine, MachineType(..))
 import Ports
 import Simulating exposing (InputTape)
 import Time exposing (Posix)
 import Utils exposing (newMsg, textBox)
 
 
-type MachineType
-    = DFA
-    | NFA
-    | NPDA
-    | Turing
+testServer =
+    True
+
+
+baseUrl =
+    if testServer then
+        "https://finsm.io"
+
+    else
+        ""
 
 
 type FilterType
@@ -198,7 +203,7 @@ saveMachine : String -> String -> Machine -> String -> Dict Int ( InputTape, a )
 saveMachine name desc machine uuid inputTape machine_type toMsg =
     Http.send toMsg <|
         Http.post
-            "/api/machine/save"
+            (baseUrl ++ "/api/machine/save")
             (Http.jsonBody <| encodeMachinePayload name desc machine uuid inputTape machine_type)
             decodeSaveResponse
 
@@ -221,7 +226,7 @@ archiveMachine : ArchivePayload -> (Result Http.Error ArchiveResponse -> msg) ->
 archiveMachine payload toMsg =
     Http.send toMsg <|
         Http.post
-            "/api/machine/archive"
+            (baseUrl ++ "/api/machine/archive")
             (Http.jsonBody <| encodeArchivePayload payload)
             decodeArchiveResponse
 
@@ -231,6 +236,7 @@ type alias LoadPayload =
     , tapes : Dict Int InputTape
     , name : String
     , uuid : String
+    , machine_type : MachineType
     }
 
 
@@ -246,18 +252,19 @@ decodeArchiveResponse =
 
 decodeLoadPayload : D.Decoder LoadPayload
 decodeLoadPayload =
-    D.map4 LoadPayload
+    D.map5 LoadPayload
         (D.field "machine" Machine.machineDecoder)
         (D.field "tape" Simulating.inputTapeDictDecoder)
         (D.field "name" D.string)
         (D.field "uuid" D.string)
+        (D.field "type" decodeMachineType)
 
 
 loadMachine : String -> (Result Http.Error LoadPayload -> msg) -> Cmd msg
 loadMachine uuid toMsg =
     Http.send toMsg <|
         Http.post
-            "/api/machine/load"
+            (baseUrl ++ "/api/machine/load")
             (Http.jsonBody <| E.string uuid)
             decodeLoadPayload
 
@@ -266,7 +273,7 @@ loadList : FilterType -> (Result Http.Error (List LoadMetadata) -> msg) -> Cmd m
 loadList machineType toMsg =
     Http.send toMsg <|
         Http.post
-            "/api/machine/list"
+            (baseUrl ++ "/api/machine/list")
             (Http.stringBody "text/plain" <| filterToString machineType)
             decodeMachineList
 
@@ -334,7 +341,7 @@ getInitLoginStatus : Cmd Msg
 getInitLoginStatus =
     Http.send InitLoginStatus <|
         Http.post
-            "/accounts/loginstate/"
+            (baseUrl ++ "/accounts/loginstate/")
             Http.emptyBody
             loginStatusDecoder
 
@@ -343,7 +350,7 @@ getLoginStatus : Cmd Msg
 getLoginStatus =
     Http.send LoginStatusChange <|
         Http.post
-            "/accounts/loginstate/"
+            (baseUrl ++ "/accounts/loginstate/")
             Http.emptyBody
             loginStatusDecoder
 
@@ -576,7 +583,7 @@ machineCreatedUpdate env appModel msg model =
                 appModel.sharedModel.machine
                 model.machineMetadata.id
                 appModel.simulatingData.tapes
-                model.machineMetadata.machine_type
+                appModel.sharedModel.machineType
                 MachineSaveResponse
             )
 

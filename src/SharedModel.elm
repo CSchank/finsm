@@ -1,13 +1,8 @@
-module SharedModel exposing (MachineType(..), SharedModel, init, machineModeButtons)
+module SharedModel exposing (SharedModel, init, machineModeButtons)
 
 import GraphicSVG exposing (..)
 import Helpers exposing (..)
-import Machine exposing (Machine)
-
-
-type MachineType
-    = DFA
-    | NFA
+import Machine exposing (Machine, MachineType(..))
 
 
 type alias SharedModel =

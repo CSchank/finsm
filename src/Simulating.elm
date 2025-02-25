@@ -550,6 +550,9 @@ update env msg ( model, pModel, sModel ) =
                                 _ ->
                                     ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
 
+                        _ ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
+
                 DFA ->
                     case sModel.machineType of
                         DFA ->
@@ -588,6 +591,12 @@ update env msg ( model, pModel, sModel ) =
                                 _ ->
                                     ( ( model, newPModel, newSModel ), True, Cmd.none )
 
+                        _ ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
+
+                _ ->
+                    ( ( model, pModel, sModel ), False, Cmd.none )
+
         MachineMsg mmsg ->
             case mmsg of
                 StartDragging sId _ ->
@@ -621,6 +630,9 @@ update env msg ( model, pModel, sModel ) =
                             { oldMachine
                                 | start = Set.singleton sId
                             }
+
+                        _ ->
+                            oldMachine
             in
             case model of
                 Default tId _ _ ->
@@ -836,6 +848,9 @@ machineDefn sModel mtype winX winY =
                 , latex 500 18 "blank" ("F = \\{ " ++ String.join "," (List.map getStateName <| Set.toList <| machine.final) ++ " \\}") AlignLeft
                     |> move ( -winX / 2 + 510, winY / 6 - 160 )
                 ]
+
+        _ ->
+            group []
 
 
 epsTrans : TransitionNames -> Delta -> Set StateID -> Set StateID

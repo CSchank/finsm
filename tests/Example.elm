@@ -7,6 +7,8 @@ import Json.Encode as E
 import Machine exposing (test)
 import Test exposing (..)
 
+import SaveLoad exposing (baseUrl)
+
 
 suite : Test
 suite =
@@ -17,4 +19,8 @@ suite =
                     (D.decodeString Machine.machineDecoder <|
                         E.encode 0 (Machine.machineEncoder Machine.test)
                     )
+        , Test.test "Dev server is turned off for deployment (baseURL is blank)" <|
+                      \_ ->
+                          Expect.equal ""
+                              baseUrl
         ]

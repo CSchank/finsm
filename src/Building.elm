@@ -9,7 +9,7 @@ import Json.Decode as D
 import Machine exposing (..)
 import Mistakes exposing (..)
 import Set
-import SharedModel exposing (MachineType(..), SharedModel, machineModeButtons)
+import SharedModel exposing (SharedModel, machineModeButtons)
 import Task
 import Tuple exposing (first, second)
 
@@ -388,6 +388,9 @@ update env msg ( model, pModel, sModel ) =
                         DFA ->
                             ( ( model, pModel, { sModel | machineType = NFA } ), False, Cmd.none )
 
+                        _ ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
+
                 DFA ->
                     case sModel.machineType of
                         DFA ->
@@ -417,6 +420,12 @@ update env msg ( model, pModel, sModel ) =
                                     { sModel | machine = { oldMachine | start = startState }, machineType = DFA }
                             in
                             ( ( model, pModel, newSModel ), True, Cmd.none )
+
+                        _ ->
+                            ( ( model, pModel, sModel ), False, Cmd.none )
+
+                _ ->
+                    ( ( model, pModel, sModel ), False, Cmd.none )
 
         AddState ( x, y ) ->
             case model.machineState of
@@ -633,6 +642,9 @@ update env msg ( model, pModel, sModel ) =
                             { oldMachine
                                 | start = Set.singleton sId
                             }
+
+                        _ ->
+                            oldMachine
             in
             ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 

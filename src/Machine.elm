@@ -13,6 +13,13 @@ import Set exposing (Set)
 import Utils exposing (decodeDict, decodePair, decodeSet, decodeTriple, encodeDict, encodePair, encodeSet, encodeTriple, textBox)
 
 
+type MachineType
+    = DFA
+    | NFA
+    | NPDA
+    | Turing
+
+
 type alias StateID =
     Int
 
