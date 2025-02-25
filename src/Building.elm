@@ -605,7 +605,7 @@ update env msg ( model, pModel, sModel ) =
                             --    ( ( model, pModel, { sModel | machine = newMachine } ), True, Cmd.none )
 
                         else if normalizedKey == "c" then
-                            ( ( { model | machineState = AddingArrow sId ( 0, 0 ) }, pModel, sModel ), False, Cmd.none )
+                            ( ( { model | machineState = AddingArrow sId env.mousePos }, pModel, sModel ), False, Cmd.none )
 
                         else
                             ( ( model, pModel, sModel ), False, Cmd.none )
